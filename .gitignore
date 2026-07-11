@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+*.key.json
+credentials*.json
+*.pem
+*.p12
+*.log
+.DS_Store

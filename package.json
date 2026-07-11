@@ -1,0 +1,48 @@
+{
+  "name": "seo-console-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Google Search Console, PageSpeed Insights, and on-page SEO audits",
+  "type": "module",
+  "bin": {
+    "seo-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "postbuild": "node --input-type=module -e \"import { chmodSync } from 'node:fs'; chmodSync('dist/index.js', 0o755)\"",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "setup": "tsx src/index.ts setup",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "mcp",
+    "seo",
+    "google-search-console",
+    "pagespeed"
+  ],
+  "license": "MIT",
+  "author": "Ibrahim Hajjaj",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "cheerio": "1.2.0",
+    "google-auth-library": "10.9.0",
+    "googleapis": "173.0.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "tsx": "4.23.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

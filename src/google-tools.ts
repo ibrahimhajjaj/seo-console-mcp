@@ -1,0 +1,232 @@
+import { google, type pagespeedonline_v5, type searchconsole_v1 } from "googleapis";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { z } from "zod";
+import type {
+  inspectUrlInput,
+  listSitemapsInput,
+  pageSpeedInput,
+  searchAnalyticsInput,
+  submitSitemapInput,
+} from "./schemas.js";
+
+type SearchAnalyticsParams = z.output<typeof searchAnalyticsInput>;
+type ListSitemapsParams = z.output<typeof listSitemapsInput>;
+type SubmitSitemapParams = z.output<typeof submitSitemapInput>;
+type InspectUrlParams = z.output<typeof inspectUrlInput>;
+type PageSpeedParams = z.output<typeof pageSpeedInput>;
+
+export type ToolResult = Omit<CallToolResult, "content" | "structuredContent"> & {
+  content: Array<{ type: "text"; text: string }>;
+  structuredContent: Record<string, unknown>;
+};
+
+type ApiResponse<T> = Promise<{ data: T }>;
+
+export interface GoogleClients {
+  searchConsole: {
+    searchanalytics: { query(params: searchconsole_v1.Params$Resource$Searchanalytics$Query): ApiResponse<searchconsole_v1.Schema$SearchAnalyticsQueryResponse> };
+    sitemaps: {
+      list(params: searchconsole_v1.Params$Resource$Sitemaps$List): ApiResponse<searchconsole_v1.Schema$SitemapsListResponse>;
+      submit(params: searchconsole_v1.Params$Resource$Sitemaps$Submit): ApiResponse<void>;
+    };
+    urlInspection: { index: { inspect(params: searchconsole_v1.Params$Resource$Urlinspection$Index$Inspect): ApiResponse<searchconsole_v1.Schema$InspectUrlIndexResponse> } };
+  };
+  pageSpeed: {
+    pagespeedapi: { runpagespeed(params: pagespeedonline_v5.Params$Resource$Pagespeedapi$Runpagespeed): ApiResponse<pagespeedonline_v5.Schema$PagespeedApiPagespeedResponseV5> };
+  };
+}
+
+export function createGoogleClients(credentialsPath?: string): GoogleClients {
+  const auth = new google.auth.GoogleAuth({
+    ...(credentialsPath ? { keyFile: credentialsPath } : {}),
+    scopes: [
+      "https://www.googleapis.com/auth/webmasters",
+      "https://www.googleapis.com/auth/webmasters.readonly",
+    ],
+  });
+  return {
+    searchConsole: google.searchconsole({ version: "v1", auth }),
+    pageSpeed: google.pagespeedonline({ version: "v5" }),
+  };
+}
+
+export async function searchAnalytics(clients: GoogleClients, params: SearchAnalyticsParams, now = new Date()): Promise<ToolResult> {
+  const endDate = params.endDate ?? formatDate(now);
+  const start = new Date(`${endDate}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - 27);
+  const startDate = params.startDate ?? formatDate(start);
+  if (startDate > endDate) throw new Error("startDate must be on or before endDate");
+
+  const requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest = {
+    startDate,
+    endDate,
+    dimensions: params.dimensions,
+    rowLimit: params.rowLimit,
+    ...(params.dimensionFilterGroups ? { dimensionFilterGroups: params.dimensionFilterGroups } : {}),
+    ...(params.type ? { type: params.type } : {}),
+  };
+  const response = await clients.searchConsole.searchanalytics.query({ siteUrl: params.siteUrl, requestBody });
+  const rows = (response.data.rows ?? []).map((row, index) => ({
+    rank: index + 1,
+    keys: Object.fromEntries(params.dimensions.map((dimension, keyIndex) => [dimension, row.keys?.[keyIndex] ?? ""])),
+    clicks: row.clicks ?? 0,
+    impressions: row.impressions ?? 0,
+    ctr: row.ctr ?? 0,
+    position: row.position ?? 0,
+  }));
+
+  const dimensionHeader = params.dimensions.join(" / ");
+  const lines = [
+    `Search analytics for ${params.siteUrl} (${startDate} to ${endDate})`,
+    `# | ${dimensionHeader} | Clicks | Impressions | CTR | Position`,
+    `--- | --- | ---: | ---: | ---: | ---:`,
+    ...rows.map((row) => `${row.rank} | ${params.dimensions.map((dimension) => row.keys[dimension]).join(" / ")} | ${row.clicks} | ${row.impressions} | ${(row.ctr * 100).toFixed(2)}% | ${row.position.toFixed(2)}`),
+  ];
+  if (rows.length === 0) lines.push("No rows returned.");
+  return result(lines.join("\n"), { siteUrl: params.siteUrl, startDate, endDate, dimensions: params.dimensions, rowCount: rows.length, rows });
+}
+
+export async function listSitemaps(clients: GoogleClients, params: ListSitemapsParams): Promise<ToolResult> {
+  const response = await clients.searchConsole.sitemaps.list({ siteUrl: params.siteUrl });
+  const sitemaps = (response.data.sitemap ?? []).map(shapeSitemap);
+  const lines = [`Sitemaps for ${params.siteUrl}: ${sitemaps.length}`];
+  for (const sitemap of sitemaps) {
+    lines.push(`- ${sitemap.path ?? "(unknown)"}: pending=${String(sitemap.isPending)}, warnings=${sitemap.warnings}, errors=${sitemap.errors}, submitted=${sitemap.lastSubmitted ?? "unknown"}`);
+  }
+  return result(lines.join("\n"), { siteUrl: params.siteUrl, count: sitemaps.length, sitemaps });
+}
+
+export async function submitSitemap(clients: GoogleClients, params: SubmitSitemapParams): Promise<ToolResult> {
+  await clients.searchConsole.sitemaps.submit({ siteUrl: params.siteUrl, feedpath: params.feedpath });
+  let sitemap: Record<string, unknown> | null = null;
+  let stateRefreshError: string | null = null;
+  try {
+    const response = await clients.searchConsole.sitemaps.list({ siteUrl: params.siteUrl });
+    const match = response.data.sitemap?.find((item) => item.path === params.feedpath);
+    sitemap = match ? shapeSitemap(match) : null;
+  } catch (error) {
+    stateRefreshError = error instanceof Error ? error.message : String(error);
+  }
+  return result(
+    `Google accepted ${params.feedpath} for ${params.siteUrl}.${sitemap ? ` Current state: pending=${String(sitemap.isPending)}, errors=${sitemap.errors}.` : stateRefreshError ? " The submission succeeded, but its current state could not be refreshed." : " It is not yet present in the sitemap list."}`,
+    { success: true, siteUrl: params.siteUrl, feedpath: params.feedpath, sitemap, stateRefreshError },
+  );
+}
+
+export async function inspectUrl(clients: GoogleClients, params: InspectUrlParams): Promise<ToolResult> {
+  const response = await clients.searchConsole.urlInspection.index.inspect({
+    requestBody: { siteUrl: params.siteUrl, inspectionUrl: params.inspectionUrl },
+  });
+  const inspection = response.data.inspectionResult;
+  const index = inspection?.indexStatusResult;
+  const indexStatus = {
+    coverageState: index?.coverageState ?? null,
+    verdict: index?.verdict ?? null,
+    robotsTxtState: index?.robotsTxtState ?? null,
+    indexingState: index?.indexingState ?? null,
+    lastCrawlTime: index?.lastCrawlTime ?? null,
+    googleCanonical: index?.googleCanonical ?? null,
+    userCanonical: index?.userCanonical ?? null,
+    pageFetchState: index?.pageFetchState ?? null,
+  };
+  const mobileUsability = inspection?.mobileUsabilityResult ? {
+    verdict: inspection.mobileUsabilityResult.verdict ?? null,
+    issues: inspection.mobileUsabilityResult.issues ?? [],
+  } : null;
+  const richResults = inspection?.richResultsResult ? {
+    verdict: inspection.richResultsResult.verdict ?? null,
+    detectedItems: inspection.richResultsResult.detectedItems ?? [],
+  } : null;
+  const text = [
+    `URL inspection for ${params.inspectionUrl}`,
+    `Verdict: ${indexStatus.verdict ?? "unknown"}`,
+    `Coverage: ${indexStatus.coverageState ?? "unknown"}`,
+    `Indexing: ${indexStatus.indexingState ?? "unknown"}; robots.txt: ${indexStatus.robotsTxtState ?? "unknown"}; fetch: ${indexStatus.pageFetchState ?? "unknown"}`,
+    `Canonical: Google=${indexStatus.googleCanonical ?? "unknown"}; user=${indexStatus.userCanonical ?? "unknown"}`,
+    `Last crawl: ${indexStatus.lastCrawlTime ?? "unknown"}`,
+    `Mobile usability: ${mobileUsability?.verdict ?? "not reported"}`,
+    `Rich results: ${richResults?.verdict ?? "not reported"}`,
+  ].join("\n");
+  return result(text, { siteUrl: params.siteUrl, inspectionUrl: params.inspectionUrl, indexStatus, mobileUsability, richResults });
+}
+
+export async function runPageSpeed(clients: GoogleClients, params: PageSpeedParams): Promise<ToolResult> {
+  const apiKey = params.apiKey ?? process.env.SEO_MCP_PAGESPEED_KEY;
+  const response = await clients.pageSpeed.pagespeedapi.runpagespeed({
+    url: params.url,
+    strategy: params.strategy,
+    category: params.category,
+    ...(apiKey ? { key: apiKey } : {}),
+  });
+  const data = response.data;
+  const metrics = data.loadingExperience?.metrics ?? {};
+  const fieldData = {
+    lcp: fieldMetric(metrics["LARGEST_CONTENTFUL_PAINT_MS"]),
+    cls: fieldMetric(metrics["CUMULATIVE_LAYOUT_SHIFT_SCORE"]),
+    inp: fieldMetric(metrics["INTERACTION_TO_NEXT_PAINT"]),
+    fid: fieldMetric(metrics["FIRST_INPUT_DELAY_MS"]),
+    fcp: fieldMetric(metrics["FIRST_CONTENTFUL_PAINT_MS"]),
+    ttfb: fieldMetric(metrics["EXPERIMENTAL_TIME_TO_FIRST_BYTE"]),
+  };
+  const scores = Object.fromEntries(Object.entries(data.lighthouseResult?.categories ?? {})
+    .filter((entry): entry is [string, pagespeedonline_v5.Schema$LighthouseCategoryV5] => Boolean(entry[1]))
+    .map(([key, category]) => [key, category.score === null || category.score === undefined ? null : Math.round(category.score * 100)]));
+  const opportunities = Object.entries(data.lighthouseResult?.audits ?? {})
+    .flatMap(([id, audit]) => {
+      if (!audit || audit.score === 1 || audit.scoreDisplayMode === "notApplicable") return [];
+      const savingsMs = numericDetail(audit.details, "overallSavingsMs") ?? (audit.numericUnit === "millisecond" ? audit.numericValue ?? null : null);
+      if (!savingsMs || savingsMs <= 0) return [];
+      return [{ id, title: audit.title ?? id, description: audit.description ?? null, savingsMs: Math.round(savingsMs) }];
+    })
+    .sort((a, b) => b.savingsMs - a.savingsMs)
+    .slice(0, 10);
+  const presentFieldData = Object.fromEntries(Object.entries(fieldData).filter(([, value]) => value !== null));
+  const text = [
+    `PageSpeed Insights for ${params.url} (${params.strategy})`,
+    `Lab scores: ${Object.entries(scores).map(([name, score]) => `${name}=${score ?? "n/a"}`).join(", ") || "not reported"}`,
+    `Field data: ${Object.entries(presentFieldData).map(([name, metric]) => `${name.toUpperCase()}=${metric?.value} (${metric?.category ?? "unknown"})`).join(", ") || "not available"}`,
+    "Top opportunities:",
+    ...(opportunities.length ? opportunities.map((item) => `- ${item.title}: about ${item.savingsMs} ms`) : ["- None reported"]),
+  ].join("\n");
+  return result(text, { url: params.url, strategy: params.strategy, fieldData: presentFieldData, scores, opportunities });
+}
+
+function shapeSitemap(sitemap: searchconsole_v1.Schema$WmxSitemap): Record<string, unknown> {
+  return {
+    path: sitemap.path ?? null,
+    lastSubmitted: sitemap.lastSubmitted ?? null,
+    lastDownloaded: sitemap.lastDownloaded ?? null,
+    isPending: sitemap.isPending ?? false,
+    isSitemapsIndex: sitemap.isSitemapsIndex ?? false,
+    warnings: toNumber(sitemap.warnings),
+    errors: toNumber(sitemap.errors),
+    contents: (sitemap.contents ?? []).map((content) => ({
+      type: content.type ?? null,
+      submitted: toNumber(content.submitted),
+      indexed: toNumber(content.indexed),
+    })),
+  };
+}
+
+function toNumber(value: string | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function fieldMetric(metric: pagespeedonline_v5.Schema$UserPageLoadMetricV5 | undefined): { value: number | null; category: string | null } | null {
+  return metric ? { value: metric.percentile ?? null, category: metric.category ?? null } : null;
+}
+
+function numericDetail(details: unknown, key: string): number | null {
+  if (!details || typeof details !== "object") return null;
+  const value = (details as Record<string, unknown>)[key];
+  return typeof value === "number" ? value : null;
+}
+
+function result(text: string, structuredContent: Record<string, unknown>): ToolResult {
+  return { content: [{ type: "text", text }], structuredContent };
+}
+
+function formatDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
