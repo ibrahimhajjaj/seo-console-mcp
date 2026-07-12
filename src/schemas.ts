@@ -68,6 +68,15 @@ export const searchAnalyticsOutput = z.object({
   firstIncompleteDate: z.string().optional(),
 });
 
+export const listPropertiesShape = {};
+export const listPropertiesOutput = z.object({
+  count: z.number(),
+  properties: z.array(z.object({
+    siteUrl: z.string().nullable(),
+    permissionLevel: z.string().nullable(),
+  })),
+});
+
 const sitemapOutput = z.object({
   path: z.string().nullable(),
   lastSubmitted: z.string().nullable(),

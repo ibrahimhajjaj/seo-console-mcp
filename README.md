@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients six tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients seven tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
 
 ## Requirements
 
@@ -214,6 +214,10 @@ To run without a local build, use `"command": "npx"` and `"args": ["-y", "seo-co
 ## Tools
 
 Every tool validates its input with Zod. Tool failures return an MCP error result instead of terminating the server. Google API status, message, and reason are included when available. A Search Console 403 also explains how to grant the service account property access.
+
+### `list_properties`
+
+Lists every Google Search Console property the service account can access, returning each property's exact `siteUrl` and `permissionLevel`. It takes no input. Service-account credentials are required, unlike `pagespeed` and `seo_audit`.
 
 ### `search_analytics`
 

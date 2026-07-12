@@ -37,6 +37,7 @@ describe("MCP server tool registration", () => {
     expect(tools.map((tool) => tool.name)).toEqual([
       "search_analytics",
       "list_sitemaps",
+      "list_properties",
       "submit_sitemap",
       "inspect_url",
       "pagespeed",

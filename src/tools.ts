@@ -4,6 +4,8 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
   inspectUrlOutput,
   inspectUrlShape,
+  listPropertiesOutput,
+  listPropertiesShape,
   listSitemapsOutput,
   listSitemapsShape,
   pageSpeedOutput,
@@ -18,6 +20,7 @@ import {
 import {
   createGoogleClients,
   inspectUrl,
+  listProperties,
   listSitemaps,
   runPageSpeed,
   searchAnalytics,
@@ -56,6 +59,14 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
     outputSchema: listSitemapsOutput,
   },
     async (params) => safely(() => listSitemaps(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("list_properties", {
+    description: "List Google Search Console properties the service account can access, with permission levels",
+    inputSchema: listPropertiesShape,
+    outputSchema: listPropertiesOutput,
+  },
+    async () => safely(() => listProperties(getAuthenticatedClients())),
   );
 
   server.registerTool("submit_sitemap", {

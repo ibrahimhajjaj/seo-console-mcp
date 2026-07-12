@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   inspectUrl,
+  listProperties,
   listSitemaps,
   runPageSpeed,
   searchAnalytics,
@@ -12,6 +13,7 @@ function fakeClients(): GoogleClients {
   return {
     searchConsole: {
       searchanalytics: { query: vi.fn() },
+      sites: { list: vi.fn() },
       sitemaps: { list: vi.fn(), submit: vi.fn() },
       urlInspection: { index: { inspect: vi.fn() } },
     },
@@ -20,6 +22,36 @@ function fakeClients(): GoogleClients {
 }
 
 describe("Google-backed tool operations", () => {
+  it("lists Search Console properties", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.sites.list).mockResolvedValue({ data: { siteEntry: [
+      { siteUrl: "sc-domain:example.com", permissionLevel: "siteOwner" },
+      { siteUrl: "https://blog.example.com/", permissionLevel: "siteFullUser" },
+    ] } });
+
+    const result = await listProperties(clients);
+
+    expect(clients.searchConsole.sites.list).toHaveBeenCalledWith({});
+    expect(result.structuredContent).toMatchObject({
+      count: 2,
+      properties: [
+        { siteUrl: "sc-domain:example.com", permissionLevel: "siteOwner" },
+        { siteUrl: "https://blog.example.com/", permissionLevel: "siteFullUser" },
+      ],
+    });
+    expect(result.content[0]?.text).toContain("sc-domain:example.com (siteOwner)");
+  });
+
+  it("guides users when no Search Console properties are available", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.sites.list).mockResolvedValue({ data: {} });
+
+    const result = await listProperties(clients);
+
+    expect(result.structuredContent).toEqual({ count: 0, properties: [] });
+    expect(result.content[0]?.text).toContain("No properties. Run `seo-mcp verify <domain>` to add one.");
+  });
+
   it("queries search analytics with defaults and formats ranked rows", async () => {
     const clients = fakeClients();
     vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [

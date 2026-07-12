@@ -26,6 +26,7 @@ type ApiResponse<T> = Promise<{ data: T }>;
 export interface GoogleClients {
   searchConsole: {
     searchanalytics: { query(params: searchconsole_v1.Params$Resource$Searchanalytics$Query): ApiResponse<searchconsole_v1.Schema$SearchAnalyticsQueryResponse> };
+    sites: { list(params: searchconsole_v1.Params$Resource$Sites$List): ApiResponse<searchconsole_v1.Schema$SitesListResponse> };
     sitemaps: {
       list(params: searchconsole_v1.Params$Resource$Sitemaps$List): ApiResponse<searchconsole_v1.Schema$SitemapsListResponse>;
       submit(params: searchconsole_v1.Params$Resource$Sitemaps$Submit): ApiResponse<void>;
@@ -103,6 +104,20 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     rows,
     ...(firstIncompleteDate ? { firstIncompleteDate } : {}),
   });
+}
+
+export async function listProperties(clients: GoogleClients): Promise<ToolResult> {
+  const response = await clients.searchConsole.sites.list({});
+  const properties = (response.data.siteEntry ?? []).map((site) => ({
+    siteUrl: site.siteUrl ?? null,
+    permissionLevel: site.permissionLevel ?? null,
+  }));
+  const lines = [`Search Console properties: ${properties.length}`];
+  for (const property of properties) {
+    lines.push(`- ${property.siteUrl ?? "(unknown)"} (${property.permissionLevel ?? "unknown"})`);
+  }
+  if (properties.length === 0) lines.push("No properties. Run `seo-mcp verify <domain>` to add one.");
+  return result(lines.join("\n"), { count: properties.length, properties });
 }
 
 export async function listSitemaps(clients: GoogleClients, params: ListSitemapsParams): Promise<ToolResult> {
