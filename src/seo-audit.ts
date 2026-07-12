@@ -22,7 +22,9 @@ export interface SeoAuditResult {
 export function parseSeoHtml(html: string, pageUrl: string): SeoAuditResult {
   const $ = cheerio.load(html);
   const clean = (value: string | undefined): string | null => value?.replace(/\s+/g, " ").trim() || null;
-  const titles = $("title").map((_, element) => clean($(element).text())).get().filter((value): value is string => value !== null);
+  // document.title semantics: SVG/MathML <title> elements are not page titles.
+  const titleElements = $("title").filter((_, element) => $(element).parents("svg,math").length === 0);
+  const titles = titleElements.map((_, element) => clean($(element).text())).get().filter((value): value is string => value !== null);
   const description = clean($("meta[name='description' i]").first().attr("content"));
   const canonicalHref = clean($("link[rel~='canonical' i]").first().attr("href"));
   let canonical: string | null = null;
@@ -40,7 +42,7 @@ export function parseSeoHtml(html: string, pageUrl: string): SeoAuditResult {
   const { schemaTypes, invalidBlocks } = collectSchemaTypes($);
 
   const imageCount = $("img").length;
-  const imagesWithAlt = $("img").filter((_, element) => $(element).attr("alt")?.trim() !== undefined).length;
+  const imagesWithAlt = $("img").filter((_, element) => ($(element).attr("alt") ?? "").trim() !== "").length;
   const links = countLinks($, pageUrl);
 
   const body = $("body").clone();
@@ -48,7 +50,7 @@ export function parseSeoHtml(html: string, pageUrl: string): SeoAuditResult {
   const words = (clean(body.text()) ?? "").match(/[\p{L}\p{N}]+(?:['’.-][\p{L}\p{N}]+)*/gu) ?? [];
   const issues: string[] = [];
   if (titles.length === 0) issues.push("Missing title element");
-  if ($("title").length > 1) issues.push(`Multiple title elements (${$("title").length})`);
+  if (titleElements.length > 1) issues.push(`Multiple title elements (${titleElements.length})`);
   if (!description) issues.push("Missing meta description");
   if (h1Texts.length === 0) issues.push("Missing H1 heading");
   if (h1Texts.length > 1) issues.push(`Multiple H1 headings (${h1Texts.length})`);
@@ -58,7 +60,7 @@ export function parseSeoHtml(html: string, pageUrl: string): SeoAuditResult {
 
   return {
     url: pageUrl,
-    title: { text: titles[0] ?? null, count: $("title").length, length: titles[0]?.length ?? 0 },
+    title: { text: titles[0] ?? null, count: titleElements.length, length: titles[0]?.length ?? 0 },
     metaDescription: { text: description, length: description?.length ?? 0 },
     canonical,
     metaRobots: clean($("meta[name='robots' i]").first().attr("content")),
@@ -112,7 +114,7 @@ function visitJsonLd(value: unknown, types: Set<string>): void {
 }
 
 function countLinks($: cheerio.CheerioAPI, pageUrl: string): { internal: number; external: number } {
-  const origin = new URL(pageUrl).origin;
+  const pageHost = new URL(pageUrl).hostname;
   let internal = 0;
   let external = 0;
   $("a[href]").each((_, element) => {
@@ -121,7 +123,7 @@ function countLinks($: cheerio.CheerioAPI, pageUrl: string): { internal: number;
     try {
       const target = new URL(href, pageUrl);
       if (target.protocol !== "http:" && target.protocol !== "https:") return;
-      if (target.origin === origin) internal += 1;
+      if (target.hostname === pageHost) internal += 1;
       else external += 1;
     } catch { /* ignore malformed links */ }
   });

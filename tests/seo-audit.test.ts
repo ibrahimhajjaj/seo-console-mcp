@@ -53,4 +53,27 @@ describe("parseSeoHtml", () => {
     expect(result.schemaTypes).toEqual([]);
     expect(result.issues).toContain("Invalid JSON-LD block (1)");
   });
+
+  it("ignores SVG <title> elements", () => {
+    const result = parseSeoHtml("<html><head><title>Real</title></head><body><svg><title>Icon label</title></svg></body></html>", "https://example.com");
+    expect(result.title).toEqual({ text: "Real", count: 1, length: 4 });
+    const multipleTitlesIssue = result.issues.find(i => i.startsWith("Multiple title elements"));
+    expect(multipleTitlesIssue).toBeUndefined();
+  });
+
+  it("reports missing title when the only title is inside an SVG", () => {
+    const result = parseSeoHtml("<html><body><svg><title>Icon label</title></svg></body></html>", "https://example.com");
+    expect(result.title.text).toBeNull();
+    expect(result.issues).toContain("Missing title element");
+  });
+
+  it("counts only non-empty alt text for images", () => {
+    const result = parseSeoHtml(`<html><body><img alt="good"><img alt=""><img alt="   "><img></body></html>`, "https://example.com");
+    expect(result.images).toEqual({ count: 4, withAlt: 1, altPercentage: 25 });
+  });
+
+  it("classifies links by hostname (ignoring scheme)", () => {
+    const result = parseSeoHtml(`<html><body><a href="http://example.com/legacy">A</a><a href="https://other.example/">B</a></body></html>`, "https://example.com/");
+    expect(result.links).toEqual({ internal: 1, external: 1 });
+  });
 });
