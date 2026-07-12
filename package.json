@@ -33,6 +33,14 @@
   ],
   "license": "MIT",
   "author": "Ibrahim Hajjaj",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ibrahimhajjaj/seo-console-mcp.git"
+  },
+  "homepage": "https://github.com/ibrahimhajjaj/seo-console-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/ibrahimhajjaj/seo-console-mcp/issues"
+  },
   "dependencies": {
     "@googleapis/pagespeedonline": "5.0.1",
     "@googleapis/searchconsole": "6.0.1",
