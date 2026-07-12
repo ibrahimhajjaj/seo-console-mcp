@@ -5,6 +5,7 @@ import type { z } from "zod";
 import type {
   compareSearchPeriodsInput,
   ctrGapsInput,
+  deleteSitemapInput,
   inspectUrlInput,
   listSitemapsInput,
   pageSpeedInput,
@@ -18,6 +19,7 @@ import { cannibalization, comparePeriods, ctrGaps, strikingDistance, type Insigh
 type SearchAnalyticsParams = z.output<typeof searchAnalyticsInput>;
 type ListSitemapsParams = z.output<typeof listSitemapsInput>;
 type SubmitSitemapParams = z.output<typeof submitSitemapInput>;
+type DeleteSitemapParams = z.output<typeof deleteSitemapInput>;
 type InspectUrlParams = z.output<typeof inspectUrlInput>;
 type PageSpeedParams = z.output<typeof pageSpeedInput>;
 type SearchOpportunitiesParams = z.output<typeof searchOpportunitiesInput>;
@@ -37,6 +39,7 @@ export interface GoogleClients {
     searchanalytics: { query(params: searchconsole_v1.Params$Resource$Searchanalytics$Query): ApiResponse<searchconsole_v1.Schema$SearchAnalyticsQueryResponse> };
     sites: { list(params: searchconsole_v1.Params$Resource$Sites$List): ApiResponse<searchconsole_v1.Schema$SitesListResponse> };
     sitemaps: {
+      delete(params: searchconsole_v1.Params$Resource$Sitemaps$Delete): ApiResponse<void>;
       list(params: searchconsole_v1.Params$Resource$Sitemaps$List): ApiResponse<searchconsole_v1.Schema$SitemapsListResponse>;
       submit(params: searchconsole_v1.Params$Resource$Sitemaps$Submit): ApiResponse<void>;
     };
@@ -224,6 +227,20 @@ export async function submitSitemap(clients: GoogleClients, params: SubmitSitema
   return result(
     `Google accepted ${params.feedpath} for ${params.siteUrl}.${sitemap ? ` Current state: pending=${String(sitemap.isPending)}, errors=${sitemap.errors}.` : stateRefreshError ? " The submission succeeded, but its current state could not be refreshed." : " It is not yet present in the sitemap list."}`,
     { success: true, siteUrl: params.siteUrl, feedpath: params.feedpath, sitemap, stateRefreshError },
+  );
+}
+
+export async function deleteSitemap(clients: GoogleClients, params: DeleteSitemapParams): Promise<ToolResult> {
+  if (params.dryRun) {
+    return result(
+      `Dry run: would delete ${params.feedpath} from ${params.siteUrl}. No write performed.`,
+      { success: true, dryRun: true, siteUrl: params.siteUrl, feedpath: params.feedpath },
+    );
+  }
+  await clients.searchConsole.sitemaps.delete({ siteUrl: params.siteUrl, feedpath: params.feedpath });
+  return result(
+    `Removed ${params.feedpath} from ${params.siteUrl}.`,
+    { success: true, siteUrl: params.siteUrl, feedpath: params.feedpath },
   );
 }
 

@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twelve tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients thirteen tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
 
 ## Requirements
 
@@ -332,6 +332,18 @@ Submits a sitemap and refreshes its current state. This is a write operation. If
 {
   "siteUrl": "sc-domain:example.com",
   "feedpath": "https://www.example.com/sitemap.xml"
+}
+```
+
+### `delete_sitemap`
+
+Removes a submitted sitemap from a Search Console property. This is a write operation. Set `dryRun` to `true` to preview the removal without changing Search Console.
+
+```json
+{
+  "siteUrl": "sc-domain:example.com",
+  "feedpath": "https://www.example.com/sitemap.xml",
+  "dryRun": true
 }
 ```
 

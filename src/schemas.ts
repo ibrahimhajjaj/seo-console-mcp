@@ -211,6 +211,19 @@ export const submitSitemapOutput = z.object({
   stateRefreshError: z.string().nullable(),
 });
 
+export const deleteSitemapShape = {
+  siteUrl: siteUrl.describe("Search Console property"),
+  feedpath: httpUrl.describe("Absolute URL of the sitemap to remove"),
+  dryRun: z.boolean().default(false).describe("If true, report what would be removed without writing to Search Console"),
+};
+export const deleteSitemapInput = z.object(deleteSitemapShape);
+export const deleteSitemapOutput = z.object({
+  success: z.boolean(),
+  dryRun: z.boolean().optional(),
+  siteUrl: z.string(),
+  feedpath: z.string(),
+});
+
 export const inspectUrlShape = {
   siteUrl: siteUrl.describe("Search Console property containing the inspected URL"),
   inspectionUrl: httpUrl.describe("Fully qualified URL to inspect"),

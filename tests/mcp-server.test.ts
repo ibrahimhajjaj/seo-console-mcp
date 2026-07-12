@@ -22,7 +22,7 @@ function fakeClients(): GoogleClients {
     searchConsole: {
       searchanalytics: { query: vi.fn() },
       sites: { list: vi.fn() },
-      sitemaps: { list: vi.fn(), submit: vi.fn() },
+      sitemaps: { delete: vi.fn(), list: vi.fn(), submit: vi.fn() },
       urlInspection: { index: { inspect: vi.fn() } },
     },
     pageSpeed: { pagespeedapi: { runpagespeed: vi.fn() } },
@@ -82,6 +82,7 @@ describe("MCP server tool registration", () => {
       "list_sitemaps",
       "list_properties",
       "submit_sitemap",
+      "delete_sitemap",
       "inspect_url",
       "pagespeed",
       "seo_audit",
@@ -200,6 +201,24 @@ describe("MCP server tool registration", () => {
       success: true,
       sitemap: null,
       stateRefreshError: "temporary list failure",
+    });
+  });
+
+  it("validates sitemap deletion output", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.sitemaps.delete).mockResolvedValue({ data: undefined });
+    const client = await connectedClient({ clients });
+
+    const result = await client.callTool({
+      name: "delete_sitemap",
+      arguments: { siteUrl: "https://example.com/", feedpath: "https://example.com/sitemap.xml" },
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      success: true,
+      siteUrl: "https://example.com/",
+      feedpath: "https://example.com/sitemap.xml",
     });
   });
 

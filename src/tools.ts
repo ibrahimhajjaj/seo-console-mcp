@@ -8,6 +8,8 @@ import {
   compareSearchPeriodsShape,
   ctrGapsOutput,
   ctrGapsShape,
+  deleteSitemapOutput,
+  deleteSitemapShape,
   inspectUrlOutput,
   inspectUrlShape,
   listPropertiesOutput,
@@ -32,6 +34,7 @@ import {
   compareSearchPeriods,
   createGoogleClients,
   ctrGapsTool,
+  deleteSitemap,
   inspectUrl,
   listProperties,
   listSitemaps,
@@ -136,6 +139,14 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
     outputSchema: submitSitemapOutput,
   },
     async (params) => safely(() => submitSitemap(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("delete_sitemap", {
+    description: "Remove a submitted sitemap from a Search Console property (write; supports dryRun)",
+    inputSchema: deleteSitemapShape,
+    outputSchema: deleteSitemapOutput,
+  },
+    async (params) => safely(() => deleteSitemap(getAuthenticatedClients(), params)),
   );
 
   server.registerTool("inspect_url", {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   compareSearchPeriods,
   ctrGapsTool,
+  deleteSitemap,
   inspectUrl,
   listProperties,
   listSitemaps,
@@ -18,7 +19,7 @@ function fakeClients(): GoogleClients {
     searchConsole: {
       searchanalytics: { query: vi.fn() },
       sites: { list: vi.fn() },
-      sitemaps: { list: vi.fn(), submit: vi.fn() },
+      sitemaps: { delete: vi.fn(), list: vi.fn(), submit: vi.fn() },
       urlInspection: { index: { inspect: vi.fn() } },
     },
     pageSpeed: { pagespeedapi: { runpagespeed: vi.fn() } },
@@ -283,6 +284,22 @@ describe("Google-backed tool operations", () => {
     const result = await submitSitemap(clients, { siteUrl: "https://example.com/", feedpath: "https://example.com/sitemap.xml" });
     expect(result.structuredContent).toMatchObject({ success: true, sitemap: null, stateRefreshError: "temporary list failure" });
     expect(result.content[0]?.text).toContain("accepted");
+  });
+
+  it("deletes a sitemap", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.sitemaps.delete).mockResolvedValue({ data: undefined });
+    const result = await deleteSitemap(clients, { siteUrl: "https://example.com/", feedpath: "https://example.com/sitemap.xml" });
+    expect(clients.searchConsole.sitemaps.delete).toHaveBeenCalledWith({ siteUrl: "https://example.com/", feedpath: "https://example.com/sitemap.xml" });
+    expect(result.structuredContent).toMatchObject({ success: true });
+  });
+
+  it("does not delete a sitemap on a dry run", async () => {
+    const clients = fakeClients();
+    const result = await deleteSitemap(clients, { siteUrl: "https://example.com/", feedpath: "https://example.com/sitemap.xml", dryRun: true });
+    expect(clients.searchConsole.sitemaps.delete).not.toHaveBeenCalled();
+    expect(result.structuredContent).toMatchObject({ success: true, dryRun: true });
+    expect(result.content[0]?.text).toContain("Dry run");
   });
 
   it("inspects URL index, mobile usability, and rich results", async () => {
