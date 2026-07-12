@@ -2,6 +2,10 @@ import { accessSync, constants } from "node:fs";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
+  compareSearchPeriodsOutput,
+  compareSearchPeriodsShape,
+  ctrGapsOutput,
+  ctrGapsShape,
   inspectUrlOutput,
   inspectUrlShape,
   listPropertiesOutput,
@@ -10,20 +14,28 @@ import {
   listSitemapsShape,
   pageSpeedOutput,
   pageSpeedShape,
+  queryCannibalizationOutput,
+  queryCannibalizationShape,
   searchAnalyticsOutput,
   searchAnalyticsShape,
+  searchOpportunitiesOutput,
+  searchOpportunitiesShape,
   seoAuditOutput,
   seoAuditShape,
   submitSitemapOutput,
   submitSitemapShape,
 } from "./schemas.js";
 import {
+  compareSearchPeriods,
   createGoogleClients,
+  ctrGapsTool,
   inspectUrl,
   listProperties,
   listSitemaps,
+  queryCannibalization,
   runPageSpeed,
   searchAnalytics,
+  searchOpportunities,
   submitSitemap,
   type GoogleClients,
   type ToolResult,
@@ -51,6 +63,38 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
     outputSchema: searchAnalyticsOutput,
   },
     async (params) => safely(() => searchAnalytics(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("search_opportunities", {
+    description: "Find queries ranking just off page 1 with high impressions, the highest-ROI keywords to improve",
+    inputSchema: searchOpportunitiesShape,
+    outputSchema: searchOpportunitiesOutput,
+  },
+    async (params) => safely(() => searchOpportunities(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("compare_search_periods", {
+    description: "Compare an analysis window with the preceding equal period to identify search gainers and losers",
+    inputSchema: compareSearchPeriodsShape,
+    outputSchema: compareSearchPeriodsOutput,
+  },
+    async (params) => safely(() => compareSearchPeriods(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("ctr_gaps", {
+    description: "Find high-impression queries or pages whose CTR trails peers at the same position for snippet rewrite prioritization",
+    inputSchema: ctrGapsShape,
+    outputSchema: ctrGapsOutput,
+  },
+    async (params) => safely(() => ctrGapsTool(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("query_cannibalization", {
+    description: "Find queries served by multiple pages to prioritize consolidation and internal-linking decisions",
+    inputSchema: queryCannibalizationShape,
+    outputSchema: queryCannibalizationOutput,
+  },
+    async (params) => safely(() => queryCannibalization(getAuthenticatedClients(), params)),
   );
 
   server.registerTool("list_sitemaps", {

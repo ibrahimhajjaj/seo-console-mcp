@@ -3,18 +3,27 @@ import { pagespeedonline, type pagespeedonline_v5 } from "@googleapis/pagespeedo
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { z } from "zod";
 import type {
+  compareSearchPeriodsInput,
+  ctrGapsInput,
   inspectUrlInput,
   listSitemapsInput,
   pageSpeedInput,
+  queryCannibalizationInput,
   searchAnalyticsInput,
+  searchOpportunitiesInput,
   submitSitemapInput,
 } from "./schemas.js";
+import { cannibalization, comparePeriods, ctrGaps, strikingDistance, type InsightRow } from "./insights.js";
 
 type SearchAnalyticsParams = z.output<typeof searchAnalyticsInput>;
 type ListSitemapsParams = z.output<typeof listSitemapsInput>;
 type SubmitSitemapParams = z.output<typeof submitSitemapInput>;
 type InspectUrlParams = z.output<typeof inspectUrlInput>;
 type PageSpeedParams = z.output<typeof pageSpeedInput>;
+type SearchOpportunitiesParams = z.output<typeof searchOpportunitiesInput>;
+type CompareSearchPeriodsParams = z.output<typeof compareSearchPeriodsInput>;
+type CtrGapsParams = z.output<typeof ctrGapsInput>;
+type QueryCannibalizationParams = z.output<typeof queryCannibalizationInput>;
 
 export type ToolResult = Omit<CallToolResult, "content" | "structuredContent"> & {
   content: Array<{ type: "text"; text: string }>;
@@ -58,11 +67,7 @@ export function createGoogleClients(credentialsPath?: string): GoogleClients {
 }
 
 export async function searchAnalytics(clients: GoogleClients, params: SearchAnalyticsParams, now = new Date()): Promise<ToolResult> {
-  const endDate = params.endDate ?? formatDate(now);
-  const start = new Date(`${endDate}T00:00:00Z`);
-  start.setUTCDate(start.getUTCDate() - 27);
-  const startDate = params.startDate ?? formatDate(start);
-  if (startDate > endDate) throw new Error("startDate must be on or before endDate");
+  const { startDate, endDate } = analysisWindow(params, now);
 
   const requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest = {
     startDate,
@@ -104,6 +109,71 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     rows,
     ...(firstIncompleteDate ? { firstIncompleteDate } : {}),
   });
+}
+
+export async function searchOpportunities(clients: GoogleClients, params: SearchOpportunitiesParams, now = new Date()): Promise<ToolResult> {
+  const window = analysisWindow(params, now);
+  const rows = await fetchInsightRows(clients, params.siteUrl, insightRequest(window, ["query", "page"]));
+  const opportunities = strikingDistance(rows, {
+    minPosition: params.minPosition ?? 5,
+    maxPosition: params.maxPosition ?? 20,
+    minImpressions: params.minImpressions ?? 10,
+    limit: params.limit ?? 50,
+  });
+  const lines = [
+    `Search opportunities for ${params.siteUrl} (${window.startDate} to ${window.endDate})`,
+    "Query | Page | Impressions | Position | Opportunity",
+    "--- | --- | ---: | ---: | ---:",
+    ...opportunities.map((item) => `${tableCell(item.keys[0] ?? "")} | ${tableCell(item.keys[1] ?? "")} | ${item.impressions} | ${item.position.toFixed(2)} | ${item.opportunity.toFixed(0)}`),
+  ];
+  if (opportunities.length === 0) lines.push("No opportunities found.");
+  return result(lines.join("\n"), { siteUrl: params.siteUrl, window, opportunities });
+}
+
+export async function compareSearchPeriods(clients: GoogleClients, params: CompareSearchPeriodsParams, now = new Date()): Promise<ToolResult> {
+  const currentWindow = analysisWindow(params, now);
+  const previousWindow = precedingWindow(currentWindow);
+  const dimensions = [params.by];
+  const current = await fetchInsightRows(clients, params.siteUrl, insightRequest(currentWindow, dimensions));
+  const previous = await fetchInsightRows(clients, params.siteUrl, insightRequest(previousWindow, dimensions));
+  const { gainers, losers } = comparePeriods(current, previous, { limit: params.limit ?? 50 });
+  const lines = [
+    `Search period comparison for ${params.siteUrl} (${currentWindow.startDate} to ${currentWindow.endDate})`,
+    `${params.by} | Click delta | Impression delta | Position delta`,
+    "--- | ---: | ---: | ---:",
+    ...gainers.map((item) => compareLine(item, "+")),
+    ...losers.map((item) => compareLine(item, "")),
+  ];
+  if (gainers.length === 0 && losers.length === 0) lines.push("No click changes found.");
+  return result(lines.join("\n"), { siteUrl: params.siteUrl, currentWindow, previousWindow, gainers, losers });
+}
+
+export async function ctrGapsTool(clients: GoogleClients, params: CtrGapsParams, now = new Date()): Promise<ToolResult> {
+  const window = analysisWindow(params, now);
+  const rows = await fetchInsightRows(clients, params.siteUrl, insightRequest(window, [params.by]));
+  const gaps = ctrGaps(rows, { minImpressions: params.minImpressions ?? 100, limit: params.limit ?? 50 });
+  const lines = [
+    `CTR gaps for ${params.siteUrl} (${window.startDate} to ${window.endDate})`,
+    `${params.by} | Impressions | CTR | Expected CTR | Missed clicks`,
+    "--- | ---: | ---: | ---: | ---:",
+    ...gaps.map((item) => `${tableCell(item.keys[0] ?? "")} | ${item.impressions} | ${(item.ctr * 100).toFixed(2)}% | ${(item.expectedCtr * 100).toFixed(2)}% | ${item.missedClicks}`),
+  ];
+  if (gaps.length === 0) lines.push("No CTR gaps found.");
+  return result(lines.join("\n"), { siteUrl: params.siteUrl, window, gaps });
+}
+
+export async function queryCannibalization(clients: GoogleClients, params: QueryCannibalizationParams, now = new Date()): Promise<ToolResult> {
+  const window = analysisWindow(params, now);
+  const rows = await fetchInsightRows(clients, params.siteUrl, insightRequest(window, ["query", "page"]));
+  const groups = cannibalization(rows, { minImpressions: params.minImpressions ?? 10 });
+  const lines = [
+    `Query cannibalization for ${params.siteUrl} (${window.startDate} to ${window.endDate})`,
+    "Query | Competing pages | Total impressions",
+    "--- | ---: | ---:",
+    ...groups.map((group) => `${tableCell(group.query)} | ${group.pages.length} | ${group.pages.reduce((sum, page) => sum + page.impressions, 0)}`),
+  ];
+  if (groups.length === 0) lines.push("No competing pages found.");
+  return result(lines.join("\n"), { siteUrl: params.siteUrl, window, groups });
 }
 
 export async function listProperties(clients: GoogleClients): Promise<ToolResult> {
@@ -261,6 +331,51 @@ function numericDetail(details: unknown, key: string): number | null {
   if (!details || typeof details !== "object") return null;
   const value = (details as Record<string, unknown>)[key];
   return typeof value === "number" ? value : null;
+}
+
+type AnalysisWindow = { startDate: string; endDate: string };
+
+function analysisWindow(params: { startDate?: string | undefined; endDate?: string | undefined }, now: Date): AnalysisWindow {
+  const endDate = params.endDate ?? formatDate(now);
+  const defaultStart = new Date(`${endDate}T00:00:00Z`);
+  defaultStart.setUTCDate(defaultStart.getUTCDate() - 27);
+  const startDate = params.startDate ?? formatDate(defaultStart);
+  if (startDate > endDate) throw new Error("startDate must be on or before endDate");
+  return { startDate, endDate };
+}
+
+function precedingWindow(window: AnalysisWindow): AnalysisWindow {
+  const currentStart = new Date(`${window.startDate}T00:00:00Z`);
+  const currentEnd = new Date(`${window.endDate}T00:00:00Z`);
+  const length = Math.round((currentEnd.valueOf() - currentStart.valueOf()) / 86_400_000) + 1;
+  const previousEnd = new Date(currentStart);
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+  const previousStart = new Date(previousEnd);
+  previousStart.setUTCDate(previousStart.getUTCDate() - length + 1);
+  return { startDate: formatDate(previousStart), endDate: formatDate(previousEnd) };
+}
+
+function insightRequest(window: AnalysisWindow, dimensions: string[]): searchconsole_v1.Schema$SearchAnalyticsQueryRequest {
+  return { ...window, dimensions, rowLimit: 5000 };
+}
+
+async function fetchInsightRows(
+  clients: GoogleClients,
+  siteUrl: string,
+  requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest,
+): Promise<InsightRow[]> {
+  const response = await clients.searchConsole.searchanalytics.query({ siteUrl, requestBody });
+  return (response.data.rows ?? []).map((row) => ({
+    keys: row.keys ?? [],
+    clicks: row.clicks ?? 0,
+    impressions: row.impressions ?? 0,
+    ctr: row.ctr ?? 0,
+    position: row.position ?? 0,
+  }));
+}
+
+function compareLine(item: { keys: string[]; clicksDelta: number; impressionsDelta: number; positionDelta: number }, positivePrefix: string): string {
+  return `${tableCell(item.keys[0] ?? "")} | ${positivePrefix}${item.clicksDelta} | ${item.impressionsDelta} | ${item.positionDelta.toFixed(2)}`;
 }
 
 function result(text: string, structuredContent: Record<string, unknown>): ToolResult {

@@ -68,6 +68,99 @@ export const searchAnalyticsOutput = z.object({
   firstIncompleteDate: z.string().optional(),
 });
 
+const analysisWindowShape = {
+  siteUrl: siteUrl.describe("Search Console property to analyze"),
+  startDate: isoDate.optional().describe("Start date in YYYY-MM-DD; defaults to the latest 28-day window"),
+  endDate: isoDate.optional().describe("End date in YYYY-MM-DD; defaults to today"),
+};
+const windowOutput = z.object({
+  startDate: z.string().describe("Inclusive window start date"),
+  endDate: z.string().describe("Inclusive window end date"),
+});
+const insightKeys = z.array(z.string()).describe("Dimension values in request order");
+
+export const searchOpportunitiesShape = {
+  ...analysisWindowShape,
+  minPosition: z.number().min(0).optional().describe("Lowest average position to include; defaults to 5"),
+  maxPosition: z.number().min(0).optional().describe("Highest average position to include; defaults to 20"),
+  minImpressions: z.number().min(0).optional().describe("Minimum impressions required; defaults to 10"),
+  limit: z.number().int().min(1).max(5000).optional().describe("Maximum opportunities to return; defaults to 50"),
+};
+export const searchOpportunitiesInput = z.object(searchOpportunitiesShape);
+export const searchOpportunitiesOutput = z.object({
+  siteUrl: z.string().describe("Search Console property analyzed"),
+  window: windowOutput.describe("Analysis window"),
+  opportunities: z.array(z.object({
+    keys: insightKeys,
+    impressions: z.number().describe("Search impressions"),
+    clicks: z.number().describe("Search clicks"),
+    ctr: z.number().describe("Click-through rate as a fraction"),
+    position: z.number().describe("Average search position"),
+    opportunity: z.number().describe("Opportunity score based on impressions and position"),
+  })).describe("Highest-value striking-distance rows"),
+});
+
+export const compareSearchPeriodsShape = {
+  ...analysisWindowShape,
+  by: z.enum(["query", "page"]).default("query").describe("Dimension used to compare performance"),
+  limit: z.number().int().min(1).max(5000).optional().describe("Maximum gainers and losers to return; defaults to 50 each"),
+};
+export const compareSearchPeriodsInput = z.object(compareSearchPeriodsShape);
+const compareItemOutput = z.object({
+  keys: insightKeys,
+  clicksCurrent: z.number().describe("Clicks in the current window"),
+  clicksPrevious: z.number().describe("Clicks in the previous window"),
+  clicksDelta: z.number().describe("Current clicks minus previous clicks"),
+  impressionsDelta: z.number().describe("Current impressions minus previous impressions"),
+  positionDelta: z.number().describe("Current average position minus previous average position"),
+});
+export const compareSearchPeriodsOutput = z.object({
+  siteUrl: z.string().describe("Search Console property analyzed"),
+  currentWindow: windowOutput.describe("Current comparison window"),
+  previousWindow: windowOutput.describe("Immediately preceding equal-length window"),
+  gainers: z.array(compareItemOutput).describe("Rows with increased clicks"),
+  losers: z.array(compareItemOutput).describe("Rows with decreased clicks"),
+});
+
+export const ctrGapsShape = {
+  ...analysisWindowShape,
+  by: z.enum(["query", "page"]).default("query").describe("Dimension used to identify CTR gaps"),
+  minImpressions: z.number().min(0).optional().describe("Minimum impressions required; defaults to 100"),
+  limit: z.number().int().min(1).max(5000).optional().describe("Maximum gaps to return; defaults to 50"),
+};
+export const ctrGapsInput = z.object(ctrGapsShape);
+export const ctrGapsOutput = z.object({
+  siteUrl: z.string().describe("Search Console property analyzed"),
+  window: windowOutput.describe("Analysis window"),
+  gaps: z.array(z.object({
+    keys: insightKeys,
+    impressions: z.number().describe("Search impressions"),
+    ctr: z.number().describe("Actual click-through rate as a fraction"),
+    expectedCtr: z.number().describe("Peer average click-through rate at the rounded position"),
+    position: z.number().describe("Average search position"),
+    missedClicks: z.number().describe("Estimated clicks missed versus peer CTR"),
+  })).describe("Rows underperforming their position peers"),
+});
+
+export const queryCannibalizationShape = {
+  ...analysisWindowShape,
+  minImpressions: z.number().min(0).optional().describe("Minimum impressions per query-page row; defaults to 10"),
+};
+export const queryCannibalizationInput = z.object(queryCannibalizationShape);
+export const queryCannibalizationOutput = z.object({
+  siteUrl: z.string().describe("Search Console property analyzed"),
+  window: windowOutput.describe("Analysis window"),
+  groups: z.array(z.object({
+    query: z.string().describe("Query served by multiple pages"),
+    pages: z.array(z.object({
+      page: z.string().describe("Competing page URL"),
+      impressions: z.number().describe("Search impressions"),
+      clicks: z.number().describe("Search clicks"),
+      position: z.number().describe("Average search position"),
+    })).describe("Pages ranking for the query"),
+  })).describe("Queries with multiple ranking pages"),
+});
+
 export const listPropertiesShape = {};
 export const listPropertiesOutput = z.object({
   count: z.number(),

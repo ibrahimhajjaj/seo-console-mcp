@@ -21,6 +21,7 @@ function fakeClients(): GoogleClients {
   return {
     searchConsole: {
       searchanalytics: { query: vi.fn() },
+      sites: { list: vi.fn() },
       sitemaps: { list: vi.fn(), submit: vi.fn() },
       urlInspection: { index: { inspect: vi.fn() } },
     },
@@ -36,6 +37,10 @@ describe("MCP server tool registration", () => {
 
     expect(tools.map((tool) => tool.name)).toEqual([
       "search_analytics",
+      "search_opportunities",
+      "compare_search_periods",
+      "ctr_gaps",
+      "query_cannibalization",
       "list_sitemaps",
       "list_properties",
       "submit_sitemap",
@@ -45,6 +50,25 @@ describe("MCP server tool registration", () => {
     ]);
     expect(tools.every((tool) => tool.description?.length)).toBe(true);
     expect(tools.every((tool) => tool.outputSchema)).toBe(true);
+  });
+
+  it.each([
+    ["search_opportunities", { siteUrl: "https://example.com/" }],
+    ["compare_search_periods", { siteUrl: "https://example.com/", by: "query" }],
+    ["ctr_gaps", { siteUrl: "https://example.com/", by: "query" }],
+    ["query_cannibalization", { siteUrl: "https://example.com/" }],
+  ])("validates %s structured output", async (name, args) => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [
+      { keys: ["seo", "https://example.com/a"], clicks: 5, impressions: 200, ctr: 0.025, position: 8 },
+      { keys: ["seo", "https://example.com/b"], clicks: 3, impressions: 150, ctr: 0.02, position: 8 },
+    ] } });
+    const client = await connectedClient({ clients });
+
+    const output = await client.callTool({ name, arguments: args });
+
+    expect(output.isError).not.toBe(true);
+    expect(output.structuredContent).toBeDefined();
   });
 
   it("validates search analytics structured output", async () => {

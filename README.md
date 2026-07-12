@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients seven tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients eleven tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
 
 ## Requirements
 
@@ -244,6 +244,62 @@ Queries `searchanalytics.query` and returns a compact ranked table plus structur
 ```
 
 `siteUrl` is required. `startDate` and `endDate` default to the latest 28-day UTC window. `dimensions` defaults to `["query"]`; allowed values are `query`, `page`, `country`, `device`, `date`, and `searchAppearance`. `rowLimit` defaults to 25 and is capped at 25,000. `type` may be `web`, `image`, `video`, or `news`.
+
+### `search_opportunities`
+
+Finds high-impression queries in striking distance of stronger rankings. It groups by query and page, defaults to positions 5 through 20, and returns opportunities ranked by impression-weighted position.
+
+```json
+{
+  "siteUrl": "sc-domain:example.com",
+  "startDate": "2026-06-01",
+  "endDate": "2026-06-28",
+  "minPosition": 5,
+  "maxPosition": 20,
+  "minImpressions": 100,
+  "limit": 25
+}
+```
+
+### `compare_search_periods`
+
+Compares a selected window with the immediately preceding equal-length window. It returns the largest click gainers and losers grouped by query or page.
+
+```json
+{
+  "siteUrl": "sc-domain:example.com",
+  "startDate": "2026-06-01",
+  "endDate": "2026-06-28",
+  "by": "query",
+  "limit": 25
+}
+```
+
+### `ctr_gaps`
+
+Finds high-impression queries or pages whose CTR trails the average for rows at the same rounded position. The missed-click estimate helps prioritize title and description rewrites.
+
+```json
+{
+  "siteUrl": "sc-domain:example.com",
+  "by": "page",
+  "minImpressions": 250,
+  "limit": 25
+}
+```
+
+### `query_cannibalization`
+
+Finds queries for which multiple pages receive Search Console impressions. Results group the competing pages and rank groups by total impressions.
+
+```json
+{
+  "siteUrl": "sc-domain:example.com",
+  "startDate": "2026-06-01",
+  "endDate": "2026-06-28",
+  "minImpressions": 25
+}
+```
 
 ### `list_sitemaps`
 

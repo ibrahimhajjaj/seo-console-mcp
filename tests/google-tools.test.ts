@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  compareSearchPeriods,
+  ctrGapsTool,
   inspectUrl,
   listProperties,
   listSitemaps,
+  queryCannibalization,
   runPageSpeed,
   searchAnalytics,
+  searchOpportunities,
   submitSitemap,
   type GoogleClients,
 } from "../src/google-tools.js";
@@ -22,6 +26,76 @@ function fakeClients(): GoogleClients {
 }
 
 describe("Google-backed tool operations", () => {
+  it("finds striking-distance search opportunities", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [
+      { keys: ["seo guide", "https://example.com/guide"], clicks: 12, impressions: 500, ctr: 0.024, position: 8 },
+      { keys: ["already first", "https://example.com/first"], clicks: 30, impressions: 200, ctr: 0.15, position: 2 },
+    ] } });
+
+    const output = await searchOpportunities(clients, { siteUrl: "https://example.com/" }, new Date("2026-07-11T12:00:00Z"));
+
+    expect(clients.searchConsole.searchanalytics.query).toHaveBeenCalledWith({ siteUrl: "https://example.com/", requestBody: {
+      startDate: "2026-06-14", endDate: "2026-07-11", dimensions: ["query", "page"], rowLimit: 5000,
+    } });
+    expect(output.structuredContent).toMatchObject({
+      window: { startDate: "2026-06-14", endDate: "2026-07-11" },
+      opportunities: [{ keys: ["seo guide", "https://example.com/guide"], opportunity: 4000 }],
+    });
+  });
+
+  it("compares current search performance with the preceding equal window", async () => {
+    const clients = fakeClients();
+    const query = vi.mocked(clients.searchConsole.searchanalytics.query);
+    query.mockResolvedValueOnce({ data: { rows: [{ keys: ["seo"], clicks: 12, impressions: 100, ctr: 0.12, position: 4 }] } });
+    query.mockResolvedValueOnce({ data: { rows: [{ keys: ["seo"], clicks: 5, impressions: 80, ctr: 0.0625, position: 6 }] } });
+
+    const output = await compareSearchPeriods(clients, {
+      siteUrl: "https://example.com/", startDate: "2026-07-01", endDate: "2026-07-10", by: "query",
+    });
+
+    expect(query).toHaveBeenNthCalledWith(1, { siteUrl: "https://example.com/", requestBody: {
+      startDate: "2026-07-01", endDate: "2026-07-10", dimensions: ["query"], rowLimit: 5000,
+    } });
+    expect(query).toHaveBeenNthCalledWith(2, { siteUrl: "https://example.com/", requestBody: {
+      startDate: "2026-06-21", endDate: "2026-06-30", dimensions: ["query"], rowLimit: 5000,
+    } });
+    expect(output.structuredContent).toMatchObject({
+      currentWindow: { startDate: "2026-07-01", endDate: "2026-07-10" },
+      previousWindow: { startDate: "2026-06-21", endDate: "2026-06-30" },
+      gainers: [{ keys: ["seo"], clicksDelta: 7 }], losers: [],
+    });
+  });
+
+  it("finds rows whose CTR trails peers at the same position", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [
+      { keys: ["weak snippet"], clicks: 10, impressions: 1000, ctr: 0.01, position: 4.1 },
+      { keys: ["strong snippet"], clicks: 100, impressions: 1000, ctr: 0.1, position: 4.2 },
+    ] } });
+
+    const output = await ctrGapsTool(clients, { siteUrl: "https://example.com/", by: "query" });
+
+    expect(output.structuredContent).toMatchObject({ gaps: [
+      { keys: ["weak snippet"], expectedCtr: 0.055, missedClicks: 45 },
+    ] });
+  });
+
+  it("groups queries served by competing pages", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [
+      { keys: ["seo", "https://example.com/a"], clicks: 5, impressions: 100, ctr: 0.05, position: 6 },
+      { keys: ["seo", "https://example.com/b"], clicks: 3, impressions: 70, ctr: 0.043, position: 8 },
+    ] } });
+
+    const output = await queryCannibalization(clients, { siteUrl: "https://example.com/" });
+
+    expect(output.structuredContent).toMatchObject({ groups: [{ query: "seo", pages: [
+      { page: "https://example.com/a", impressions: 100 },
+      { page: "https://example.com/b", impressions: 70 },
+    ] }] });
+  });
+
   it("lists Search Console properties", async () => {
     const clients = fakeClients();
     vi.mocked(clients.searchConsole.sites.list).mockResolvedValue({ data: { siteEntry: [
