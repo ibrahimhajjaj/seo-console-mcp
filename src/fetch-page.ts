@@ -92,7 +92,54 @@ export async function fetchHtml(
   if (!response.ok) throw new Error(`Page fetch failed with HTTP ${response.status} ${response.statusText}`);
   const contentLength = Number(response.headers.get("content-length") ?? 0);
   if (contentLength > MAX_HTML_BYTES) throw new Error("Page HTML exceeds the 10 MB audit limit");
-  const bytes = await response.arrayBuffer();
-  if (bytes.byteLength > MAX_HTML_BYTES) throw new Error("Page HTML exceeds the 10 MB audit limit");
-  return { html: new TextDecoder().decode(bytes), finalUrl: currentUrl.toString(), status: response.status };
+  const bytes = await readCappedBody(response);
+  const charset = detectCharset(response.headers.get("content-type"), bytes);
+  return { html: decodeBytes(bytes, charset), finalUrl: currentUrl.toString(), status: response.status };
+}
+
+// Read the body incrementally so a missing/false content-length cannot force an
+// unbounded allocation: stop and cancel the stream the moment the running total
+// crosses the cap, before the whole body is in memory.
+async function readCappedBody(response: Response): Promise<Uint8Array> {
+  if (!response.body) return new Uint8Array(0);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > MAX_HTML_BYTES) {
+      await reader.cancel();
+      throw new Error("Page HTML exceeds the 10 MB audit limit");
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
+// Honor the response charset (Content-Type, else a <meta charset> in the head)
+// so non-UTF-8 pages are not mangled into replacement characters.
+function detectCharset(contentType: string | null, bytes: Uint8Array): string {
+  const headerCharset = contentType ? /charset=["']?([\w-]+)/i.exec(contentType)?.[1] : undefined;
+  if (headerCharset) return headerCharset;
+  const head = new TextDecoder("latin1").decode(bytes.subarray(0, 1024));
+  const metaCharset = /<meta[^>]+charset=["']?\s*([\w-]+)/i.exec(head)?.[1]
+    ?? /<meta[^>]+content=["'][^"']*charset=([\w-]+)/i.exec(head)?.[1];
+  return metaCharset ?? "utf-8";
+}
+
+function decodeBytes(bytes: Uint8Array, charset: string): string {
+  try {
+    return new TextDecoder(charset).decode(bytes);
+  } catch {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
 }

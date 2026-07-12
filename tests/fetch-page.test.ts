@@ -116,6 +116,48 @@ describe("fetchHtml", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(6);
   });
 
+  it("aborts and cancels a body that exceeds the 10 MB cap without a content-length", async () => {
+    let cancelled = false;
+    const oneMb = new Uint8Array(1024 * 1024);
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) { controller.enqueue(oneMb); },
+      cancel() { cancelled = true; },
+    });
+    const fetchImpl = vi.fn(async () => new Response(stream, { status: 200 }));
+
+    await expect(fetchHtml("https://big.example/", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
+    })).rejects.toThrow("Page HTML exceeds the 10 MB audit limit");
+    expect(cancelled).toBe(true);
+  });
+
+  it("decodes a non-UTF-8 body using the Content-Type charset", async () => {
+    const body = new Uint8Array([0x63, 0x61, 0x66, 0xe9]); // "café" in windows-1252 (é = 0xE9)
+    const fetchImpl = vi.fn(async () => new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/html; charset=windows-1252" },
+    }));
+
+    const result = await fetchHtml("https://fr.example/", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
+    });
+    expect(result.html).toBe("café");
+  });
+
+  it("falls back to a <meta charset> when the header omits one", async () => {
+    const prefix = new TextEncoder().encode(`<meta charset="windows-1252"><p>`);
+    const body = new Uint8Array([...prefix, 0x63, 0x61, 0x66, 0xe9]); // ...café
+    const fetchImpl = vi.fn(async () => new Response(body, { status: 200 }));
+
+    const result = await fetchHtml("https://fr.example/", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
+    });
+    expect(result.html).toContain("café");
+  });
+
   it("allows private targets when explicitly enabled", async () => {
     const fetchImpl = vi.fn(async () => new Response("internal", { status: 200 }));
     const lookupHost = vi.fn();
