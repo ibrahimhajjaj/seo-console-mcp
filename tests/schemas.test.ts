@@ -40,6 +40,13 @@ describe("tool input schemas", () => {
     expect(() => searchAnalyticsInput.parse({ siteUrl: "https://example.com", startDate: "2026-99-01" })).toThrow();
   });
 
+  it("rejects duplicate search analytics dimensions", () => {
+    expect(() => searchAnalyticsInput.parse({
+      siteUrl: "https://example.com",
+      dimensions: ["query", "query"],
+    })).toThrow("dimensions must be unique");
+  });
+
   it("validates list_sitemaps", () => {
     expect(listSitemapsInput.parse({ siteUrl: "https://example.com" }).siteUrl).toBe("https://example.com/");
     expect(() => listSitemapsInput.parse({ siteUrl: "example.com" })).toThrow();
@@ -60,6 +67,12 @@ describe("tool input schemas", () => {
     expect(parsed.strategy).toBe("mobile");
     expect(parsed.category).toEqual(["performance", "seo", "accessibility", "best-practices"]);
     expect(() => pageSpeedInput.parse({ url: "file:///tmp/page", strategy: "tablet" })).toThrow();
+  });
+
+  it("rejects URLs with embedded credentials", () => {
+    expect(pageSpeedInput.parse({ url: "https://example.com/" }).url).toBe("https://example.com/");
+    expect(() => pageSpeedInput.parse({ url: "https://user:pass@example.com/" }))
+      .toThrow("URL must not contain embedded credentials");
   });
 
   it("validates seo_audit", () => {

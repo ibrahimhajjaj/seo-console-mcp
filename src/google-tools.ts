@@ -36,6 +36,11 @@ export interface GoogleClients {
   };
 }
 
+// Values can contain the cell delimiter or newlines, so text table cells must remain single-line.
+function tableCell(value: string): string {
+  return value.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
+}
+
 export function createGoogleClients(credentialsPath?: string): GoogleClients {
   const auth = new google.auth.GoogleAuth({
     ...(credentialsPath ? { keyFile: credentialsPath } : {}),
@@ -80,7 +85,7 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     `Search analytics for ${params.siteUrl} (${startDate} to ${endDate})`,
     `# | ${dimensionHeader} | Clicks | Impressions | CTR | Position`,
     `--- | --- | ---: | ---: | ---: | ---:`,
-    ...rows.map((row) => `${row.rank} | ${params.dimensions.map((dimension) => row.keys[dimension]).join(" / ")} | ${row.clicks} | ${row.impressions} | ${(row.ctr * 100).toFixed(2)}% | ${row.position.toFixed(2)}`),
+    ...rows.map((row) => `${row.rank} | ${params.dimensions.map((dimension) => tableCell(String(row.keys[dimension]))).join(" / ")} | ${row.clicks} | ${row.impressions} | ${(row.ctr * 100).toFixed(2)}% | ${row.position.toFixed(2)}`),
   ];
   if (rows.length === 0) lines.push("No rows returned.");
   return result(lines.join("\n"), { siteUrl: params.siteUrl, startDate, endDate, dimensions: params.dimensions, rowCount: rows.length, rows });

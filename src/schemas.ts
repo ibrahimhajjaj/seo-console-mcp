@@ -2,9 +2,12 @@ import { z } from "zod";
 import { normalizeSiteUrl } from "./site-url.js";
 
 const httpUrl = z.url().superRefine((value, context) => {
-  const protocol = new URL(value).protocol;
-  if (protocol !== "http:" && protocol !== "https:") {
+  const url = new URL(value);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
     context.addIssue({ code: "custom", message: "URL must use http or https" });
+  }
+  if (url.username || url.password) {
+    context.addIssue({ code: "custom", message: "URL must not contain embedded credentials" });
   }
 }).transform((value) => new URL(value).toString());
 
@@ -38,7 +41,9 @@ export const searchAnalyticsShape = {
   siteUrl: siteUrl.describe("Search Console property, such as https://example.com/ or sc-domain:example.com"),
   startDate: isoDate.optional().describe("Start date in YYYY-MM-DD; defaults to 28 days ago"),
   endDate: isoDate.optional().describe("End date in YYYY-MM-DD; defaults to today"),
-  dimensions: z.array(z.enum(searchDimensions)).min(1).default(["query"]).describe("Dimensions used to group results"),
+  dimensions: z.array(z.enum(searchDimensions)).min(1)
+    .refine((values) => new Set(values).size === values.length, "dimensions must be unique")
+    .default(["query"]).describe("Dimensions used to group results"),
   rowLimit: z.number().int().min(1).max(25_000).default(25).describe("Maximum rows to return"),
   dimensionFilterGroups: z.array(dimensionFilterGroup).optional().describe("Search Console dimension filters"),
   type: z.enum(["web", "image", "video", "news"]).optional().describe("Search result type"),

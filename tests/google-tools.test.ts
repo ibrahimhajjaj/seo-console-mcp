@@ -45,6 +45,29 @@ describe("Google-backed tool operations", () => {
     expect(result.structuredContent).toMatchObject({ rowCount: 1, rows: [{ rank: 1, keys: { query: "seo mcp" } }] });
   });
 
+  it("escapes delimiters and newlines only in search analytics text", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [
+      { keys: ["buy cats | dogs"], clicks: 4, impressions: 20, ctr: 0.2, position: 2 },
+      { keys: ["first\nsecond"], clicks: 3, impressions: 15, ctr: 0.2, position: 4 },
+    ] } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "https://example.com/",
+      dimensions: ["query"],
+      rowLimit: 25,
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    const text = result.content[0]?.text ?? "";
+    expect(text).toContain("1 | buy cats \\| dogs | 4 | 20 | 20.00% | 2.00");
+    expect(text).toContain("2 | first second | 3 | 15 | 20.00% | 4.00");
+    expect(text).not.toContain("first\nsecond");
+    expect(result.structuredContent).toMatchObject({ rows: [
+      { keys: { query: "buy cats | dogs" } },
+      { keys: { query: "first\nsecond" } },
+    ] });
+  });
+
   it("passes search filters and type through", async () => {
     const clients = fakeClients();
     vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: {} });
