@@ -11,6 +11,7 @@ import type {
   listSitemapsInput,
   pageSpeedInput,
   queryCannibalizationInput,
+  requestRecrawlInput,
   searchAnalyticsInput,
   searchOpportunitiesInput,
   submitSitemapInput,
@@ -25,6 +26,7 @@ type SubmitSitemapParams = z.output<typeof submitSitemapInput>;
 type DeleteSitemapParams = z.output<typeof deleteSitemapInput>;
 type InspectUrlParams = z.output<typeof inspectUrlInput>;
 type IndexCoverageParams = z.output<typeof indexCoverageInput>;
+type RequestRecrawlParams = z.output<typeof requestRecrawlInput>;
 type PageSpeedParams = z.output<typeof pageSpeedInput>;
 type SearchOpportunitiesParams = z.output<typeof searchOpportunitiesInput>;
 type CompareSearchPeriodsParams = z.output<typeof compareSearchPeriodsInput>;
@@ -297,36 +299,7 @@ export async function indexCoverage(
   const sitemap = await (deps.fetchImpl ?? fetchHtml)(params.sitemapUrl);
   const parsed = parseSitemapUrls(sitemap.html);
   const selectedUrls = parsed.urls.slice(0, maxUrls);
-  const results = await mapWithConcurrency(selectedUrls, concurrency, async (url) => {
-    try {
-      const response = await clients.searchConsole.urlInspection.index.inspect({
-        requestBody: { siteUrl: params.siteUrl, inspectionUrl: url },
-      });
-      const status = response.data.inspectionResult?.indexStatusResult;
-      const coverageState = status?.coverageState ?? null;
-      const verdict = status?.verdict ?? null;
-      const normalizedCoverage = coverageState?.toLowerCase() ?? "";
-      const indexed = verdict === "PASS"
-        || (normalizedCoverage.includes("indexed") && !normalizedCoverage.includes("not indexed"));
-      return {
-        url,
-        coverageState,
-        verdict,
-        indexed,
-        lastCrawlTime: status?.lastCrawlTime ?? null,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        url,
-        coverageState: null,
-        verdict: null,
-        indexed: false,
-        lastCrawlTime: null,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
+  const results = await inspectIndexStatuses(clients, params.siteUrl, selectedUrls, concurrency);
   const failed = results.filter((item) => item.error !== null).length;
   const indexed = results.filter((item) => item.indexed).length;
   const notIndexed = results
@@ -351,6 +324,75 @@ export async function indexCoverage(
     failed,
     truncated,
     childSitemapsSkipped: parsed.childSitemaps.length,
+    results,
+  });
+}
+
+export async function requestRecrawl(
+  clients: GoogleClients,
+  params: RequestRecrawlParams,
+  deps: { fetchImpl?: typeof fetchHtml } = {},
+): Promise<ToolResult> {
+  // Enforce the quota caps here too, not only in the MCP schema: this function is
+  // exported and can be called directly with out-of-range or non-finite values.
+  const maxUrls = Math.min(50, Math.max(1, Math.trunc(params.maxUrls) || 1));
+  const concurrency = Math.min(5, Math.max(1, Math.trunc(params.concurrency) || 1));
+  let selectedUrls: string[];
+  let totalDiscovered: number;
+  let sitemapIndexOnly = false;
+  if (params.urls && params.urls.length > 0) {
+    totalDiscovered = params.urls.length;
+    selectedUrls = params.urls.slice(0, 50);
+  } else if (params.sitemapUrl) {
+    const sitemap = await (deps.fetchImpl ?? fetchHtml)(params.sitemapUrl);
+    const parsed = parseSitemapUrls(sitemap.html);
+    totalDiscovered = parsed.urls.length;
+    selectedUrls = parsed.urls.slice(0, maxUrls);
+    sitemapIndexOnly = parsed.urls.length === 0 && parsed.childSitemaps.length > 0;
+  } else {
+    throw new Error("Provide urls or sitemapUrl so there is something to check.");
+  }
+  const results = await inspectIndexStatuses(clients, params.siteUrl, selectedUrls, concurrency);
+  const indexed = results.filter((item) => item.indexed).length;
+  const failed = results.filter((item) => item.error !== null).length;
+  const notIndexed = results
+    .filter((item) => !item.indexed && item.error === null)
+    .map(({ url, coverageState }) => ({ url, coverageState }));
+  const feedpath = params.feedpath ?? params.sitemapUrl ?? null;
+
+  let performed = false;
+  let reason: string;
+  if (selectedUrls.length === 0) {
+    reason = "no URLs to check";
+  } else if (notIndexed.length === 0) {
+    reason = "all checked URLs are already indexed";
+  } else if (!feedpath) {
+    reason = "no sitemap to resubmit; pass feedpath or sitemapUrl";
+  } else if (params.dryRun) {
+    reason = `dry run: would resubmit ${feedpath}`;
+  } else {
+    await clients.searchConsole.sitemaps.submit({ siteUrl: params.siteUrl, feedpath });
+    performed = true;
+    reason = `resubmitted ${feedpath}`;
+  }
+  const truncated = totalDiscovered > selectedUrls.length || sitemapIndexOnly;
+  const text = [
+    `Recrawl check for ${params.siteUrl}: ${indexed} of ${selectedUrls.length} checked URLs are indexed; ${notIndexed.length} not indexed; ${failed} failed.`,
+    ...(truncated && totalDiscovered > selectedUrls.length ? [`Truncated after ${selectedUrls.length} of ${totalDiscovered} URLs.`] : []),
+    ...(sitemapIndexOnly ? ["The sitemap is an index with no direct page URLs; child sitemaps were not read."] : []),
+    `Sitemap resubmission: ${reason}.`,
+    "Google has no bulk request-indexing API; resubmitting a sitemap with fresh lastmod values is the supported recrawl signal. Use Request Indexing in the Search Console UI for single urgent URLs.",
+  ].join("\n");
+  return result(text, {
+    siteUrl: params.siteUrl,
+    checked: results.length,
+    indexed,
+    notIndexed,
+    failed,
+    totalDiscovered,
+    truncated,
+    resubmit: { performed, feedpath, reason },
+    ...(params.dryRun ? { dryRun: true } : {}),
     results,
   });
 }
@@ -394,6 +436,53 @@ export async function runPageSpeed(clients: GoogleClients, params: PageSpeedPara
     ...(opportunities.length ? opportunities.map((item) => `- ${item.title}: about ${item.savingsMs} ms`) : ["- None reported"]),
   ].join("\n");
   return result(text, { url: params.url, strategy: params.strategy, fieldData: presentFieldData, scores, opportunities });
+}
+
+type UrlIndexStatus = {
+  url: string;
+  coverageState: string | null;
+  verdict: string | null;
+  indexed: boolean;
+  lastCrawlTime: string | null;
+  error: string | null;
+};
+
+async function inspectIndexStatuses(
+  clients: GoogleClients,
+  siteUrl: string,
+  urls: string[],
+  concurrency: number,
+): Promise<UrlIndexStatus[]> {
+  return mapWithConcurrency(urls, concurrency, async (url) => {
+    try {
+      const response = await clients.searchConsole.urlInspection.index.inspect({
+        requestBody: { siteUrl, inspectionUrl: url },
+      });
+      const status = response.data.inspectionResult?.indexStatusResult;
+      const coverageState = status?.coverageState ?? null;
+      const verdict = status?.verdict ?? null;
+      const normalizedCoverage = coverageState?.toLowerCase() ?? "";
+      const indexed = verdict === "PASS"
+        || (normalizedCoverage.includes("indexed") && !normalizedCoverage.includes("not indexed"));
+      return {
+        url,
+        coverageState,
+        verdict,
+        indexed,
+        lastCrawlTime: status?.lastCrawlTime ?? null,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        url,
+        coverageState: null,
+        verdict: null,
+        indexed: false,
+        lastCrawlTime: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
 }
 
 function shapeSitemap(sitemap: searchconsole_v1.Schema$WmxSitemap): Record<string, unknown> {

@@ -8,6 +8,7 @@ import {
   listProperties,
   listSitemaps,
   queryCannibalization,
+  requestRecrawl,
   runPageSpeed,
   searchAnalytics,
   searchOpportunities,
@@ -403,6 +404,119 @@ describe("Google-backed tool operations", () => {
 
     expect(clients.searchConsole.urlInspection.index.inspect).not.toHaveBeenCalled();
     expect(output.structuredContent).toMatchObject({ totalDiscovered: 0, checked: 0, truncated: true, childSitemapsSkipped: 2 });
+  });
+
+  it("resubmits the sitemap when checked URLs are not indexed", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect)
+      .mockResolvedValueOnce({ data: { inspectionResult: { indexStatusResult: { verdict: "PASS", coverageState: "Submitted and indexed" } } } })
+      .mockResolvedValueOnce({ data: { inspectionResult: { indexStatusResult: { verdict: "NEUTRAL", coverageState: "Discovered - currently not indexed" } } } });
+    vi.mocked(clients.searchConsole.sitemaps.submit).mockResolvedValue({ data: undefined });
+
+    const output = await requestRecrawl(clients, {
+      siteUrl: "sc-domain:example.com",
+      sitemapUrl: "https://example.com/sitemap.xml",
+      maxUrls: 20,
+      concurrency: 1,
+      dryRun: false,
+    }, { fetchImpl: vi.fn().mockResolvedValue({ html: sitemap("a", "b") }) });
+
+    expect(clients.searchConsole.sitemaps.submit).toHaveBeenCalledWith({ siteUrl: "sc-domain:example.com", feedpath: "https://example.com/sitemap.xml" });
+    expect(output.structuredContent).toMatchObject({
+      checked: 2,
+      indexed: 1,
+      notIndexed: [{ url: "https://example.com/b", coverageState: "Discovered - currently not indexed" }],
+      resubmit: { performed: true, feedpath: "https://example.com/sitemap.xml" },
+    });
+  });
+
+  it("skips resubmission when every checked URL is indexed", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({ data: { inspectionResult: { indexStatusResult: { verdict: "PASS", coverageState: "Submitted and indexed" } } } });
+
+    const output = await requestRecrawl(clients, {
+      siteUrl: "sc-domain:example.com",
+      sitemapUrl: "https://example.com/sitemap.xml",
+      maxUrls: 20,
+      concurrency: 3,
+      dryRun: false,
+    }, { fetchImpl: vi.fn().mockResolvedValue({ html: sitemap("a", "b") }) });
+
+    expect(clients.searchConsole.sitemaps.submit).not.toHaveBeenCalled();
+    expect(output.structuredContent).toMatchObject({
+      indexed: 2,
+      resubmit: { performed: false, reason: "all checked URLs are already indexed" },
+    });
+  });
+
+  it("does not resubmit the sitemap on a recrawl dry run", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({ data: { inspectionResult: { indexStatusResult: { verdict: "NEUTRAL", coverageState: "Crawled - currently not indexed" } } } });
+
+    const output = await requestRecrawl(clients, {
+      siteUrl: "sc-domain:example.com",
+      sitemapUrl: "https://example.com/sitemap.xml",
+      maxUrls: 20,
+      concurrency: 3,
+      dryRun: true,
+    }, { fetchImpl: vi.fn().mockResolvedValue({ html: sitemap("a") }) });
+
+    expect(clients.searchConsole.sitemaps.submit).not.toHaveBeenCalled();
+    expect(output.structuredContent).toMatchObject({
+      dryRun: true,
+      resubmit: { performed: false, reason: "dry run: would resubmit https://example.com/sitemap.xml" },
+    });
+  });
+
+  it("checks explicit URLs without a sitemap and reports there is nothing to resubmit", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({ data: { inspectionResult: { indexStatusResult: { verdict: "NEUTRAL", coverageState: "Discovered - currently not indexed" } } } });
+    const fetchImpl = vi.fn();
+
+    const output = await requestRecrawl(clients, {
+      siteUrl: "sc-domain:example.com",
+      urls: ["https://example.com/new-page"],
+      maxUrls: 20,
+      concurrency: 3,
+      dryRun: false,
+    }, { fetchImpl });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(clients.searchConsole.urlInspection.index.inspect).toHaveBeenCalledWith({ requestBody: { siteUrl: "sc-domain:example.com", inspectionUrl: "https://example.com/new-page" } });
+    expect(clients.searchConsole.sitemaps.submit).not.toHaveBeenCalled();
+    expect(output.structuredContent).toMatchObject({
+      notIndexed: [{ url: "https://example.com/new-page" }],
+      resubmit: { performed: false, feedpath: null, reason: "no sitemap to resubmit; pass feedpath or sitemapUrl" },
+    });
+  });
+
+  it("resubmits an explicit feedpath for explicit URLs", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({ data: { inspectionResult: { indexStatusResult: { verdict: "NEUTRAL", coverageState: "Discovered - currently not indexed" } } } });
+    vi.mocked(clients.searchConsole.sitemaps.submit).mockResolvedValue({ data: undefined });
+
+    const output = await requestRecrawl(clients, {
+      siteUrl: "sc-domain:example.com",
+      urls: ["https://example.com/new-page"],
+      feedpath: "https://example.com/sitemap.xml",
+      maxUrls: 20,
+      concurrency: 3,
+      dryRun: false,
+    });
+
+    expect(clients.searchConsole.sitemaps.submit).toHaveBeenCalledWith({ siteUrl: "sc-domain:example.com", feedpath: "https://example.com/sitemap.xml" });
+    expect(output.structuredContent).toMatchObject({ resubmit: { performed: true, feedpath: "https://example.com/sitemap.xml" } });
+  });
+
+  it("rejects a recrawl request with neither urls nor a sitemap", async () => {
+    const clients = fakeClients();
+
+    await expect(requestRecrawl(clients, {
+      siteUrl: "sc-domain:example.com",
+      maxUrls: 20,
+      concurrency: 3,
+      dryRun: false,
+    })).rejects.toThrow("Provide urls or sitemapUrl");
   });
 
   it("extracts PageSpeed field data, category scores, and opportunities", async () => {

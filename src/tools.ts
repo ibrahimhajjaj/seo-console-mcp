@@ -22,6 +22,8 @@ import {
   pageSpeedShape,
   queryCannibalizationOutput,
   queryCannibalizationShape,
+  requestRecrawlOutput,
+  requestRecrawlShape,
   searchAnalyticsOutput,
   searchAnalyticsShape,
   searchOpportunitiesOutput,
@@ -42,6 +44,7 @@ import {
   listProperties,
   listSitemaps,
   queryCannibalization,
+  requestRecrawl,
   runPageSpeed,
   searchAnalytics,
   searchOpportunities,
@@ -166,6 +169,14 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
     outputSchema: indexCoverageOutput,
   },
     async (params) => safely(() => indexCoverage(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("request_recrawl", {
+    description: "Inspect URLs' Google index status and resubmit the covering sitemap for the ones not indexed, the supported bulk recrawl nudge (write; supports dryRun)",
+    inputSchema: requestRecrawlShape,
+    outputSchema: requestRecrawlOutput,
+  },
+    async (params) => safely(() => requestRecrawl(getAuthenticatedClients(), params)),
   );
 
   server.registerTool("pagespeed", {

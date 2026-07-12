@@ -3,6 +3,7 @@ import {
   inspectUrlInput,
   listSitemapsInput,
   pageSpeedInput,
+  requestRecrawlInput,
   searchAnalyticsInput,
   seoAuditInput,
   submitSitemapInput,
@@ -95,5 +96,11 @@ describe("tool input schemas", () => {
   it("validates seo_audit", () => {
     expect(seoAuditInput.parse({ url: "https://example.com" }).url).toBe("https://example.com/");
     expect(() => seoAuditInput.parse({ url: "javascript:alert(1)" })).toThrow();
+  });
+
+  it("validates request_recrawl defaults", () => {
+    const parsed = requestRecrawlInput.parse({ siteUrl: "sc-domain:example.com", sitemapUrl: "https://example.com/sitemap.xml" });
+    expect(parsed).toMatchObject({ maxUrls: 20, concurrency: 3, dryRun: false });
+    expect(() => requestRecrawlInput.parse({ siteUrl: "https://example.com", urls: [] })).toThrow();
   });
 });

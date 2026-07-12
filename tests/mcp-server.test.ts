@@ -85,6 +85,7 @@ describe("MCP server tool registration", () => {
       "delete_sitemap",
       "inspect_url",
       "index_coverage",
+      "request_recrawl",
       "pagespeed",
       "seo_audit",
       "audit_site",

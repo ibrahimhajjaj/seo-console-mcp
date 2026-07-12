@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients fourteen tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients fifteen tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
 
 ## Requirements
 
@@ -401,6 +401,21 @@ Fetches a sitemap and checks a bounded set of its direct page URLs with Google's
 ```
 
 `maxUrls` defaults to 20 and has a hard maximum of 50. `concurrency` defaults to 3 and has a hard maximum of 5. These limits protect the URL Inspection API quota, which is approximately 2,000 queries per day and 600 per minute for each property.
+
+### `request_recrawl`
+
+Checks URLs with the URL Inspection API and, when some are not indexed, resubmits the covering sitemap. That resubmission is Google's only supported bulk recrawl signal: there is no request-indexing API, and the Search Console UI's Request Indexing button has no programmatic equivalent. URLs come from `urls` or are read from `sitemapUrl`; the sitemap to resubmit is `feedpath`, defaulting to `sitemapUrl`. This is a write operation. Set `dryRun` to `true` to inspect and report without resubmitting.
+
+```json
+{
+  "siteUrl": "sc-domain:example.com",
+  "sitemapUrl": "https://www.example.com/sitemap.xml",
+  "maxUrls": 20,
+  "dryRun": true
+}
+```
+
+It shares the `index_coverage` caps (`maxUrls` up to 50, `concurrency` up to 5) because both draw on the same URL Inspection quota. Resubmission only prompts a recrawl of pages whose sitemap `lastmod` is fresh, so keep `lastmod` accurate for changed URLs.
 
 ### `pagespeed`
 

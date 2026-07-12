@@ -280,6 +280,33 @@ export const indexCoverageOutput = z.object({
   results: z.array(indexCoverageResult),
 });
 
+export const requestRecrawlShape = {
+  siteUrl: siteUrl.describe("Search Console property containing the URLs"),
+  urls: z.array(httpUrl).min(1).max(50).optional().describe("Explicit URLs to check; omit to read them from sitemapUrl"),
+  sitemapUrl: httpUrl.optional().describe("Sitemap to read URLs from; also the default sitemap to resubmit"),
+  feedpath: httpUrl.optional().describe("Sitemap to resubmit when unindexed URLs are found; defaults to sitemapUrl"),
+  maxUrls: z.number().int().min(1).max(50).default(20).describe("Maximum sitemap URLs to inspect"),
+  concurrency: z.number().int().min(1).max(5).default(3).describe("Concurrent URL Inspection requests"),
+  dryRun: z.boolean().default(false).describe("If true, inspect and report without resubmitting the sitemap"),
+};
+export const requestRecrawlInput = z.object(requestRecrawlShape);
+export const requestRecrawlOutput = z.object({
+  siteUrl: z.string(),
+  checked: z.number(),
+  indexed: z.number(),
+  notIndexed: z.array(z.object({ url: z.string(), coverageState: z.string().nullable() })),
+  failed: z.number(),
+  totalDiscovered: z.number(),
+  truncated: z.boolean(),
+  resubmit: z.object({
+    performed: z.boolean(),
+    feedpath: z.string().nullable(),
+    reason: z.string(),
+  }),
+  dryRun: z.boolean().optional(),
+  results: z.array(indexCoverageResult),
+});
+
 export const pageSpeedCategories = ["performance", "seo", "accessibility", "best-practices"] as const;
 export const pageSpeedShape = {
   url: httpUrl.describe("Public page URL to analyze"),
