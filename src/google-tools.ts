@@ -1,4 +1,5 @@
-import { google, type pagespeedonline_v5, type searchconsole_v1 } from "googleapis";
+import { auth as googleAuth, searchconsole, type searchconsole_v1 } from "@googleapis/searchconsole";
+import { pagespeedonline, type pagespeedonline_v5 } from "@googleapis/pagespeedonline";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { z } from "zod";
 import type {
@@ -42,7 +43,7 @@ function tableCell(value: string): string {
 }
 
 export function createGoogleClients(credentialsPath?: string): GoogleClients {
-  const auth = new google.auth.GoogleAuth({
+  const auth = new googleAuth.GoogleAuth({
     ...(credentialsPath ? { keyFile: credentialsPath } : {}),
     scopes: [
       "https://www.googleapis.com/auth/webmasters",
@@ -50,8 +51,8 @@ export function createGoogleClients(credentialsPath?: string): GoogleClients {
     ],
   });
   return {
-    searchConsole: google.searchconsole({ version: "v1", auth }),
-    pageSpeed: google.pagespeedonline({ version: "v5" }),
+    searchConsole: searchconsole({ version: "v1", auth }),
+    pageSpeed: pagespeedonline({ version: "v5" }),
   };
 }
 

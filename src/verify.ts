@@ -1,4 +1,5 @@
-import { google } from "googleapis";
+import { auth as googleAuth, siteVerification as siteVerificationApi } from "@googleapis/siteverification";
+import { searchconsole } from "@googleapis/searchconsole";
 import { createCloudflareClient, type CloudflareClient } from "./cloudflare.js";
 
 export interface VerifyClients {
@@ -123,15 +124,15 @@ async function verifyDomain(domain: string, deps: VerifyDeps): Promise<boolean> 
 }
 
 function createVerifyClients(credentialsPath?: string): VerifyClients {
-  const auth = new google.auth.GoogleAuth({
+  const auth = new googleAuth.GoogleAuth({
     ...(credentialsPath ? { keyFile: credentialsPath } : {}),
     scopes: [
       "https://www.googleapis.com/auth/siteverification",
       "https://www.googleapis.com/auth/webmasters",
     ],
   });
-  const siteVerification = google.siteVerification({ version: "v1", auth });
-  const searchConsole = google.searchconsole({ version: "v1", auth });
+  const siteVerification = siteVerificationApi({ version: "v1", auth });
+  const searchConsole = searchconsole({ version: "v1", auth });
   return {
     async getToken(domain) {
       const response = await siteVerification.webResource.getToken({
