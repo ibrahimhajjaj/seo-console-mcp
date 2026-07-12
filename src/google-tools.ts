@@ -290,10 +290,14 @@ export async function indexCoverage(
   params: IndexCoverageParams,
   deps: { fetchImpl?: typeof fetchHtml } = {},
 ): Promise<ToolResult> {
+  // Enforce the quota caps here too, not only in the MCP schema: this function is
+  // exported and can be called directly with out-of-range or non-finite values.
+  const maxUrls = Math.min(50, Math.max(1, Math.trunc(params.maxUrls) || 1));
+  const concurrency = Math.min(5, Math.max(1, Math.trunc(params.concurrency) || 1));
   const sitemap = await (deps.fetchImpl ?? fetchHtml)(params.sitemapUrl);
   const parsed = parseSitemapUrls(sitemap.html);
-  const selectedUrls = parsed.urls.slice(0, params.maxUrls);
-  const results = await mapWithConcurrency(selectedUrls, params.concurrency, async (url) => {
+  const selectedUrls = parsed.urls.slice(0, maxUrls);
+  const results = await mapWithConcurrency(selectedUrls, concurrency, async (url) => {
     try {
       const response = await clients.searchConsole.urlInspection.index.inspect({
         requestBody: { siteUrl: params.siteUrl, inspectionUrl: url },
@@ -328,11 +332,13 @@ export async function indexCoverage(
   const notIndexed = results
     .filter((item) => !item.indexed && item.error === null)
     .map(({ url, coverageState }) => ({ url, coverageState }));
-  const truncated = parsed.urls.length > selectedUrls.length;
   const sitemapIndexOnly = parsed.urls.length === 0 && parsed.childSitemaps.length > 0;
+  // A skipped sitemap index means coverage is incomplete, so structured clients
+  // must see truncated=true, not just a note in the human text.
+  const truncated = parsed.urls.length > selectedUrls.length || sitemapIndexOnly;
   const text = [
     `Index coverage for ${params.siteUrl}: ${indexed} of ${selectedUrls.length} checked URLs are indexed.`,
-    `${notIndexed.length} not indexed; ${failed} failed.${truncated ? ` Truncated after ${params.maxUrls} of ${parsed.urls.length} discovered URLs.` : ""}`,
+    `${notIndexed.length} not indexed; ${failed} failed.${parsed.urls.length > selectedUrls.length ? ` Truncated after ${maxUrls} of ${parsed.urls.length} discovered URLs.` : ""}`,
     ...(sitemapIndexOnly ? ["The sitemap is an index with no direct page URLs; child sitemaps were not inspected."] : []),
   ].join("\n");
   return result(text, {
@@ -344,6 +350,7 @@ export async function indexCoverage(
     notIndexed,
     failed,
     truncated,
+    childSitemapsSkipped: parsed.childSitemaps.length,
     results,
   });
 }

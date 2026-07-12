@@ -131,7 +131,10 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
     if (!key.ok) return fail(print, "Could not create the service account key. Resolve the gcloud error above and run setup again.");
   }
 
-  const canPrompt = options.prompt !== undefined || (stdin.isTTY && stdout.isTTY);
+  // Only ASK interactively on a real TTY. A caller can inject a prompt (e.g. to
+  // supply a project ID) without consenting to provision a billed key, so a
+  // non-interactive run with no explicit --pagespeed-key must default to skip.
+  const canPrompt = Boolean(stdin.isTTY && stdout.isTTY);
   const wantPageSpeedKey = options.pagespeedKey
     ?? (canPrompt && /^y/i.test((await prompt("Create a PageSpeed Insights API key for higher quota? [y/N]: ")).trim()));
   let pageSpeedKey: string | undefined;

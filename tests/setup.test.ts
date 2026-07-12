@@ -122,6 +122,23 @@ describe("setup wizard", () => {
     expect(lines.join("\n")).not.toContain("SEO_MCP_PAGESPEED_KEY");
   });
 
+  it("does not provision a PageSpeed key non-interactively when no flag is given", async () => {
+    // A caller may inject a prompt (e.g. for the project ID) without a TTY; a
+    // stray "y" must not be read as consent to create a billed key.
+    const runner = runnerWith((args) => {
+      if (args.includes("list") && args.includes("auth")) return { ok: true, stdout: "owner@example.com\n", exitCode: 0 };
+      return { ok: true, stdout: "", exitCode: 0 };
+    });
+    const outcome = await runSetupWizard({
+      runner, print: () => {}, projectId: "seo-project-123", keyPath: "/already/key.json",
+      fileExists: () => true, prompt: vi.fn().mockResolvedValue("y"),
+    });
+
+    expect(outcome).toBe("ready");
+    expect(runner.capture).not.toHaveBeenCalledWith(expect.arrayContaining(["api-keys", "create"]));
+    expect(runner.inherit).not.toHaveBeenCalledWith(expect.arrayContaining(["api-keys", "create"]));
+  });
+
   it("creates a PageSpeed API key and includes it in the client configuration", async () => {
     const runner = runnerWith((args) => {
       if (args.includes("list") && args.includes("auth")) return { ok: true, stdout: "owner@example.com\n", exitCode: 0 };

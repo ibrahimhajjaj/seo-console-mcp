@@ -374,6 +374,37 @@ describe("Google-backed tool operations", () => {
     expect(output.structuredContent).toMatchObject({ totalDiscovered: 3, checked: 2, truncated: true });
   });
 
+  it("clamps out-of-range maxUrls and concurrency at the function boundary", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({ data: { inspectionResult: { indexStatusResult: { verdict: "PASS", coverageState: "Submitted and indexed" } } } });
+    const many = Array.from({ length: 80 }, (_, index) => String(index));
+
+    const output = await indexCoverage(clients, {
+      siteUrl: "sc-domain:example.com",
+      sitemapUrl: "https://example.com/sitemap.xml",
+      maxUrls: 999,
+      concurrency: 50,
+    }, { fetchImpl: vi.fn().mockResolvedValue({ html: sitemap(...many) }) });
+
+    expect(clients.searchConsole.urlInspection.index.inspect).toHaveBeenCalledTimes(50);
+    expect(output.structuredContent).toMatchObject({ totalDiscovered: 80, checked: 50, truncated: true });
+  });
+
+  it("marks a sitemap index as truncated and inspects nothing", async () => {
+    const clients = fakeClients();
+    const index = "<sitemapindex><sitemap><loc>https://example.com/a.xml</loc></sitemap><sitemap><loc>https://example.com/b.xml</loc></sitemap></sitemapindex>";
+
+    const output = await indexCoverage(clients, {
+      siteUrl: "sc-domain:example.com",
+      sitemapUrl: "https://example.com/sitemap_index.xml",
+      maxUrls: 20,
+      concurrency: 3,
+    }, { fetchImpl: vi.fn().mockResolvedValue({ html: index }) });
+
+    expect(clients.searchConsole.urlInspection.index.inspect).not.toHaveBeenCalled();
+    expect(output.structuredContent).toMatchObject({ totalDiscovered: 0, checked: 0, truncated: true, childSitemapsSkipped: 2 });
+  });
+
   it("extracts PageSpeed field data, category scores, and opportunities", async () => {
     const clients = fakeClients();
     vi.mocked(clients.pageSpeed.pagespeedapi.runpagespeed).mockResolvedValue({ data: {

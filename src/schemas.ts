@@ -276,6 +276,7 @@ export const indexCoverageOutput = z.object({
   notIndexed: z.array(z.object({ url: z.string(), coverageState: z.string().nullable() })),
   failed: z.number(),
   truncated: z.boolean(),
+  childSitemapsSkipped: z.number(),
   results: z.array(indexCoverageResult),
 });
 
