@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
+import { USER_AGENT } from "./version.js";
 
 const MAX_HTML_BYTES = 10 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
@@ -71,7 +72,7 @@ export async function fetchHtml(
       redirect: "manual",
       signal,
       headers: {
-        "user-agent": "seo-mcp/0.1 (+https://www.npmjs.com/package/seo-mcp)",
+        "user-agent": USER_AGENT,
         accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1",
       },
     });
