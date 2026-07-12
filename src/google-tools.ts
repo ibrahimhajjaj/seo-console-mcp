@@ -69,8 +69,12 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     rowLimit: params.rowLimit,
     ...(params.dimensionFilterGroups ? { dimensionFilterGroups: params.dimensionFilterGroups } : {}),
     ...(params.type ? { type: params.type } : {}),
+    ...(params.dataState ? { dataState: params.dataState } : {}),
+    ...(params.aggregationType ? { aggregationType: params.aggregationType } : {}),
   };
   const response = await clients.searchConsole.searchanalytics.query({ siteUrl: params.siteUrl, requestBody });
+  const firstIncompleteDate = response.data.metadata?.firstIncompleteDate
+    ?? response.data.metadata?.firstIncompleteHour;
   const rows = (response.data.rows ?? []).map((row, index) => ({
     rank: index + 1,
     keys: Object.fromEntries(params.dimensions.map((dimension, keyIndex) => [dimension, row.keys?.[keyIndex] ?? ""])),
@@ -88,7 +92,16 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     ...rows.map((row) => `${row.rank} | ${params.dimensions.map((dimension) => tableCell(String(row.keys[dimension]))).join(" / ")} | ${row.clicks} | ${row.impressions} | ${(row.ctr * 100).toFixed(2)}% | ${row.position.toFixed(2)}`),
   ];
   if (rows.length === 0) lines.push("No rows returned.");
-  return result(lines.join("\n"), { siteUrl: params.siteUrl, startDate, endDate, dimensions: params.dimensions, rowCount: rows.length, rows });
+  if (firstIncompleteDate) lines.push(`Note: data from ${firstIncompleteDate} onward is still being collected.`);
+  return result(lines.join("\n"), {
+    siteUrl: params.siteUrl,
+    startDate,
+    endDate,
+    dimensions: params.dimensions,
+    rowCount: rows.length,
+    rows,
+    ...(firstIncompleteDate ? { firstIncompleteDate } : {}),
+  });
 }
 
 export async function listSitemaps(clients: GoogleClients, params: ListSitemapsParams): Promise<ToolResult> {

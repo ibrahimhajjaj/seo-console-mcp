@@ -68,15 +68,38 @@ describe("Google-backed tool operations", () => {
     ] });
   });
 
-  it("passes search filters and type through", async () => {
+  it("passes search filters, type, data state, and aggregation type through", async () => {
     const clients = fakeClients();
     vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: {} });
     const groups = [{ groupType: "and" as const, filters: [{ dimension: "query" as const, operator: "contains" as const, expression: "seo" }] }];
     await searchAnalytics(clients, {
       siteUrl: "sc-domain:example.com", startDate: "2026-07-01", endDate: "2026-07-10",
       dimensions: ["page"], rowLimit: 10, dimensionFilterGroups: groups, type: "image",
+      dataState: "all", aggregationType: "byPage",
     });
-    expect(clients.searchConsole.searchanalytics.query).toHaveBeenCalledWith(expect.objectContaining({ requestBody: expect.objectContaining({ dimensionFilterGroups: groups, type: "image" }) }));
+    expect(clients.searchConsole.searchanalytics.query).toHaveBeenCalledWith(expect.objectContaining({ requestBody: expect.objectContaining({
+      dimensionFilterGroups: groups,
+      type: "image",
+      dataState: "all",
+      aggregationType: "byPage",
+    }) }));
+  });
+
+  it("surfaces the first incomplete search analytics date", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: {
+      metadata: { firstIncompleteDate: "2026-07-10" },
+    } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "sc-domain:example.com",
+      dimensions: ["date"],
+      rowLimit: 25,
+      dataState: "all",
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    expect(result.structuredContent).toMatchObject({ firstIncompleteDate: "2026-07-10" });
+    expect(result.content[0]?.text).toContain("Note: data from 2026-07-10 onward is still being collected.");
   });
 
   it("lists sitemaps and shapes their contents", async () => {

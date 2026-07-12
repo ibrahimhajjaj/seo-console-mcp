@@ -34,6 +34,23 @@ describe("tool input schemas", () => {
     expect(parsed.rowLimit).toBe(25);
   });
 
+  it("accepts search analytics data state and aggregation type", () => {
+    const parsed = searchAnalyticsInput.parse({
+      siteUrl: "sc-domain:example.com",
+      dataState: "all",
+      aggregationType: "byPage",
+    });
+    expect(parsed.dataState).toBe("all");
+    expect(parsed.aggregationType).toBe("byPage");
+  });
+
+  it("rejects an invalid search analytics data state", () => {
+    expect(() => searchAnalyticsInput.parse({
+      siteUrl: "sc-domain:example.com",
+      dataState: "weekly",
+    })).toThrow();
+  });
+
   it("rejects invalid search analytics inputs", () => {
     expect(() => searchAnalyticsInput.parse({ siteUrl: "example.com", rowLimit: 25001 })).toThrow();
     expect(() => searchAnalyticsInput.parse({ siteUrl: "https://example.com", dimensions: ["invalid"] })).toThrow();

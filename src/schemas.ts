@@ -47,6 +47,8 @@ export const searchAnalyticsShape = {
   rowLimit: z.number().int().min(1).max(25_000).default(25).describe("Maximum rows to return"),
   dimensionFilterGroups: z.array(dimensionFilterGroup).optional().describe("Search Console dimension filters"),
   type: z.enum(["web", "image", "video", "news"]).optional().describe("Search result type"),
+  dataState: z.enum(["full", "all"]).optional().describe("full = finalized data (default, ~2-3 day lag); all = include recent partial data"),
+  aggregationType: z.enum(["auto", "byProperty", "byPage"]).optional().describe("How Search Console aggregates rows"),
 };
 export const searchAnalyticsInput = z.object(searchAnalyticsShape);
 
