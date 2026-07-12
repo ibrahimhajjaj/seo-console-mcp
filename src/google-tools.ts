@@ -91,14 +91,18 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     position: row.position ?? 0,
   }));
 
-  const dimensionHeader = params.dimensions.join(" / ");
-  const lines = [
-    `Search analytics for ${params.siteUrl} (${startDate} to ${endDate})`,
-    `# | ${dimensionHeader} | Clicks | Impressions | CTR | Position`,
-    `--- | --- | ---: | ---: | ---: | ---:`,
-    ...rows.map((row) => `${row.rank} | ${params.dimensions.map((dimension) => tableCell(String(row.keys[dimension]))).join(" / ")} | ${row.clicks} | ${row.impressions} | ${(row.ctr * 100).toFixed(2)}% | ${row.position.toFixed(2)}`),
-  ];
-  if (rows.length === 0) lines.push("No rows returned.");
+  const lines = params.maxTableRows === 0
+    ? [`Search analytics for ${params.siteUrl} returned ${rows.length} rows (${startDate} to ${endDate}). See structured data.`]
+    : [
+      `Search analytics for ${params.siteUrl} (${startDate} to ${endDate})`,
+      `# | ${params.dimensions.join(" / ")} | Clicks | Impressions | CTR | Position`,
+      `--- | --- | ---: | ---: | ---: | ---:`,
+      ...rows.slice(0, params.maxTableRows).map((row) => `${row.rank} | ${params.dimensions.map((dimension) => tableCell(String(row.keys[dimension]))).join(" / ")} | ${row.clicks} | ${row.impressions} | ${(row.ctr * 100).toFixed(2)}% | ${row.position.toFixed(2)}`),
+    ];
+  if (params.maxTableRows > 0 && rows.length === 0) lines.push("No rows returned.");
+  if (params.maxTableRows > 0 && rows.length > params.maxTableRows) {
+    lines.push(`... ${rows.length - params.maxTableRows} more rows (see structured data).`);
+  }
   if (firstIncompleteDate) lines.push(`Note: data from ${firstIncompleteDate} onward is still being collected.`);
   return result(lines.join("\n"), {
     siteUrl: params.siteUrl,

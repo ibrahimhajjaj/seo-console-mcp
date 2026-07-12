@@ -136,6 +136,7 @@ describe("Google-backed tool operations", () => {
       siteUrl: "https://example.com/",
       dimensions: ["query"],
       rowLimit: 25,
+      maxTableRows: 25,
     }, new Date("2026-07-11T12:00:00Z"));
 
     expect(clients.searchConsole.searchanalytics.query).toHaveBeenCalledWith({
@@ -151,6 +152,40 @@ describe("Google-backed tool operations", () => {
     expect(result.structuredContent).toMatchObject({ rowCount: 1, rows: [{ rank: 1, keys: { query: "seo mcp" } }] });
   });
 
+  it("caps search analytics text rows while preserving structured rows", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: Array.from({ length: 5 }, (_, index) => ({
+      keys: [`query ${index + 1}`], clicks: index + 1, impressions: 10, ctr: 0.1, position: index + 1,
+    })) } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "https://example.com/", dimensions: ["query"], rowLimit: 25, maxTableRows: 2,
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    const text = result.content[0]?.text ?? "";
+    expect(text).toContain("1 | query 1");
+    expect(text).toContain("2 | query 2");
+    expect(text).not.toContain("3 | query 3");
+    expect(text).toContain("... 3 more rows (see structured data).");
+    expect(result.structuredContent.rows).toHaveLength(5);
+  });
+
+  it("returns a summary without a table when the text row budget is zero", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: Array.from({ length: 5 }, (_, index) => ({
+      keys: [`query ${index + 1}`], clicks: index + 1, impressions: 10, ctr: 0.1, position: index + 1,
+    })) } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "https://example.com/", dimensions: ["query"], rowLimit: 25, maxTableRows: 0,
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    const text = result.content[0]?.text ?? "";
+    expect(text).toBe("Search analytics for https://example.com/ returned 5 rows (2026-06-14 to 2026-07-11). See structured data.");
+    expect(text).not.toContain("Clicks | Impressions");
+    expect(result.structuredContent.rows).toHaveLength(5);
+  });
+
   it("escapes delimiters and newlines only in search analytics text", async () => {
     const clients = fakeClients();
     vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [
@@ -162,6 +197,7 @@ describe("Google-backed tool operations", () => {
       siteUrl: "https://example.com/",
       dimensions: ["query"],
       rowLimit: 25,
+      maxTableRows: 25,
     }, new Date("2026-07-11T12:00:00Z"));
 
     const text = result.content[0]?.text ?? "";
@@ -181,6 +217,7 @@ describe("Google-backed tool operations", () => {
     await searchAnalytics(clients, {
       siteUrl: "sc-domain:example.com", startDate: "2026-07-01", endDate: "2026-07-10",
       dimensions: ["page"], rowLimit: 10, dimensionFilterGroups: groups, type: "image",
+      maxTableRows: 25,
       dataState: "all", aggregationType: "byPage",
     });
     expect(clients.searchConsole.searchanalytics.query).toHaveBeenCalledWith(expect.objectContaining({ requestBody: expect.objectContaining({
@@ -201,6 +238,7 @@ describe("Google-backed tool operations", () => {
       siteUrl: "sc-domain:example.com",
       dimensions: ["date"],
       rowLimit: 25,
+      maxTableRows: 25,
       dataState: "all",
     }, new Date("2026-07-11T12:00:00Z"));
 

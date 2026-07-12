@@ -212,6 +212,10 @@ Add the same server entry under `mcpServers` in Claude Desktop's configuration f
 
 To run without a local build, use `"command": "npx"` and `"args": ["-y", "seo-console-mcp"]`.
 
+## Resources
+
+`seo://properties` returns the Google Search Console properties available to the service account as JSON. It calls Search Console on every read, so the result is always current.
+
 ## Tools
 
 Every tool validates its input with Zod. Tool failures return an MCP error result instead of terminating the server. Google API status, message, and reason are included when available. A Search Console 403 also explains how to grant the service account property access.
@@ -231,6 +235,7 @@ Queries `searchanalytics.query` and returns a compact ranked table plus structur
   "endDate": "2026-06-28",
   "dimensions": ["query", "page"],
   "rowLimit": 100,
+  "maxTableRows": 25,
   "dimensionFilterGroups": [
     {
       "groupType": "and",
@@ -243,7 +248,7 @@ Queries `searchanalytics.query` and returns a compact ranked table plus structur
 }
 ```
 
-`siteUrl` is required. `startDate` and `endDate` default to the latest 28-day UTC window. `dimensions` defaults to `["query"]`; allowed values are `query`, `page`, `country`, `device`, `date`, and `searchAppearance`. `rowLimit` defaults to 25 and is capped at 25,000. `type` may be `web`, `image`, `video`, or `news`.
+`siteUrl` is required. `startDate` and `endDate` default to the latest 28-day UTC window. `dimensions` defaults to `["query"]`; allowed values are `query`, `page`, `country`, `device`, `date`, and `searchAppearance`. `rowLimit` defaults to 25 and is capped at 25,000. `maxTableRows` defaults to 25 and caps only the text table; structured rows remain complete. Set it to 0 for a summary without a table. `type` may be `web`, `image`, `video`, or `news`.
 
 ### `search_opportunities`
 

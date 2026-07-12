@@ -57,6 +57,19 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
     return getClients();
   };
 
+  server.registerResource("properties", "seo://properties", {
+    title: "Search Console properties",
+    description: "Live list of Google Search Console properties available to the service account",
+    mimeType: "application/json",
+  }, async (uri) => {
+    try {
+      const properties = await listProperties(getAuthenticatedClients());
+      return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(properties.structuredContent) }] };
+    } catch (error) {
+      return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify({ error: formatToolError(error) }) }] };
+    }
+  });
+
   server.registerTool("search_analytics", {
     description: "Query Google Search Console search analytics and return ranked clicks, impressions, CTR, and position",
     inputSchema: searchAnalyticsShape,

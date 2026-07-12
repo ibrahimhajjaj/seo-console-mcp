@@ -45,6 +45,7 @@ export const searchAnalyticsShape = {
     .refine((values) => new Set(values).size === values.length, "dimensions must be unique")
     .default(["query"]).describe("Dimensions used to group results"),
   rowLimit: z.number().int().min(1).max(25_000).default(25).describe("Maximum rows to return"),
+  maxTableRows: z.number().int().min(0).max(25_000).default(25).describe("Cap rows shown in the text table; structured rows are always complete. 0 = summary only."),
   dimensionFilterGroups: z.array(dimensionFilterGroup).optional().describe("Search Console dimension filters"),
   type: z.enum(["web", "image", "video", "news"]).optional().describe("Search result type"),
   dataState: z.enum(["full", "all"]).optional().describe("full = finalized data (default, ~2-3 day lag); all = include recent partial data"),

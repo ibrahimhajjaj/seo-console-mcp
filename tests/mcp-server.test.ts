@@ -30,6 +30,44 @@ function fakeClients(): GoogleClients {
 }
 
 describe("MCP server tool registration", () => {
+  it("lists and reads the live Search Console properties resource", async () => {
+    const clients = fakeClients();
+    const list = vi.mocked(clients.searchConsole.sites.list);
+    list.mockResolvedValueOnce({ data: { siteEntry: [
+      { siteUrl: "sc-domain:example.com", permissionLevel: "siteOwner" },
+    ] } });
+    list.mockResolvedValueOnce({ data: { siteEntry: [
+      { siteUrl: "https://blog.example.com/", permissionLevel: "siteFullUser" },
+    ] } });
+    const client = await connectedClient({ clients });
+
+    const { resources } = await client.listResources();
+    expect(resources).toContainEqual(expect.objectContaining({ name: "properties", uri: "seo://properties" }));
+
+    const result = await client.readResource({ uri: "seo://properties" });
+    expect(JSON.parse(result.contents[0]?.text ?? "")).toEqual({
+      count: 1,
+      properties: [{ siteUrl: "sc-domain:example.com", permissionLevel: "siteOwner" }],
+    });
+
+    const refreshed = await client.readResource({ uri: "seo://properties" });
+    expect(JSON.parse(refreshed.contents[0]?.text ?? "")).toEqual({
+      count: 1,
+      properties: [{ siteUrl: "https://blog.example.com/", permissionLevel: "siteFullUser" }],
+    });
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a clear resource payload when credentials are missing", async () => {
+    const client = await connectedClient({});
+
+    const result = await client.readResource({ uri: "seo://properties" });
+
+    expect(JSON.parse(result.contents[0]?.text ?? "")).toEqual({
+      error: expect.stringContaining("credentials are not configured"),
+    });
+  });
+
   it("lists all registered tools with descriptions", async () => {
     const client = await connectedClient({ clients: fakeClients() });
 
