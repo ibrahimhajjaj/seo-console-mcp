@@ -1,5 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchHtml } from "../src/fetch-page.js";
+import { createPublicOnlyLookup, fetchHtml } from "../src/fetch-page.js";
+
+function runLookup(addresses: Array<{ address: string; family: number }>): Promise<{ err: Error | null; result: unknown }> {
+  const lookup = createPublicOnlyLookup((_hostname, _options, callback) => callback(null, addresses));
+  return new Promise((resolve) => lookup("host.example", {}, (err, result) => resolve({ err, result })));
+}
+
+describe("createPublicOnlyLookup", () => {
+  it("returns an array containing only public addresses", async () => {
+    const addresses = [
+      { address: "93.184.216.34", family: 4 },
+      { address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+    ];
+
+    await expect(runLookup(addresses)).resolves.toEqual({ err: null, result: addresses });
+  });
+
+  it("rejects a private address", async () => {
+    const { err } = await runLookup([{ address: "10.0.0.5", family: 4 }]);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain("non-public address");
+  });
+
+  it("rejects a mix of public and private addresses", async () => {
+    const { err } = await runLookup([
+      { address: "93.184.216.34", family: 4 },
+      { address: "10.0.0.5", family: 4 },
+    ]);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain("non-public address");
+  });
+});
 
 describe("fetchHtml", () => {
   it("returns decoded HTML, final URL, and status", async () => {

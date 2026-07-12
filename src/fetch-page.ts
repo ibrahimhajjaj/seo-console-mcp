@@ -1,5 +1,7 @@
+import { lookup as dnsLookupCallback } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
+import { Agent } from "undici";
 import { USER_AGENT } from "./version.js";
 
 const MAX_HTML_BYTES = 10 * 1024 * 1024;
@@ -38,6 +40,50 @@ function isNonPublicAddress(address: string): boolean {
   return false;
 }
 
+type DnsResolver = (
+  hostname: string,
+  options: { all: true },
+  callback: (
+    err: NodeJS.ErrnoException | null,
+    addresses: Array<{ address: string; family: number }>,
+  ) => void,
+) => void;
+
+// Every resolved address must be validated and passed unchanged to the socket.
+export function createPublicOnlyLookup(resolve: DnsResolver) {
+  return (
+    hostname: string,
+    options: unknown,
+    callback: (
+      err: Error | null,
+      address: string | Array<{ address: string; family: number }>,
+      family?: number,
+    ) => void,
+  ): void => {
+    resolve(hostname, { ...(options as object), all: true }, (err, addresses) => {
+      if (err) return callback(err, "", 0);
+      const bad = addresses.find((address) => isNonPublicAddress(address.address));
+      if (bad) {
+        return callback(
+          new Error(`Refusing to connect to ${hostname}: resolves to a non-public address (${bad.address}).`),
+          "",
+          0,
+        );
+      }
+      callback(null, addresses);
+    });
+  };
+}
+
+let publicOnlyAgent: Agent | undefined;
+
+function publicOnlyDispatcher(): Agent {
+  publicOnlyAgent ??= new Agent({
+    connect: { lookup: createPublicOnlyLookup(dnsLookupCallback as unknown as DnsResolver) },
+  });
+  return publicOnlyAgent;
+}
+
 async function assertPublicHost(hostname: string, lookupHost: LookupHost): Promise<void> {
   const host = normalizeAddress(hostname);
   const addresses = isIP(host) === 0 ? await lookupHost(host) : [{ address: host, family: isIP(host) }];
@@ -68,14 +114,19 @@ export async function fetchHtml(
 
   while (true) {
     if (!allowPrivateHosts) await assertPublicHost(currentUrl.hostname, lookupHost);
-    response = await fetchImpl(currentUrl.toString(), {
+    // dispatcher pins the connection to the validated address (closes the DNS
+    // rebinding race the hostname-only pre-check above cannot). undici extension
+    // to RequestInit, so the init is typed to allow it.
+    const init: RequestInit & { dispatcher?: Agent } = {
       redirect: "manual",
       signal,
       headers: {
         "user-agent": USER_AGENT,
         accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1",
       },
-    });
+      ...(allowPrivateHosts ? {} : { dispatcher: publicOnlyDispatcher() }),
+    };
+    response = await fetchImpl(currentUrl.toString(), init);
 
     if (![301, 302, 303, 307, 308].includes(response.status)) break;
     const location = response.headers.get("location");
