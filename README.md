@@ -38,7 +38,7 @@ From a local checkout:
 npm run setup
 ```
 
-From the published package:
+Or with `npx`:
 
 ```sh
 npx -y seo-console-mcp setup
@@ -55,7 +55,7 @@ The wizard is safe to rerun. It:
 1. Checks for `gcloud`. If it is absent, it prints manual instructions and exits successfully without changing anything.
 2. Uses the active authenticated account or runs `gcloud auth login`.
 3. Uses the current project, a supplied `--project`, or asks for a project ID. It creates the project if it does not exist and selects it.
-4. Enables `searchconsole.googleapis.com` and `pagespeedonline.googleapis.com`.
+4. Enables `searchconsole.googleapis.com`, `pagespeedonline.googleapis.com`, and `siteverification.googleapis.com`.
 5. Reuses or creates the `seo-mcp` service account.
 6. Reuses an existing key or creates `seo-mcp.key.json`.
 7. Prints the required Search Console permission step and ready-to-copy client configurations.
@@ -77,7 +77,7 @@ seo-mcp verify getpsst.app another-domain.com
 
 The token can also be passed with `--cf-token`, and the key path with `--credentials` (otherwise `GOOGLE_APPLICATION_CREDENTIALS` / `SEO_MCP_CREDENTIALS` is used). The command is idempotent: the TXT record is left in place (Google re-checks it), so re-running a domain is safe. Leave the record in DNS or ownership is lost.
 
-`verify` reads the token from `CLOUDFLARE_API_TOKEN` (or `--cf-token`) and never stores or logs it, so any secret store that can export an environment variable works. The token needs `Zone -> DNS -> Edit` and `Zone -> Zone -> Read` (the "Edit zone DNS" template), scoped to the zones you verify. To keep it out of shell history:
+`verify` reads the token from `CLOUDFLARE_API_TOKEN` or `CF_API_TOKEN` (or `--cf-token`) and never stores or logs it, so any secret store that can export an environment variable works. The token needs `Zone -> DNS -> Edit` and `Zone -> Zone -> Read` (the "Edit zone DNS" template), scoped to the zones you verify. To keep it out of shell history:
 
 macOS (Keychain):
 
@@ -166,7 +166,7 @@ claude mcp add --scope user seo-mcp --env GOOGLE_APPLICATION_CREDENTIALS=/abs/pa
 
 The `--` separator is mandatory. It separates Claude Code options from the MCP server command.
 
-Once the package is published:
+Or with `npx` (no local build):
 
 ```sh
 claude mcp add --scope user seo-mcp --env GOOGLE_APPLICATION_CREDENTIALS=/abs/path/seo-mcp.key.json -- npx -y seo-console-mcp
@@ -209,7 +209,7 @@ Add the same server entry under `mcpServers` in Claude Desktop's configuration f
 }
 ```
 
-For the published package, use `"command": "npx"` and `"args": ["-y", "seo-console-mcp"]`.
+To run without a local build, use `"command": "npx"` and `"args": ["-y", "seo-console-mcp"]`.
 
 ## Tools
 

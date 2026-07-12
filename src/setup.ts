@@ -97,7 +97,7 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
   const selected = await runner.inherit(["config", "set", "project", projectId, "--quiet"]);
   if (!selected.ok) return fail(print, `Could not set ${projectId} as the active gcloud project.`);
 
-  print("[4/6] Enabling Search Console and PageSpeed Insights APIs...");
+  print("[4/6] Enabling Search Console, PageSpeed Insights, and Site Verification APIs...");
   const enabled = await runner.inherit(["services", "enable", ...apiServices, `--project=${projectId}`, "--quiet"]);
   if (!enabled.ok) return fail(print, "Could not enable the required APIs. Resolve the gcloud error above and run setup again.");
 
@@ -247,7 +247,7 @@ function printManualSetup(print: (line: string) => void): void {
   print("Install it from https://cloud.google.com/sdk/docs/install, then run `seo-mcp setup` again.");
   print("Manual fallback:");
   print("1. Create or select a Google Cloud project.");
-  print("2. Enable searchconsole.googleapis.com and pagespeedonline.googleapis.com.");
+  print("2. Enable searchconsole.googleapis.com, pagespeedonline.googleapis.com, and siteverification.googleapis.com.");
   print("3. Create a service account named seo-mcp and download a JSON key ending in .key.json.");
   print("4. Add the service account email as an Owner in Search Console -> your property -> Settings -> Users and permissions.");
   print("5. Set GOOGLE_APPLICATION_CREDENTIALS to the absolute key path in your MCP client configuration.");
