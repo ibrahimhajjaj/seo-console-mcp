@@ -2,6 +2,8 @@ import { accessSync, constants } from "node:fs";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
+  auditSiteOutput,
+  auditSiteShape,
   compareSearchPeriodsOutput,
   compareSearchPeriodsShape,
   ctrGapsOutput,
@@ -25,6 +27,7 @@ import {
   submitSitemapOutput,
   submitSitemapShape,
 } from "./schemas.js";
+import { auditSite } from "./audit-site.js";
 import {
   compareSearchPeriods,
   createGoogleClients,
@@ -162,6 +165,20 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
       return { content: [{ type: "text", text }], structuredContent: { ...audit, httpStatus: page.status } };
     }),
   );
+
+  server.registerTool("audit_site", {
+    description: "Audit the on-page SEO of up to N pages from a sitemap and roll up the most common issues across the site.",
+    inputSchema: auditSiteShape,
+    outputSchema: auditSiteOutput,
+  },
+    async (params) => safely(async () => {
+      const result = await auditSite(params.sitemapUrl, params);
+      return {
+        content: [{ type: "text", text: formatSiteAudit(result) }],
+        structuredContent: { ...result },
+      };
+    }),
+  );
 }
 
 async function safely(operation: () => Promise<ToolResult>): Promise<CallToolResult> {
@@ -197,4 +214,15 @@ function formatAudit(audit: ReturnType<typeof parseSeoHtml>): string {
     "Issues:",
     ...(audit.issues.length ? audit.issues.map((issue) => `- ${issue}`) : ["- None of the checked common issues found"]),
   ].join("\n");
+}
+
+function formatSiteAudit(audit: Awaited<ReturnType<typeof auditSite>>): string {
+  const summary = `Audited ${audit.audited} of ${audit.totalDiscovered} discovered pages; ${audit.failed} failed`;
+  const truncation = audit.truncated
+    ? `Truncated: ${audit.skipped} discovered page(s) and ${audit.childSitemapsSkipped} child sitemap(s) skipped`
+    : "Truncated: no";
+  const issues = Object.entries(audit.rollup)
+    .sort((left, right) => right[1] - left[1])
+    .map(([issue, count]) => `- ${issue}: ${count}`);
+  return [summary, truncation, "Issue rollup:", ...(issues.length ? issues : ["- No issues found"])].join("\n");
 }

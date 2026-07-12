@@ -85,6 +85,7 @@ describe("MCP server tool registration", () => {
       "inspect_url",
       "pagespeed",
       "seo_audit",
+      "audit_site",
     ]);
     expect(tools.every((tool) => tool.description?.length)).toBe(true);
     expect(tools.every((tool) => tool.outputSchema)).toBe(true);

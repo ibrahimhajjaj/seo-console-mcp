@@ -286,3 +286,28 @@ export const seoAuditOutput = z.object({
   issues: z.array(z.string()),
   httpStatus: z.number(),
 });
+
+export const auditSiteShape = {
+  sitemapUrl: httpUrl.describe("Public sitemap URL to audit"),
+  maxPages: z.number().int().min(1).max(50).default(20).describe("Maximum pages to audit"),
+  concurrency: z.number().int().min(1).max(10).default(5).describe("Maximum page fetches in flight"),
+};
+export const auditSiteInput = z.object(auditSiteShape);
+export const auditSiteOutput = z.object({
+  sitemapUrl: z.string(),
+  totalDiscovered: z.number(),
+  audited: z.number(),
+  failed: z.number(),
+  truncated: z.boolean(),
+  skipped: z.number(),
+  childSitemapsSkipped: z.number(),
+  pages: z.array(z.object({
+    url: z.string(),
+    issues: z.array(z.string()).optional(),
+    title: z.string().nullable().optional(),
+    metaDescription: z.string().nullable().optional(),
+    h1: z.array(z.string()).optional(),
+    error: z.string().optional(),
+  })),
+  rollup: z.record(z.string(), z.number()),
+});

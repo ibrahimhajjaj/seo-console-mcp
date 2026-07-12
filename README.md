@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients eleven tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twelve tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
 
 ## Requirements
 
@@ -146,7 +146,7 @@ For example:
 node dist/index.js --credentials /absolute/path/seo-mcp.key.json
 ```
 
-`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit` also needs no Google credentials.
+`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit` and `audit_site` also need no Google credentials.
 
 ## Security model
 
@@ -222,7 +222,7 @@ Every tool validates its input with Zod. Tool failures return an MCP error resul
 
 ### `list_properties`
 
-Lists every Google Search Console property the service account can access, returning each property's exact `siteUrl` and `permissionLevel`. It takes no input. Service-account credentials are required, unlike `pagespeed` and `seo_audit`.
+Lists every Google Search Console property the service account can access, returning each property's exact `siteUrl` and `permissionLevel`. It takes no input. Service-account credentials are required, unlike `pagespeed`, `seo_audit`, and `audit_site`.
 
 ### `search_analytics`
 
@@ -361,6 +361,20 @@ Fetches up to 10 MB of HTML with redirects enabled, a 15-second timeout, and an 
   "url": "https://www.example.com/landing-page"
 }
 ```
+
+### `audit_site`
+
+Fetches a sitemap and audits up to 50 of its page URLs with bounded concurrency. Sitemap indexes are supported with a hard cap of five child sitemap fetches. The result includes compact per-page findings, isolated page-fetch errors, a count of each shared issue, and explicit truncation and skipped counts. It does not require Google credentials.
+
+```json
+{
+  "sitemapUrl": "https://www.example.com/sitemap.xml",
+  "maxPages": 20,
+  "concurrency": 5
+}
+```
+
+`maxPages` defaults to 20 and `concurrency` defaults to 5. Their maximum values are 50 and 10, respectively.
 
 ## Development
 
