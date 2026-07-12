@@ -160,7 +160,27 @@ node dist/index.js --credentials /absolute/path/seo-mcp.key.json
 - **Revoking is easy.** Relinquish ownership from the Search Console UI (or `siteVerification.webResource.delete`), and rotate the key with `gcloud iam service-accounts keys delete`.
 - **`seo_audit` only fetches public hosts.** The target URL and every redirect hop is resolved and refused if it lands on a loopback, private, link-local, or other non-public address, so a model cannot be steered into fetching internal services or cloud metadata. The address is validated again at connection time (the socket is pinned to the validated address), so a DNS-rebinding host cannot present a public address at validation and a private one at connect. Set `SEO_MCP_ALLOW_PRIVATE_HOSTS=1` to audit internal or staging hosts you trust. This is not a substitute for network-level isolation; run the server behind egress controls if you audit untrusted URLs on a host with reachable internal services.
 
-## Claude Code
+## Claude Code plugin
+
+This repo is also a Claude Code plugin that bundles the MCP server and adds three
+slash commands over it. From Claude Code:
+
+```text
+/plugin marketplace add ibrahimhajjaj/seo-console-mcp
+/plugin install seo-console@verdelic
+```
+
+Enabling it prompts for your service-account key path (optional; the `seo_audit`
+and `pagespeed` tools work without it) and an optional PageSpeed API key. It then
+registers the MCP server (via `npx -y seo-console-mcp`) and adds:
+
+- `/seo-console:triage <siteUrl>`: full property triage with a prioritized action plan
+- `/seo-console:content <siteUrl>`: content to create or improve, backed by Search Console data
+- `/seo-console:launch <siteUrl>`: pre-launch / launch SEO readiness check
+
+To try it from a local checkout without a marketplace: `claude --plugin-dir .`.
+
+## Claude Code (MCP server only)
 
 Register the local build for the current user:
 

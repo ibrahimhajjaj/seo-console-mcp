@@ -1,0 +1,36 @@
+{
+  "name": "seo-console",
+  "displayName": "SEO Console",
+  "version": "0.1.0",
+  "description": "Turn Claude Code into a senior product-marketing manager over Google Search Console: search analytics, striking-distance keywords, CTR gaps, cannibalization, on-page and whole-site audits, indexing coverage, and PageSpeed.",
+  "author": {
+    "name": "Ibrahim Hajjaj"
+  },
+  "homepage": "https://github.com/ibrahimhajjaj/seo-console-mcp#readme",
+  "repository": "https://github.com/ibrahimhajjaj/seo-console-mcp",
+  "license": "MIT",
+  "keywords": ["seo", "google-search-console", "pagespeed", "marketing", "mcp"],
+  "commands": ["./commands/"],
+  "mcpServers": {
+    "seo-console": {
+      "command": "npx",
+      "args": ["-y", "seo-console-mcp@^0.2.0"],
+      "env": {
+        "GOOGLE_APPLICATION_CREDENTIALS": "${user_config.credentials}",
+        "SEO_MCP_PAGESPEED_KEY": "${user_config.pagespeed_key}"
+      }
+    }
+  },
+  "userConfig": {
+    "credentials": {
+      "type": "string",
+      "title": "Service account key path",
+      "description": "Absolute path to your Google service-account key JSON. Required for the Search Console tools; seo_audit and pagespeed work without it. Leave blank to fall back to a GOOGLE_APPLICATION_CREDENTIALS already in your environment."
+    },
+    "pagespeed_key": {
+      "type": "string",
+      "title": "PageSpeed API key (optional)",
+      "description": "A PageSpeed Insights API key for higher quota. Optional; pagespeed works without one on a lower quota."
+    }
+  }
+}
