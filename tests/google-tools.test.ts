@@ -3,6 +3,7 @@ import {
   compareSearchPeriods,
   ctrGapsTool,
   deleteSitemap,
+  indexCoverage,
   inspectUrl,
   listProperties,
   listSitemaps,
@@ -313,6 +314,66 @@ describe("Google-backed tool operations", () => {
     expect(result.structuredContent).toMatchObject({ indexStatus: { verdict: "PASS" }, mobileUsability: { verdict: "PASS" }, richResults: { detectedItems: [{ richResultType: "Breadcrumbs" }] } });
   });
 
+  it("rolls up indexed and not-indexed sitemap URLs", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect)
+      .mockResolvedValueOnce({ data: { inspectionResult: { indexStatusResult: { verdict: "PASS", coverageState: "Submitted and indexed", lastCrawlTime: "2026-07-10T00:00:00Z" } } } })
+      .mockResolvedValueOnce({ data: { inspectionResult: { indexStatusResult: { verdict: "NEUTRAL", coverageState: "Crawled - currently not indexed" } } } })
+      .mockResolvedValueOnce({ data: { inspectionResult: { indexStatusResult: { verdict: "PASS", coverageState: "Indexed, not submitted in sitemap" } } } });
+
+    const output = await indexCoverage(clients, {
+      siteUrl: "sc-domain:example.com",
+      sitemapUrl: "https://example.com/sitemap.xml",
+      maxUrls: 20,
+      concurrency: 3,
+    }, { fetchImpl: vi.fn().mockResolvedValue({ html: sitemap("a", "b", "c") }) });
+
+    expect(output.structuredContent).toMatchObject({
+      totalDiscovered: 3,
+      checked: 3,
+      indexed: 2,
+      failed: 0,
+      truncated: false,
+      notIndexed: [{ url: "https://example.com/b", coverageState: "Crawled - currently not indexed" }],
+    });
+  });
+
+  it("isolates URL inspection failures", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect)
+      .mockResolvedValueOnce({ data: { inspectionResult: { indexStatusResult: { verdict: "PASS", coverageState: "Submitted and indexed" } } } })
+      .mockRejectedValueOnce(new Error("inspection unavailable"));
+
+    const output = await indexCoverage(clients, {
+      siteUrl: "sc-domain:example.com",
+      sitemapUrl: "https://example.com/sitemap.xml",
+      maxUrls: 20,
+      concurrency: 3,
+    }, { fetchImpl: vi.fn().mockResolvedValue({ html: sitemap("a", "b") }) });
+
+    expect(output.structuredContent).toMatchObject({ checked: 2, indexed: 1, failed: 1 });
+    expect(output.structuredContent.results).toContainEqual(expect.objectContaining({
+      url: "https://example.com/b",
+      indexed: false,
+      error: "inspection unavailable",
+    }));
+  });
+
+  it("limits sitemap inspections and reports truncation", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({ data: { inspectionResult: { indexStatusResult: { verdict: "PASS", coverageState: "Submitted and indexed" } } } });
+
+    const output = await indexCoverage(clients, {
+      siteUrl: "sc-domain:example.com",
+      sitemapUrl: "https://example.com/sitemap.xml",
+      maxUrls: 2,
+      concurrency: 1,
+    }, { fetchImpl: vi.fn().mockResolvedValue({ html: sitemap("a", "b", "c") }) });
+
+    expect(clients.searchConsole.urlInspection.index.inspect).toHaveBeenCalledTimes(2);
+    expect(output.structuredContent).toMatchObject({ totalDiscovered: 3, checked: 2, truncated: true });
+  });
+
   it("extracts PageSpeed field data, category scores, and opportunities", async () => {
     const clients = fakeClients();
     vi.mocked(clients.pageSpeed.pagespeedapi.runpagespeed).mockResolvedValue({ data: {
@@ -326,3 +387,7 @@ describe("Google-backed tool operations", () => {
     expect(result.structuredContent).toMatchObject({ fieldData: { lcp: { value: 2400 }, inp: { value: 180 } }, scores: { performance: 91, seo: 95 }, opportunities: [{ savingsMs: 450 }] });
   });
 });
+
+function sitemap(...paths: string[]): string {
+  return `<urlset>${paths.map((path) => `<url><loc>https://example.com/${path}</loc></url>`).join("")}</urlset>`;
+}

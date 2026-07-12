@@ -12,6 +12,8 @@ import {
   deleteSitemapShape,
   inspectUrlOutput,
   inspectUrlShape,
+  indexCoverageOutput,
+  indexCoverageShape,
   listPropertiesOutput,
   listPropertiesShape,
   listSitemapsOutput,
@@ -36,6 +38,7 @@ import {
   ctrGapsTool,
   deleteSitemap,
   inspectUrl,
+  indexCoverage,
   listProperties,
   listSitemaps,
   queryCannibalization,
@@ -155,6 +158,14 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
     outputSchema: inspectUrlOutput,
   },
     async (params) => safely(() => inspectUrl(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("index_coverage", {
+    description: "Check how many of a sitemap's pages are indexed by Google (bounded; respects URL Inspection quota)",
+    inputSchema: indexCoverageShape,
+    outputSchema: indexCoverageOutput,
+  },
+    async (params) => safely(() => indexCoverage(getAuthenticatedClients(), params)),
   );
 
   server.registerTool("pagespeed", {

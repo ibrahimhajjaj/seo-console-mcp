@@ -84,6 +84,7 @@ describe("MCP server tool registration", () => {
       "submit_sitemap",
       "delete_sitemap",
       "inspect_url",
+      "index_coverage",
       "pagespeed",
       "seo_audit",
       "audit_site",
@@ -220,6 +221,28 @@ describe("MCP server tool registration", () => {
       siteUrl: "https://example.com/",
       feedpath: "https://example.com/sitemap.xml",
     });
+  });
+
+  it("validates index coverage structured output", async () => {
+    const clients = fakeClients();
+    vi.mocked(fetchHtml).mockResolvedValue({
+      html: "<urlset><url><loc>https://example.com/page</loc></url></urlset>",
+      finalUrl: "https://example.com/sitemap.xml",
+      status: 200,
+      headers: {},
+    });
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({ data: { inspectionResult: {
+      indexStatusResult: { verdict: "PASS", coverageState: "Submitted and indexed" },
+    } } });
+    const client = await connectedClient({ clients });
+
+    const result = await client.callTool({
+      name: "index_coverage",
+      arguments: { siteUrl: "sc-domain:example.com", sitemapUrl: "https://example.com/sitemap.xml" },
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ checked: 1, indexed: 1, notIndexed: [] });
   });
 
   it("validates URL inspection output with nullable index fields", async () => {

@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients thirteen tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients fourteen tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
 
 ## Requirements
 
@@ -357,6 +357,21 @@ Returns index coverage, verdict, robots state, indexing state, crawl time, fetch
   "inspectionUrl": "https://www.example.com/products/widget"
 }
 ```
+
+### `index_coverage`
+
+Fetches a sitemap and checks a bounded set of its direct page URLs with Google's URL Inspection API. It returns indexed, not-indexed, and failed counts, the not-indexed URLs and coverage states, full per-URL results, and whether the result was truncated. Sitemap indexes are not followed into child sitemaps.
+
+```json
+{
+  "siteUrl": "sc-domain:example.com",
+  "sitemapUrl": "https://www.example.com/sitemap.xml",
+  "maxUrls": 20,
+  "concurrency": 3
+}
+```
+
+`maxUrls` defaults to 20 and has a hard maximum of 50. `concurrency` defaults to 3 and has a hard maximum of 5. These limits protect the URL Inspection API quota, which is approximately 2,000 queries per day and 600 per minute for each property.
 
 ### `pagespeed`
 

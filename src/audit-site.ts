@@ -110,7 +110,7 @@ export async function auditSite(
   };
 }
 
-async function mapWithConcurrency<T, R>(
+export async function mapWithConcurrency<T, R>(
   values: T[],
   concurrency: number,
   operation: (value: T) => Promise<R>,

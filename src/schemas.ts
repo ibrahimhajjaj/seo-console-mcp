@@ -252,6 +252,33 @@ export const inspectUrlOutput = z.object({
   }).nullable(),
 });
 
+export const indexCoverageShape = {
+  siteUrl: siteUrl.describe("Search Console property containing the sitemap URLs"),
+  sitemapUrl: httpUrl.describe("Fully qualified sitemap URL to inspect"),
+  maxUrls: z.number().int().min(1).max(50).default(20).describe("Maximum URLs to inspect"),
+  concurrency: z.number().int().min(1).max(5).default(3).describe("Concurrent URL Inspection requests"),
+};
+export const indexCoverageInput = z.object(indexCoverageShape);
+const indexCoverageResult = z.object({
+  url: z.string(),
+  coverageState: z.string().nullable(),
+  verdict: z.string().nullable(),
+  indexed: z.boolean(),
+  lastCrawlTime: z.string().nullable(),
+  error: z.string().nullable(),
+});
+export const indexCoverageOutput = z.object({
+  siteUrl: z.string(),
+  sitemapUrl: z.string(),
+  totalDiscovered: z.number(),
+  checked: z.number(),
+  indexed: z.number(),
+  notIndexed: z.array(z.object({ url: z.string(), coverageState: z.string().nullable() })),
+  failed: z.number(),
+  truncated: z.boolean(),
+  results: z.array(indexCoverageResult),
+});
+
 export const pageSpeedCategories = ["performance", "seo", "accessibility", "best-practices"] as const;
 export const pageSpeedShape = {
   url: httpUrl.describe("Public page URL to analyze"),

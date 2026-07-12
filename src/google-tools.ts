@@ -6,6 +6,7 @@ import type {
   compareSearchPeriodsInput,
   ctrGapsInput,
   deleteSitemapInput,
+  indexCoverageInput,
   inspectUrlInput,
   listSitemapsInput,
   pageSpeedInput,
@@ -14,6 +15,8 @@ import type {
   searchOpportunitiesInput,
   submitSitemapInput,
 } from "./schemas.js";
+import { mapWithConcurrency, parseSitemapUrls } from "./audit-site.js";
+import { fetchHtml } from "./fetch-page.js";
 import { cannibalization, comparePeriods, ctrGaps, strikingDistance, type InsightRow } from "./insights.js";
 
 type SearchAnalyticsParams = z.output<typeof searchAnalyticsInput>;
@@ -21,6 +24,7 @@ type ListSitemapsParams = z.output<typeof listSitemapsInput>;
 type SubmitSitemapParams = z.output<typeof submitSitemapInput>;
 type DeleteSitemapParams = z.output<typeof deleteSitemapInput>;
 type InspectUrlParams = z.output<typeof inspectUrlInput>;
+type IndexCoverageParams = z.output<typeof indexCoverageInput>;
 type PageSpeedParams = z.output<typeof pageSpeedInput>;
 type SearchOpportunitiesParams = z.output<typeof searchOpportunitiesInput>;
 type CompareSearchPeriodsParams = z.output<typeof compareSearchPeriodsInput>;
@@ -279,6 +283,69 @@ export async function inspectUrl(clients: GoogleClients, params: InspectUrlParam
     `Rich results: ${richResults?.verdict ?? "not reported"}`,
   ].join("\n");
   return result(text, { siteUrl: params.siteUrl, inspectionUrl: params.inspectionUrl, indexStatus, mobileUsability, richResults });
+}
+
+export async function indexCoverage(
+  clients: GoogleClients,
+  params: IndexCoverageParams,
+  deps: { fetchImpl?: typeof fetchHtml } = {},
+): Promise<ToolResult> {
+  const sitemap = await (deps.fetchImpl ?? fetchHtml)(params.sitemapUrl);
+  const parsed = parseSitemapUrls(sitemap.html);
+  const selectedUrls = parsed.urls.slice(0, params.maxUrls);
+  const results = await mapWithConcurrency(selectedUrls, params.concurrency, async (url) => {
+    try {
+      const response = await clients.searchConsole.urlInspection.index.inspect({
+        requestBody: { siteUrl: params.siteUrl, inspectionUrl: url },
+      });
+      const status = response.data.inspectionResult?.indexStatusResult;
+      const coverageState = status?.coverageState ?? null;
+      const verdict = status?.verdict ?? null;
+      const normalizedCoverage = coverageState?.toLowerCase() ?? "";
+      const indexed = verdict === "PASS"
+        || (normalizedCoverage.includes("indexed") && !normalizedCoverage.includes("not indexed"));
+      return {
+        url,
+        coverageState,
+        verdict,
+        indexed,
+        lastCrawlTime: status?.lastCrawlTime ?? null,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        url,
+        coverageState: null,
+        verdict: null,
+        indexed: false,
+        lastCrawlTime: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+  const failed = results.filter((item) => item.error !== null).length;
+  const indexed = results.filter((item) => item.indexed).length;
+  const notIndexed = results
+    .filter((item) => !item.indexed && item.error === null)
+    .map(({ url, coverageState }) => ({ url, coverageState }));
+  const truncated = parsed.urls.length > selectedUrls.length;
+  const sitemapIndexOnly = parsed.urls.length === 0 && parsed.childSitemaps.length > 0;
+  const text = [
+    `Index coverage for ${params.siteUrl}: ${indexed} of ${selectedUrls.length} checked URLs are indexed.`,
+    `${notIndexed.length} not indexed; ${failed} failed.${truncated ? ` Truncated after ${params.maxUrls} of ${parsed.urls.length} discovered URLs.` : ""}`,
+    ...(sitemapIndexOnly ? ["The sitemap is an index with no direct page URLs; child sitemaps were not inspected."] : []),
+  ].join("\n");
+  return result(text, {
+    siteUrl: params.siteUrl,
+    sitemapUrl: params.sitemapUrl,
+    totalDiscovered: parsed.urls.length,
+    checked: results.length,
+    indexed,
+    notIndexed,
+    failed,
+    truncated,
+    results,
+  });
 }
 
 export async function runPageSpeed(clients: GoogleClients, params: PageSpeedParams): Promise<ToolResult> {
