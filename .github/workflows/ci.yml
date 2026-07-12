@@ -17,10 +17,12 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      # npm install (not npm ci): npm ci does not reliably install the
-      # platform-specific optional native bindings vitest 4's rolldown needs
-      # (npm/cli#4828), so a clean ci install fails at test startup on Linux.
-      - run: npm install --no-audit --no-fund
+      # A committed package-lock.json generated on one OS makes npm skip the
+      # platform-specific optional native binding vitest 4's rolldown needs on
+      # another OS (npm/cli#4828). Removing the lockfile first lets npm resolve
+      # the correct binding fresh for this runner, which is npm's own recommended
+      # fix for the error. The committed lockfile is kept for local reproducibility.
+      - run: rm -f package-lock.json && npm install --no-audit --no-fund
       - run: npm run lint
       - run: npm test
       - run: npm run build
