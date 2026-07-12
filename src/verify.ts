@@ -104,7 +104,10 @@ async function verifyDomain(domain: string, deps: VerifyDeps): Promise<boolean> 
     } catch (error) {
       const status = httpStatus(error);
       const message = error instanceof Error ? error.message : String(error);
-      if (status === 409 || status === 400) {
+      // 409 is the plain conflict; a 400 is only "already added" when the message
+      // says so, otherwise it is a real malformed-request failure we must surface.
+      const alreadyPresent = status === 409 || (status === 400 && /already|exist/i.test(message));
+      if (alreadyPresent) {
         print(`[4/4] sc-domain:${domain} is already in Search Console.`);
       } else {
         print(`[4/4] Ownership verified, but adding sc-domain:${domain} to Search Console failed: ${message}`);

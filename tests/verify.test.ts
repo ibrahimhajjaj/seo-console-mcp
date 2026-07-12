@@ -65,6 +65,18 @@ describe("runVerify", () => {
     expect(lines.join("\n")).toContain("already in Search Console");
   });
 
+  it("reports a Search Console add 400 that is not an already-present conflict", async () => {
+    const addSite = vi.fn(async () => {
+      throw Object.assign(new Error("Invalid site URL"), { response: { status: 400 } });
+    });
+    const clients = fakeClients({ addSite });
+    const lines: string[] = [];
+    const ok = await runVerify(["getpsst.app"], { clients, cloudflare: fakeCloudflare(), print: (line) => lines.push(line), ...noWait });
+    expect(ok).toBe(false);
+    expect(lines.join("\n")).toContain("failed: Invalid site URL");
+    expect(lines.join("\n")).not.toContain("already in Search Console");
+  });
+
   it("reports a Search Console add authorization failure", async () => {
     const addSite = vi.fn(async () => {
       throw Object.assign(new Error("forbidden"), { response: { status: 403 } });
