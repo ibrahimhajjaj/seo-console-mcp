@@ -17,7 +17,10 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      - run: npm ci
+      # npm install (not npm ci): npm ci does not reliably install the
+      # platform-specific optional native bindings vitest 4's rolldown needs
+      # (npm/cli#4828), so a clean ci install fails at test startup on Linux.
+      - run: npm install --no-audit --no-fund
       - run: npm run lint
       - run: npm test
       - run: npm run build
