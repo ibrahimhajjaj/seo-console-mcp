@@ -7,7 +7,7 @@ import { startServer } from "./server.js";
 
 const usage = [
   "Usage: seo-mcp [--credentials /path/key.json]",
-  "       seo-mcp setup [--project PROJECT_ID] [--key /path/seo-mcp.key.json]",
+  "       seo-mcp setup [--project PROJECT_ID] [--key /path/seo-mcp.key.json] [--pagespeed-key|--no-pagespeed-key]",
   "       seo-mcp verify <domain> [<domain>...] [--cf-token TOKEN] [--credentials /path/key.json]",
 ].join("\n");
 
@@ -30,6 +30,7 @@ async function main(): Promise<void> {
     const outcome = await runSetupWizard({
       ...(command.projectId ? { projectId: command.projectId } : {}),
       ...(command.keyPath ? { keyPath: command.keyPath } : {}),
+      ...(command.pagespeedKey !== undefined ? { pagespeedKey: command.pagespeedKey } : {}),
     });
     if (outcome === "failed") process.exitCode = 1;
     return;

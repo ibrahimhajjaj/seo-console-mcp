@@ -1,7 +1,7 @@
 export type CliCommand =
   | { kind: "help" }
   | { kind: "serve"; credentials?: string }
-  | { kind: "setup"; projectId?: string; keyPath?: string }
+  | { kind: "setup"; projectId?: string; keyPath?: string; pagespeedKey?: boolean }
   | { kind: "verify"; domains: string[]; credentials?: string; cfToken?: string };
 
 export class UsageError extends Error {}
@@ -10,7 +10,7 @@ type CommandKind = Exclude<CliCommand["kind"], "help">;
 
 const allowedFlags: Record<CommandKind, ReadonlySet<string>> = {
   serve: new Set(["--credentials"]),
-  setup: new Set(["--project", "--key"]),
+  setup: new Set(["--project", "--key", "--pagespeed-key", "--no-pagespeed-key"]),
   verify: new Set(["--credentials", "--cf-token"]),
 };
 
@@ -36,6 +36,7 @@ export function parseCliArgs(args: string[]): CliCommand {
   let projectId: string | undefined;
   let keyPath: string | undefined;
   let cfToken: string | undefined;
+  let pagespeedKey: boolean | undefined;
 
   for (let index = 0; index < commandArgs.length; index++) {
     const arg = commandArgs[index];
@@ -45,6 +46,11 @@ export function parseCliArgs(args: string[]): CliCommand {
       if (!knownFlags.has(arg)) throw new UsageError(`unknown option: ${arg}`);
       if (!allowedFlags[kind].has(arg)) {
         throw new UsageError(`unknown option for ${kind}: ${arg}`);
+      }
+
+      if (arg === "--pagespeed-key" || arg === "--no-pagespeed-key") {
+        pagespeedKey = arg === "--pagespeed-key";
+        continue;
       }
 
       const value = optionValue(commandArgs, index);
@@ -69,6 +75,7 @@ export function parseCliArgs(args: string[]): CliCommand {
       kind,
       ...(projectId ? { projectId } : {}),
       ...(keyPath ? { keyPath } : {}),
+      ...(pagespeedKey !== undefined ? { pagespeedKey } : {}),
     };
   }
   if (kind === "verify") {

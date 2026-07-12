@@ -42,6 +42,21 @@ describe("parseCliArgs", () => {
     });
   });
 
+  it.each([
+    ["--pagespeed-key", true],
+    ["--no-pagespeed-key", false],
+  ] as const)("parses the setup %s flag", (flag, pagespeedKey) => {
+    expect(parseCliArgs(["setup", flag])).toEqual({
+      kind: "setup",
+      pagespeedKey,
+    });
+  });
+
+  it("leaves the PageSpeed key choice undefined when no flag is given", () => {
+    expect(parseCliArgs(["setup"])).toEqual({ kind: "setup" });
+    expect(parseCliArgs(["setup"])).not.toHaveProperty("pagespeedKey");
+  });
+
   it("rejects a known option on the wrong command", () => {
     const parse = () => parseCliArgs(["setup", "--cf-token", "T"]);
 

@@ -50,6 +50,8 @@ For an unattended project choice or a custom key location:
 seo-mcp setup --project my-seo-project --key /absolute/path/seo-mcp.key.json
 ```
 
+The wizard also offers an optional PageSpeed Insights API key for higher quota. It is opt-in: use `--pagespeed-key` to create one without a prompt, or `--no-pagespeed-key` to skip the prompt explicitly. Non-interactive runs skip it unless `--pagespeed-key` is provided.
+
 The wizard is safe to rerun. It:
 
 1. Checks for `gcloud`. If it is absent, it prints manual instructions and exits successfully without changing anything.
@@ -58,9 +60,10 @@ The wizard is safe to rerun. It:
 4. Enables `searchconsole.googleapis.com`, `pagespeedonline.googleapis.com`, and `siteverification.googleapis.com`.
 5. Reuses or creates the `seo-mcp` service account.
 6. Reuses an existing key or creates `seo-mcp.key.json`.
-7. Prints the required Search Console permission step and ready-to-copy client configurations.
+7. Optionally creates a project-scoped API key restricted to PageSpeed Insights.
+8. Prints the required Search Console permission step and ready-to-copy client configurations.
 
-The wizard never prints key contents. The generated `*.key.json` filename is ignored by Git.
+The wizard never prints the service account key contents. When PageSpeed key creation is requested and succeeds, it prints that key once in the final client configuration. The generated `*.key.json` filename is ignored by Git.
 
 ### Granting the service account Search Console access
 

@@ -25,6 +25,7 @@ export interface SetupOptions {
   cwd?: string;
   projectId?: string;
   keyPath?: string;
+  pagespeedKey?: boolean;
   fileExists?: (path: string) => boolean;
   makeDir?: (dir: string) => void;
 }
@@ -130,6 +131,38 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
     if (!key.ok) return fail(print, "Could not create the service account key. Resolve the gcloud error above and run setup again.");
   }
 
+  const canPrompt = options.prompt !== undefined || (stdin.isTTY && stdout.isTTY);
+  const wantPageSpeedKey = options.pagespeedKey
+    ?? (canPrompt && /^y/i.test((await prompt("Create a PageSpeed Insights API key for higher quota? [y/N]: ")).trim()));
+  let pageSpeedKey: string | undefined;
+  if (!wantPageSpeedKey) {
+    print("PageSpeed quota: using the low anonymous quota; add an API key later for higher quota.");
+  } else {
+    print("PageSpeed quota: creating a project-scoped API key...");
+    try {
+      const apiKeysEnabled = await runner.inherit([
+        "services", "enable", "apikeys.googleapis.com", `--project=${projectId}`, "--quiet",
+      ]);
+      if (!apiKeysEnabled.ok) throw new Error("API Keys API could not be enabled");
+
+      const createdPageSpeedKey = await runner.capture([
+        "services", "api-keys", "create", "--display-name=seo-mcp pagespeed",
+        "--api-target=service=pagespeedonline.googleapis.com", `--project=${projectId}`, "--format=value(name)",
+      ]);
+      const keyName = createdPageSpeedKey.stdout.trim();
+      if (!createdPageSpeedKey.ok || !keyName) throw new Error("PageSpeed API key could not be created");
+
+      const keyString = await runner.capture([
+        "services", "api-keys", "get-key-string", keyName, "--format=value(keyString)",
+      ]);
+      pageSpeedKey = keyString.stdout.trim();
+      if (!keyString.ok || !pageSpeedKey) throw new Error("PageSpeed API key string could not be retrieved");
+    } catch {
+      pageSpeedKey = undefined;
+      print("Warning: PageSpeed API key provisioning failed. Setup will continue with anonymous quota.");
+    }
+  }
+
   const distEntry = resolve(fileURLToPath(new URL("..", import.meta.url)), "dist", "index.js");
   print("");
   print("MANUAL STEP REQUIRED");
@@ -142,13 +175,17 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
   print(`claude mcp add --scope user seo-mcp --env GOOGLE_APPLICATION_CREDENTIALS=${keyPath} -- npx -y seo-console-mcp`);
   print("");
   print("MCP client configuration:");
+  if (pageSpeedKey) print("Save this key; it grants PageSpeed quota on your project and is shown only in the configuration below.");
   print(JSON.stringify({
     mcpServers: {
       "seo-mcp": {
         type: "stdio",
         command: "node",
         args: [distEntry],
-        env: { GOOGLE_APPLICATION_CREDENTIALS: keyPath },
+        env: {
+          GOOGLE_APPLICATION_CREDENTIALS: keyPath,
+          ...(pageSpeedKey ? { SEO_MCP_PAGESPEED_KEY: pageSpeedKey } : {}),
+        },
       },
     },
   }, null, 2));

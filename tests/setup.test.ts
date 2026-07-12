@@ -35,7 +35,7 @@ describe("setup wizard", () => {
     });
     const lines: string[] = [];
     const outcome = await runSetupWizard({
-      runner, print: (line) => lines.push(line), cwd: "/work/seo-mcp", projectId: "seo-project-123", keyPath: "./seo-mcp.key.json", prompt: vi.fn(),
+      runner, print: (line) => lines.push(line), cwd: "/work/seo-mcp", projectId: "seo-project-123", keyPath: "./seo-mcp.key.json", prompt: vi.fn(), pagespeedKey: false,
     });
     expect(outcome).toBe("ready");
     expect(runner.inherit).toHaveBeenCalledWith(expect.arrayContaining(["projects", "describe", "seo-project-123"]));
@@ -61,7 +61,7 @@ describe("setup wizard", () => {
       .mockResolvedValueOnce("example-seo-project");  // valid
     const outcome = await runSetupWizard({
       runner, print: (line) => lines.push(line), cwd: "/work", keyPath: "/work/seo-mcp.key.json",
-      makeDir: vi.fn(), fileExists: () => false, prompt,
+      makeDir: vi.fn(), fileExists: () => false, prompt, pagespeedKey: false,
     });
     expect(outcome).toBe("ready");
     expect(prompt).toHaveBeenCalledTimes(3);
@@ -78,7 +78,7 @@ describe("setup wizard", () => {
     const madeDirs: string[] = [];
     const outcome = await runSetupWizard({
       runner, print: () => {}, cwd: "/some/other/repo", projectId: "example-seo-project",
-      makeDir: (dir) => madeDirs.push(dir), fileExists: () => false, prompt: vi.fn(),
+      makeDir: (dir) => madeDirs.push(dir), fileExists: () => false, prompt: vi.fn(), pagespeedKey: false,
     });
     expect(outcome).toBe("ready");
     const keyCreate = (runner.inherit as ReturnType<typeof vi.fn>).mock.calls
@@ -98,12 +98,71 @@ describe("setup wizard", () => {
     const lines: string[] = [];
     const outcome = await runSetupWizard({
       runner, print: (line) => lines.push(line), cwd: "/work", projectId: "existing-project", keyPath: "/already/seo-mcp.key.json",
-      fileExists: () => true, prompt: vi.fn(),
+      fileExists: () => true, prompt: vi.fn(), pagespeedKey: false,
     });
     expect(outcome).toBe("ready");
     expect(runner.inherit).not.toHaveBeenCalledWith(expect.arrayContaining(["service-accounts", "create"]));
     expect(runner.inherit).not.toHaveBeenCalledWith(expect.arrayContaining(["keys", "create"]));
     expect(lines.join("\n")).toContain("already exists; keeping it");
+  });
+
+  it("skips PageSpeed API key creation when opted out", async () => {
+    const runner = runnerWith((args) => {
+      if (args.includes("list") && args.includes("auth")) return { ok: true, stdout: "owner@example.com\n", exitCode: 0 };
+      return { ok: true, stdout: "", exitCode: 0 };
+    });
+    const lines: string[] = [];
+    const outcome = await runSetupWizard({
+      runner, print: (line) => lines.push(line), projectId: "seo-project-123", keyPath: "/already/key.json",
+      fileExists: () => true, pagespeedKey: false,
+    });
+
+    expect(outcome).toBe("ready");
+    expect(runner.capture).not.toHaveBeenCalledWith(expect.arrayContaining(["api-keys", "create"]));
+    expect(lines.join("\n")).not.toContain("SEO_MCP_PAGESPEED_KEY");
+  });
+
+  it("creates a PageSpeed API key and includes it in the client configuration", async () => {
+    const runner = runnerWith((args) => {
+      if (args.includes("list") && args.includes("auth")) return { ok: true, stdout: "owner@example.com\n", exitCode: 0 };
+      if (args.includes("api-keys") && args.includes("create")) {
+        return { ok: true, stdout: "projects/123/locations/global/keys/pagespeed-key\n", exitCode: 0 };
+      }
+      if (args.includes("get-key-string")) return { ok: true, stdout: "fake-pagespeed-key\n", exitCode: 0 };
+      return { ok: true, stdout: "", exitCode: 0 };
+    });
+    const lines: string[] = [];
+    const outcome = await runSetupWizard({
+      runner, print: (line) => lines.push(line), projectId: "seo-project-123", keyPath: "/already/key.json",
+      fileExists: () => true, pagespeedKey: true,
+    });
+
+    expect(outcome).toBe("ready");
+    expect(runner.inherit).toHaveBeenCalledWith([
+      "services", "enable", "apikeys.googleapis.com", "--project=seo-project-123", "--quiet",
+    ]);
+    expect(runner.capture).toHaveBeenCalledWith([
+      "services", "api-keys", "create", "--display-name=seo-mcp pagespeed",
+      "--api-target=service=pagespeedonline.googleapis.com", "--project=seo-project-123", "--format=value(name)",
+    ]);
+    expect(lines.join("\n")).toContain('"SEO_MCP_PAGESPEED_KEY": "fake-pagespeed-key"');
+  });
+
+  it("warns and remains ready when PageSpeed API key creation fails", async () => {
+    const runner = runnerWith((args) => {
+      if (args.includes("list") && args.includes("auth")) return { ok: true, stdout: "owner@example.com\n", exitCode: 0 };
+      if (args.includes("api-keys") && args.includes("create")) return { ok: false, stdout: "", exitCode: 1 };
+      return { ok: true, stdout: "", exitCode: 0 };
+    });
+    const lines: string[] = [];
+    const outcome = await runSetupWizard({
+      runner, print: (line) => lines.push(line), projectId: "seo-project-123", keyPath: "/already/key.json",
+      fileExists: () => true, pagespeedKey: true,
+    });
+
+    expect(outcome).toBe("ready");
+    expect(lines.join("\n")).toMatch(/warning.*PageSpeed API key/i);
+    expect(lines.join("\n")).not.toContain("SEO_MCP_PAGESPEED_KEY");
   });
 });
 
