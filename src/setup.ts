@@ -58,7 +58,7 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
   print("This wizard creates a Google Cloud service account for Search Console.");
 
   const version = await runner.capture(["version", "--format=value(core.version)"]);
-  if (!version.ok && version.errorCode === "ENOENT") {
+  if (!version.ok && (version.errorCode === "ENOENT" || version.errorCode === "EINVAL")) {
     printManualSetup(print);
     return "manual";
   }
@@ -186,15 +186,22 @@ function createGcloudRunner(): SetupRunner {
   };
 }
 
+// cmd.exe cannot spawn .cmd batch files directly since Node's CVE-2024-27980
+// fix; go through the shell with each argument double-quoted.
+export function windowsCommandLine(args: string[]): string {
+  return ["gcloud.cmd", ...args.map((arg) => `"${arg.replaceAll('"', '""')}"`)].join(" ");
+}
+
 function spawnGcloud(args: string[], output: "pipe" | "inherit"): Promise<CommandResult> {
   return new Promise((resolveResult) => {
-    const executable = process.platform === "win32" ? "gcloud.cmd" : "gcloud";
-    const child = spawn(executable, args, {
-      // Never hand gcloud our stdin: prompts are disabled, and an inherited TTY lets gcloud
-      // leave the terminal in raw mode, which staircases every later line of output.
-      stdio: output === "pipe" ? ["ignore", "pipe", "inherit"] : ["ignore", "inherit", "inherit"],
-      env: { ...process.env, CLOUDSDK_CORE_DISABLE_PROMPTS: "1" },
-    });
+    // Never hand gcloud our stdin: prompts are disabled, and an inherited TTY lets gcloud
+    // leave the terminal in raw mode, which staircases every later line of output.
+    const stdio: ["ignore", "pipe", "inherit"] | ["ignore", "inherit", "inherit"] =
+      output === "pipe" ? ["ignore", "pipe", "inherit"] : ["ignore", "inherit", "inherit"];
+    const env = { ...process.env, CLOUDSDK_CORE_DISABLE_PROMPTS: "1" };
+    const child = process.platform === "win32"
+      ? spawn(windowsCommandLine(args), { shell: true, stdio, env })
+      : spawn("gcloud", args, { stdio, env });
     let captured = "";
     if (output === "pipe" && child.stdout) {
       child.stdout.setEncoding("utf8");

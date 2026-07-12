@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runSetupWizard, type CommandResult, type SetupRunner } from "../src/setup.js";
+import { runSetupWizard, windowsCommandLine, type CommandResult, type SetupRunner } from "../src/setup.js";
 
 function runnerWith(handler: (args: string[]) => CommandResult | Promise<CommandResult>): SetupRunner {
   return {
@@ -16,6 +16,14 @@ describe("setup wizard", () => {
     expect(outcome).toBe("manual");
     expect(lines.join("\n")).toContain("gcloud CLI was not found");
     expect(lines.join("\n")).toContain("Search Console -> your property -> Settings -> Users and permissions");
+  });
+
+  it("prints manual setup and exits gracefully when gcloud cannot be launched", async () => {
+    const runner = runnerWith(() => ({ ok: false, stdout: "", exitCode: null, errorCode: "EINVAL" }));
+    const lines: string[] = [];
+    const outcome = await runSetupWizard({ runner, print: (line) => lines.push(line), cwd: "/tmp/project", prompt: vi.fn() });
+    expect(outcome).toBe("manual");
+    expect(lines.join("\n")).toContain("gcloud CLI was not found");
   });
 
   it("creates missing resources and prints client configuration", async () => {
@@ -96,5 +104,19 @@ describe("setup wizard", () => {
     expect(runner.inherit).not.toHaveBeenCalledWith(expect.arrayContaining(["service-accounts", "create"]));
     expect(runner.inherit).not.toHaveBeenCalledWith(expect.arrayContaining(["keys", "create"]));
     expect(lines.join("\n")).toContain("already exists; keeping it");
+  });
+});
+
+describe("windowsCommandLine", () => {
+  it("quotes a simple argument", () => {
+    expect(windowsCommandLine(["version"])).toBe('gcloud.cmd "version"');
+  });
+
+  it("preserves spaces inside a quoted argument", () => {
+    expect(windowsCommandLine(["--display-name=SEO MCP"])).toBe('gcloud.cmd "--display-name=SEO MCP"');
+  });
+
+  it("doubles embedded double quotes", () => {
+    expect(windowsCommandLine(['--format="value"'])).toBe('gcloud.cmd "--format=""value"""');
   });
 });
