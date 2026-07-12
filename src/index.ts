@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { resolve } from "node:path";
 import { parseCliArgs, UsageError } from "./cli.js";
+import { resolveCredentialsPath } from "./credentials.js";
 import { runSetupWizard } from "./setup.js";
 import { runVerify } from "./verify.js";
 import { startServer } from "./server.js";
@@ -41,18 +41,19 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    const credentials = command.credentials ?? process.env.SEO_MCP_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const credentialsPath = resolveCredentialsPath(
+      command.credentials ?? process.env.SEO_MCP_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    );
     const ok = await runVerify(command.domains, {
-      ...(credentials ? { credentialsPath: resolve(credentials) } : {}),
+      ...(credentialsPath ? { credentialsPath } : {}),
       ...(command.cfToken ? { cloudflareToken: command.cfToken } : {}),
     });
     if (!ok) process.exitCode = 1;
     return;
   }
-  const configuredPath = command.credentials
-    ?? process.env.SEO_MCP_CREDENTIALS
-    ?? process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  const credentialsPath = configuredPath ? resolve(configuredPath) : undefined;
+  const credentialsPath = resolveCredentialsPath(
+    command.credentials ?? process.env.SEO_MCP_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  );
   await startServer(credentialsPath);
 }
 

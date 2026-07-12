@@ -142,6 +142,7 @@ Credential lookup order is:
 1. `--credentials /absolute/path/key.json`
 2. `SEO_MCP_CREDENTIALS`
 3. `GOOGLE_APPLICATION_CREDENTIALS`
+4. `~/.config/seo-mcp/seo-mcp.key.json` (or `$XDG_CONFIG_HOME/seo-mcp/...`) if it exists. This is the default location the setup wizard writes to, so a standard install needs no configuration.
 
 For example:
 
@@ -170,13 +171,18 @@ slash commands over it. From Claude Code:
 /plugin install seo-console@verdelic
 ```
 
-Enabling it prompts for your service-account key path (optional; the `seo_audit`
-and `pagespeed` tools work without it) and an optional PageSpeed API key. It then
-registers the MCP server (via `npx -y seo-console-mcp`) and adds:
+It registers the MCP server (via `npx -y seo-console-mcp`) and adds:
 
 - `/seo-console:triage <siteUrl>`: full property triage with a prioritized action plan
 - `/seo-console:content <siteUrl>`: content to create or improve, backed by Search Console data
 - `/seo-console:launch <siteUrl>`: pre-launch / launch SEO readiness check
+
+The server finds your service-account key automatically at the default location
+(`~/.config/seo-mcp/seo-mcp.key.json`, where the setup wizard writes it), so no
+configuration is needed for a standard install. For a key elsewhere, set
+`GOOGLE_APPLICATION_CREDENTIALS` (and `SEO_MCP_PAGESPEED_KEY` for higher PageSpeed
+quota) in the environment Claude Code runs in. The `seo_audit` and `pagespeed`
+tools work with no credentials at all.
 
 To try it from a local checkout without a marketplace: `claude --plugin-dir .`.
 

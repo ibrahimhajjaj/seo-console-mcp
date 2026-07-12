@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1
+
+### Fixed
+
+- Credentials are now auto-discovered at the default location
+  (`~/.config/seo-mcp/seo-mcp.key.json`, where `setup` writes the key) when no
+  explicit `--credentials` / `SEO_MCP_CREDENTIALS` / `GOOGLE_APPLICATION_CREDENTIALS`
+  is set, and an empty value is treated as unset. A standard install (including the
+  Claude Code plugin) now works with no credentials configuration.
+
 ## 0.2.0
 
 Search Console analysis, on-page auditing at scale, and guided workflows.
