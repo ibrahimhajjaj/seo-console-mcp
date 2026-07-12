@@ -46,6 +46,7 @@ import {
 import { fetchHtml } from "./fetch-page.js";
 import { parseSeoHtml } from "./seo-audit.js";
 import { formatToolError } from "./errors.js";
+import { registerPrompts } from "./prompts.js";
 
 export interface ToolDependencies {
   credentialsPath?: string;
@@ -179,6 +180,8 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
       };
     }),
   );
+
+  registerPrompts(server);
 }
 
 async function safely(operation: () => Promise<ToolResult>): Promise<CallToolResult> {

@@ -91,6 +91,35 @@ describe("MCP server tool registration", () => {
     expect(tools.every((tool) => tool.outputSchema)).toBe(true);
   });
 
+  it("lists the SEO workflow prompts", async () => {
+    const client = await connectedClient();
+
+    const { prompts } = await client.listPrompts();
+
+    expect(prompts.map((prompt) => prompt.name)).toEqual([
+      "seo_triage",
+      "content_opportunities",
+      "launch_seo_check",
+    ]);
+    expect(prompts.every((prompt) => prompt.arguments?.some((argument) => argument.name === "siteUrl" && argument.required))).toBe(true);
+  });
+
+  it("interpolates the property into the SEO triage playbook", async () => {
+    const client = await connectedClient();
+
+    const result = await client.getPrompt({
+      name: "seo_triage",
+      arguments: { siteUrl: "sc-domain:example.com" },
+    });
+    const message = result.messages[0];
+
+    expect(message?.content.type).toBe("text");
+    if (message?.content.type !== "text") throw new Error("Expected a text prompt message");
+    expect(message.content.text).toContain("example.com");
+    expect(message.content.text).toContain("search_opportunities");
+    expect(message.content.text).toContain("compare_search_periods");
+  });
+
   it.each([
     ["search_opportunities", { siteUrl: "https://example.com/" }],
     ["compare_search_periods", { siteUrl: "https://example.com/", by: "query" }],

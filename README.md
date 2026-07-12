@@ -216,6 +216,14 @@ To run without a local build, use `"command": "npx"` and `"args": ["-y", "seo-co
 
 `seo://properties` returns the Google Search Console properties available to the service account as JSON. It calls Search Console on every read, so the result is always current.
 
+## Prompts
+
+MCP clients surface these prompts as starting points a user can pick for common SEO workflows:
+
+- `seo_triage` confirms a property, analyzes recent performance and opportunities, audits the site, and produces an impact-versus-effort action plan.
+- `content_opportunities` groups evidence-backed recommendations into content to create and existing content to improve.
+- `launch_seo_check` produces a go/no-go checklist for technical and indexing readiness before launch.
+
 ## Tools
 
 Every tool validates its input with Zod. Tool failures return an MCP error result instead of terminating the server. Google API status, message, and reason are included when available. A Search Console 403 also explains how to grant the service account property access.
