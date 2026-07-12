@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0
+
+Bulk recrawl nudges for Google and IndexNow submission for the other engines.
+
+### Added
+
+- `request_recrawl`: checks URLs with the URL Inspection API and resubmits the
+  covering sitemap when some are not indexed. Google exposes no request-indexing
+  API, so a sitemap resubmission with fresh `lastmod` values is the supported bulk
+  recrawl signal; the tool says so in its output and reports exactly which URLs are
+  still pending. Takes explicit URLs or a sitemap; supports `dryRun`.
+- `indexnow_submit`: submits up to 10,000 changed URLs per call to an IndexNow
+  endpoint (Bing, Yandex, Naver, Seznam, Yep; Google does not participate). The key
+  comes from `key` or `SEO_MCP_INDEXNOW_KEY` and must be hosted on the site as
+  `https://<host>/<key>.txt`. Needs no Google credentials; supports `dryRun`.
+  Neither the key nor its file location is ever echoed in tool output, since key
+  file URLs conventionally contain the key.
+- The `seo_triage` and `launch_seo_check` prompts now offer both tools when pages
+  are not indexed.
+
 ## 0.2.2
 
 ### Changed
