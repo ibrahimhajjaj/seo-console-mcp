@@ -86,6 +86,7 @@ describe("MCP server tool registration", () => {
       "inspect_url",
       "index_coverage",
       "request_recrawl",
+      "indexnow_submit",
       "pagespeed",
       "seo_audit",
       "audit_site",

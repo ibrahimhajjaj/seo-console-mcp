@@ -381,7 +381,7 @@ export async function requestRecrawl(
     ...(truncated && totalDiscovered > selectedUrls.length ? [`Truncated after ${selectedUrls.length} of ${totalDiscovered} URLs.`] : []),
     ...(sitemapIndexOnly ? ["The sitemap is an index with no direct page URLs; child sitemaps were not read."] : []),
     `Sitemap resubmission: ${reason}.`,
-    "Google has no bulk request-indexing API; resubmitting a sitemap with fresh lastmod values is the supported recrawl signal. Use Request Indexing in the Search Console UI for single urgent URLs.",
+    "Google has no bulk request-indexing API; resubmitting a sitemap with fresh lastmod values is the supported recrawl signal. Use Request Indexing in the Search Console UI for single urgent URLs, and indexnow_submit to notify Bing/Yandex-family engines.",
   ].join("\n");
   return result(text, {
     siteUrl: params.siteUrl,

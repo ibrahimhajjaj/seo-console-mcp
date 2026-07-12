@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  indexNowSubmitInput,
   inspectUrlInput,
   listSitemapsInput,
   pageSpeedInput,
@@ -102,5 +103,12 @@ describe("tool input schemas", () => {
     const parsed = requestRecrawlInput.parse({ siteUrl: "sc-domain:example.com", sitemapUrl: "https://example.com/sitemap.xml" });
     expect(parsed).toMatchObject({ maxUrls: 20, concurrency: 3, dryRun: false });
     expect(() => requestRecrawlInput.parse({ siteUrl: "https://example.com", urls: [] })).toThrow();
+  });
+
+  it("validates indexnow_submit keys and defaults", () => {
+    const parsed = indexNowSubmitInput.parse({ urls: ["https://example.com/a"], key: "a1b2c3d4e5f6" });
+    expect(parsed).toMatchObject({ endpoint: "api.indexnow.org", dryRun: false });
+    expect(() => indexNowSubmitInput.parse({ urls: ["https://example.com/a"], key: "short" }))
+      .toThrow("8-128 characters");
   });
 });

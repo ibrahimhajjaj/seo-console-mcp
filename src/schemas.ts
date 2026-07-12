@@ -307,6 +307,33 @@ export const requestRecrawlOutput = z.object({
   results: z.array(indexCoverageResult),
 });
 
+export const indexNowEndpoints = [
+  "api.indexnow.org",
+  "www.bing.com",
+  "yandex.com",
+  "searchadvisor.naver.com",
+  "search.seznam.cz",
+  "indexnow.yep.com",
+] as const;
+export const indexNowSubmitShape = {
+  urls: z.array(httpUrl).min(1).max(10_000).describe("Changed page URLs; one submission covers one host"),
+  key: z.string().regex(/^[A-Za-z0-9-]{8,128}$/, "IndexNow keys are 8-128 characters of a-z, A-Z, 0-9, or dash")
+    .optional().describe("IndexNow key; defaults to SEO_MCP_INDEXNOW_KEY. The same key must be hosted on the site as a text file at https://<host>/<key>.txt (or at keyLocation) containing only the key"),
+  keyLocation: httpUrl.optional().describe("URL of the hosted key file when it is not https://<host>/<key>.txt"),
+  endpoint: z.enum(indexNowEndpoints).default("api.indexnow.org").describe("IndexNow endpoint to notify; participating engines share submissions"),
+  dryRun: z.boolean().default(false).describe("If true, report what would be submitted without notifying the endpoint"),
+};
+export const indexNowSubmitInput = z.object(indexNowSubmitShape);
+export const indexNowSubmitOutput = z.object({
+  success: z.boolean(),
+  dryRun: z.boolean().optional(),
+  endpoint: z.string(),
+  host: z.string(),
+  urlCount: z.number(),
+  statusCode: z.number().nullable(),
+  note: z.string(),
+});
+
 export const pageSpeedCategories = ["performance", "seo", "accessibility", "best-practices"] as const;
 export const pageSpeedShape = {
   url: httpUrl.describe("Public page URL to analyze"),

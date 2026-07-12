@@ -10,6 +10,8 @@ import {
   ctrGapsShape,
   deleteSitemapOutput,
   deleteSitemapShape,
+  indexNowSubmitOutput,
+  indexNowSubmitShape,
   inspectUrlOutput,
   inspectUrlShape,
   indexCoverageOutput,
@@ -53,6 +55,7 @@ import {
   type ToolResult,
 } from "./google-tools.js";
 import { fetchHtml } from "./fetch-page.js";
+import { submitIndexNow } from "./indexnow.js";
 import { parseSeoHtml } from "./seo-audit.js";
 import { formatToolError } from "./errors.js";
 import { registerPrompts } from "./prompts.js";
@@ -177,6 +180,14 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
     outputSchema: requestRecrawlOutput,
   },
     async (params) => safely(() => requestRecrawl(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("indexnow_submit", {
+    description: "Submit changed URLs in bulk to IndexNow search engines: Bing, Yandex, Naver, Seznam, Yep; not Google. Needs an IndexNow key hosted on the site at https://<host>/<key>.txt (write; supports dryRun)",
+    inputSchema: indexNowSubmitShape,
+    outputSchema: indexNowSubmitOutput,
+  },
+    async (params) => safely(() => submitIndexNow(params)),
   );
 
   server.registerTool("pagespeed", {

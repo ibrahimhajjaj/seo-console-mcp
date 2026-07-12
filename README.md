@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients fifteen tools for verified Search Console properties while keeping the HTML audit and PageSpeed tools usable without Google service account credentials.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients sixteen tools for verified Search Console properties while keeping the HTML audit, PageSpeed, and IndexNow tools usable without Google service account credentials.
 
 ## Requirements
 
@@ -150,7 +150,7 @@ For example:
 node dist/index.js --credentials /absolute/path/seo-mcp.key.json
 ```
 
-`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit` and `audit_site` also need no Google credentials.
+`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`.
 
 ## Security model
 
@@ -259,7 +259,7 @@ Every tool validates its input with Zod. Tool failures return an MCP error resul
 
 ### `list_properties`
 
-Lists every Google Search Console property the service account can access, returning each property's exact `siteUrl` and `permissionLevel`. It takes no input. Service-account credentials are required, unlike `pagespeed`, `seo_audit`, and `audit_site`.
+Lists every Google Search Console property the service account can access, returning each property's exact `siteUrl` and `permissionLevel`. It takes no input. Service-account credentials are required, unlike `pagespeed`, `seo_audit`, `audit_site`, and `indexnow_submit`.
 
 ### `search_analytics`
 
@@ -416,6 +416,19 @@ Checks URLs with the URL Inspection API and, when some are not indexed, resubmit
 ```
 
 It shares the `index_coverage` caps (`maxUrls` up to 50, `concurrency` up to 5) because both draw on the same URL Inspection quota. Resubmission only prompts a recrawl of pages whose sitemap `lastmod` is fresh, so keep `lastmod` accurate for changed URLs.
+
+### `indexnow_submit`
+
+Submits up to 10,000 changed URLs in one call to an [IndexNow](https://www.indexnow.org/) endpoint. Participating engines (Bing, Yandex, Naver, Seznam, Yep) share submissions with each other. Google does not use IndexNow; use `request_recrawl` for Google. This is a write operation and supports `dryRun`. It needs no Google credentials.
+
+```json
+{
+  "urls": ["https://www.example.com/new-page", "https://www.example.com/updated-page"],
+  "key": "your-indexnow-key"
+}
+```
+
+All URLs in one submission must share one host. The key is any 8-128 character value of letters, digits, or dashes, passed as `key` or `SEO_MCP_INDEXNOW_KEY`, and must be hosted as a text file containing exactly the key at `https://<host>/<key>.txt` (or at `keyLocation` on the same host). Because key file URLs conventionally contain the key, neither the key nor `keyLocation` is ever echoed in tool output. `endpoint` defaults to `api.indexnow.org`; a submission to any participating endpoint reaches all of them.
 
 ### `pagespeed`
 
