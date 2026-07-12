@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+### Changed
+
+- The package now exposes a `seo-console-mcp` bin matching its name, alongside the
+  existing `seo-mcp`. Both launch the same server.
+
 ## 0.2.1
 
 ### Fixed

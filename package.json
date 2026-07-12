@@ -1,9 +1,10 @@
 {
   "name": "seo-console-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "MCP server for Google Search Console, PageSpeed Insights, and on-page SEO audits",
   "type": "module",
   "bin": {
+    "seo-console-mcp": "dist/index.js",
     "seo-mcp": "dist/index.js"
   },
   "files": [
