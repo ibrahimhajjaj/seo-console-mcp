@@ -155,6 +155,15 @@ describe("Google-backed tool operations", () => {
     expect(result.structuredContent).toMatchObject({ success: true, sitemap: { isPending: true } });
   });
 
+  it("does not write to Search Console on a dry-run submit", async () => {
+    const clients = fakeClients();
+    const result = await submitSitemap(clients, { siteUrl: "https://example.com/", feedpath: "https://example.com/sitemap.xml", dryRun: true });
+    expect(clients.searchConsole.sitemaps.submit).not.toHaveBeenCalled();
+    expect(clients.searchConsole.sitemaps.list).not.toHaveBeenCalled();
+    expect(result.structuredContent).toMatchObject({ success: true, dryRun: true, sitemap: null, stateRefreshError: null });
+    expect(result.content[0]?.text).toContain("Dry run");
+  });
+
   it("reports an accepted sitemap if refreshing state fails", async () => {
     const clients = fakeClients();
     vi.mocked(clients.searchConsole.sitemaps.submit).mockResolvedValue({ data: undefined });

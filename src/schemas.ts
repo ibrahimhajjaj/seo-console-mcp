@@ -105,6 +105,7 @@ export const listSitemapsOutput = z.object({
 export const submitSitemapShape = {
   siteUrl: siteUrl.describe("Search Console property"),
   feedpath: httpUrl.describe("Absolute URL of the sitemap to submit"),
+  dryRun: z.boolean().default(false).describe("If true, report what would be submitted without writing to Search Console"),
 };
 export const submitSitemapInput = z.object(submitSitemapShape);
 export const submitSitemapOutput = z.object({

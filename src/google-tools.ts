@@ -131,6 +131,12 @@ export async function listSitemaps(clients: GoogleClients, params: ListSitemapsP
 }
 
 export async function submitSitemap(clients: GoogleClients, params: SubmitSitemapParams): Promise<ToolResult> {
+  if (params.dryRun) {
+    return result(
+      `Dry run: would submit ${params.feedpath} to ${params.siteUrl}. No write performed.`,
+      { success: true, dryRun: true, siteUrl: params.siteUrl, feedpath: params.feedpath, sitemap: null, stateRefreshError: null },
+    );
+  }
   await clients.searchConsole.sitemaps.submit({ siteUrl: params.siteUrl, feedpath: params.feedpath });
   let sitemap: Record<string, unknown> | null = null;
   let stateRefreshError: string | null = null;
