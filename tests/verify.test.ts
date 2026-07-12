@@ -55,10 +55,37 @@ describe("runVerify", () => {
   });
 
   it("treats an already-present Search Console property as success", async () => {
-    const addSite = vi.fn(async () => { throw new Error("already exists"); });
+    const addSite = vi.fn(async () => {
+      throw Object.assign(new Error("already exists"), { code: 409 });
+    });
     const clients = fakeClients({ addSite });
-    const ok = await runVerify(["getpsst.app"], { clients, cloudflare: fakeCloudflare(), print: () => {}, ...noWait });
+    const lines: string[] = [];
+    const ok = await runVerify(["getpsst.app"], { clients, cloudflare: fakeCloudflare(), print: (line) => lines.push(line), ...noWait });
     expect(ok).toBe(true);
+    expect(lines.join("\n")).toContain("already in Search Console");
+  });
+
+  it("reports a Search Console add authorization failure", async () => {
+    const addSite = vi.fn(async () => {
+      throw Object.assign(new Error("forbidden"), { response: { status: 403 } });
+    });
+    const clients = fakeClients({ addSite });
+    const lines: string[] = [];
+    const ok = await runVerify(["getpsst.app"], { clients, cloudflare: fakeCloudflare(), print: (line) => lines.push(line), ...noWait });
+    expect(ok).toBe(false);
+    expect(lines.join("\n")).toContain("adding sc-domain:getpsst.app to Search Console failed: forbidden");
+    expect(lines.join("\n")).not.toContain("Done.");
+  });
+
+  it("fails verification immediately on an authentication error", async () => {
+    const verifyOwnership = vi.fn(async () => {
+      throw Object.assign(new Error("unauthorized"), { response: { status: 401 } });
+    });
+    const clients = fakeClients({ verifyOwnership });
+    const ok = await runVerify(["getpsst.app"], { clients, cloudflare: fakeCloudflare(), print: () => {}, attempts: 5, ...noWait });
+    expect(ok).toBe(false);
+    expect(verifyOwnership).toHaveBeenCalledTimes(1);
+    expect(clients.addSite).not.toHaveBeenCalled();
   });
 
   it("fails fast without a Cloudflare token", async () => {

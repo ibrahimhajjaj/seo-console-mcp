@@ -27,6 +27,15 @@ interface VerifyDeps {
   delayMs: number;
 }
 
+function httpStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const record = error as { code?: unknown; response?: { status?: unknown } };
+  const raw = record.response?.status ?? record.code;
+  if (typeof raw === "number") return raw;
+  if (typeof raw === "string" && /^\d+$/.test(raw)) return Number(raw);
+  return undefined;
+}
+
 export async function runVerify(domains: string[], options: VerifyOptions = {}): Promise<boolean> {
   const print = options.print ?? console.log;
   const sleep = options.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -74,6 +83,11 @@ async function verifyDomain(domain: string, deps: VerifyDeps): Promise<boolean> 
         break;
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
+        const status = httpStatus(error);
+        if (status === 401 || status === 403) {
+          print(`[3/4] Verification cannot proceed: ${lastError}`);
+          return false;
+        }
         if (attempt < attempts) await sleep(delayMs);
       }
     }
@@ -88,8 +102,14 @@ async function verifyDomain(domain: string, deps: VerifyDeps): Promise<boolean> 
       await clients.addSite(domain);
       print(`[4/4] Added sc-domain:${domain} to Search Console.`);
     } catch (error) {
-      // Verification is the grant that matters; adding an already-present property is not a failure.
-      print(`[4/4] Search Console add returned: ${error instanceof Error ? error.message : String(error)} (it may already be present).`);
+      const status = httpStatus(error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (status === 409 || status === 400) {
+        print(`[4/4] sc-domain:${domain} is already in Search Console.`);
+      } else {
+        print(`[4/4] Ownership verified, but adding sc-domain:${domain} to Search Console failed: ${message}`);
+        return false;
+      }
     }
     print(`Done. Query it with siteUrl "sc-domain:${domain}".`);
     return true;
