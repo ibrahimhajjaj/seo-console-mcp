@@ -27,6 +27,7 @@ export interface AuditSiteResult {
   truncated: boolean;
   skipped: number;
   childSitemapsSkipped: number;
+  childSitemapsFailed: number;
   pages: AuditSitePage[];
   rollup: Record<string, number>;
 }
@@ -51,13 +52,20 @@ export async function auditSite(
   const parsed = parseSitemapUrls(sitemap.html);
   const pageUrls = [...parsed.urls];
   let childSitemapsSkipped = 0;
+  let childSitemapsFailed = 0;
 
   if (pageUrls.length === 0 && parsed.childSitemaps.length > 0) {
     const children = parsed.childSitemaps.slice(0, MAX_CHILD_SITEMAPS);
     childSitemapsSkipped = parsed.childSitemaps.length - children.length;
     for (const childUrl of children) {
-      const child = await fetchImpl(childUrl);
-      pageUrls.push(...parseSitemapUrls(child.html).urls);
+      // Isolate each child: one bad child sitemap must not abort the whole audit
+      // or discard pages already gathered from earlier children.
+      try {
+        const child = await fetchImpl(childUrl);
+        pageUrls.push(...parseSitemapUrls(child.html).urls);
+      } catch {
+        childSitemapsFailed += 1;
+      }
       if (pageUrls.length >= maxPages) {
         childSitemapsSkipped += children.length - children.indexOf(childUrl) - 1;
         break;
@@ -96,6 +104,7 @@ export async function auditSite(
     truncated: skipped > 0 || childSitemapsSkipped > 0,
     skipped,
     childSitemapsSkipped,
+    childSitemapsFailed,
     pages,
     rollup,
   };

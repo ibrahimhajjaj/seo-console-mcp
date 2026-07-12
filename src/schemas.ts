@@ -301,6 +301,7 @@ export const auditSiteOutput = z.object({
   truncated: z.boolean(),
   skipped: z.number(),
   childSitemapsSkipped: z.number(),
+  childSitemapsFailed: z.number(),
   pages: z.array(z.object({
     url: z.string(),
     issues: z.array(z.string()).optional(),

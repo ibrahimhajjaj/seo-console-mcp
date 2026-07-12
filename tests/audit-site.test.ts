@@ -54,6 +54,22 @@ describe("auditSite", () => {
     expect(result.rollup["Missing meta description"]).toBe(2);
   });
 
+  it("isolates a failed child sitemap and continues with the valid ones", async () => {
+    const sitemapUrl = "https://example.com/sitemap.xml";
+    const fetchImpl: typeof fetchHtml = async (url) => {
+      if (url === sitemapUrl) return page("<sitemapindex><sitemap><loc>https://example.com/bad.xml</loc></sitemap><sitemap><loc>https://example.com/good.xml</loc></sitemap></sitemapindex>", url);
+      if (url === "https://example.com/bad.xml") throw new Error("child sitemap 503");
+      if (url === "https://example.com/good.xml") return page("<urlset><url><loc>https://example.com/page-a</loc></url></urlset>", url);
+      return page("<html><body><h1>Page</h1></body></html>", url);
+    };
+
+    const result = await auditSite(sitemapUrl, { fetchImpl });
+
+    expect(result.childSitemapsFailed).toBe(1);
+    expect(result.audited).toBe(1);
+    expect(result.pages.map((entry) => entry.url)).toEqual(["https://example.com/page-a"]);
+  });
+
   it("respects the concurrency limit", async () => {
     const sitemapUrl = "https://example.com/sitemap.xml";
     const urls = Array.from({ length: 6 }, (_, index) => `https://example.com/${index}`);

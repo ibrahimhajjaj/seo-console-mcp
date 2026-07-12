@@ -77,7 +77,7 @@ describe("Google-backed tool operations", () => {
     const output = await ctrGapsTool(clients, { siteUrl: "https://example.com/", by: "query" });
 
     expect(output.structuredContent).toMatchObject({ gaps: [
-      { keys: ["weak snippet"], expectedCtr: 0.055, missedClicks: 45 },
+      { keys: ["weak snippet"], expectedCtr: 0.1, missedClicks: 90 },
     ] });
   });
 

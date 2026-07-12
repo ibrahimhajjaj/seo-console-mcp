@@ -93,19 +93,26 @@ export interface CtrGapItem {
 
 export function ctrGaps(rows: InsightRow[], options: CtrGapOptions = {}): CtrGapItem[] {
   const { minImpressions = 100, limit = 50 } = options;
-  const bucketTotals = new Map<number, { totalCtr: number; count: number }>();
+  // Impression-weighted CTR per position bucket (aggregate clicks / aggregate
+  // impressions), so a high-volume row anchors the baseline instead of every row
+  // counting equally regardless of size.
+  const bucketTotals = new Map<number, { clicks: number; impressions: number }>();
   for (const row of rows) {
     const bucket = Math.round(row.position);
-    const total = bucketTotals.get(bucket) ?? { totalCtr: 0, count: 0 };
-    total.totalCtr += row.ctr;
-    total.count += 1;
+    const total = bucketTotals.get(bucket) ?? { clicks: 0, impressions: 0 };
+    total.clicks += row.clicks;
+    total.impressions += row.impressions;
     bucketTotals.set(bucket, total);
   }
 
   return rows
     .map((row): CtrGapItem => {
       const bucket = bucketTotals.get(Math.round(row.position));
-      const expectedCtr = bucket ? bucket.totalCtr / bucket.count : row.ctr;
+      // Leave-one-out peer baseline: compare the row against its bucket neighbors,
+      // not itself. No peer impressions -> expected = own ctr (never flagged).
+      const peerImpressions = (bucket?.impressions ?? row.impressions) - row.impressions;
+      const peerClicks = (bucket?.clicks ?? row.clicks) - row.clicks;
+      const expectedCtr = peerImpressions > 0 ? peerClicks / peerImpressions : row.ctr;
       return {
         keys: row.keys,
         impressions: row.impressions,

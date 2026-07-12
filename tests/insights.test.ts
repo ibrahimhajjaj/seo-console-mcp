@@ -60,7 +60,7 @@ describe("comparePeriods", () => {
 });
 
 describe("ctrGaps", () => {
-  it("flags a below-average row using its position bucket mean", () => {
+  it("flags a below-baseline row using the impression-weighted, leave-one-out bucket CTR", () => {
     const rows = [
       row(["low"], 1_000, 20, 0.02, 5.1),
       row(["high"], 1_000, 180, 0.18, 4.8),
@@ -68,8 +68,26 @@ describe("ctrGaps", () => {
 
     const gaps = ctrGaps(rows);
     expect(gaps).toHaveLength(1);
-    expect(gaps[0]).toMatchObject({ keys: ["low"], impressions: 1_000, ctr: 0.02, position: 5.1, missedClicks: 80 });
-    expect(gaps[0]?.expectedCtr).toBeCloseTo(0.1);
+    // "low" is compared against its only peer "high": 180/1000 = 0.18 expected.
+    expect(gaps[0]).toMatchObject({ keys: ["low"], impressions: 1_000, ctr: 0.02, position: 5.1, missedClicks: 160 });
+    expect(gaps[0]?.expectedCtr).toBeCloseTo(0.18);
+  });
+
+  it("weights the expected CTR by impressions, not by row count", () => {
+    const rows = [
+      row(["target"], 200, 4, 0.02, 5),
+      row(["big-peer"], 100_000, 10_000, 0.10, 5),
+      row(["tiny-peer"], 100, 50, 0.50, 5),
+    ];
+
+    // target's peers aggregate to (10000+50)/(100000+100) ~= 0.1004, anchored by
+    // big-peer; an unweighted row-mean would be (0.10+0.50)/2 = 0.30.
+    const gap = ctrGaps(rows, { minImpressions: 100 }).find(({ keys }) => keys[0] === "target");
+    expect(gap?.expectedCtr).toBeCloseTo(0.1004, 3);
+  });
+
+  it("never flags a row alone in its position bucket (no peers)", () => {
+    expect(ctrGaps([row(["solo"], 5_000, 10, 0.002, 7)])).toEqual([]);
   });
 
   it("respects minimum impressions", () => {
