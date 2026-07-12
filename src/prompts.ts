@@ -19,7 +19,8 @@ export function registerPrompts(server: McpServer): void {
 2. Run \`search_analytics\` for the last 28 days, then \`compare_search_periods\` against the prior 28 days.
 3. Run \`search_opportunities\`, \`ctr_gaps\`, and \`query_cannibalization\`.
 4. Run \`audit_site\` on the property's sitemap, or \`seo_audit\` on its top pages, and run \`pagespeed\` on the homepage.
-5. Produce a prioritized action plan ranked by impact versus effort, with specific next steps and the numbers that justify each action.`,
+5. Run \`index_coverage\` on the sitemap to see how many pages Google has actually indexed.
+6. Produce a prioritized action plan ranked by impact versus effort, with specific next steps and the numbers that justify each action.`,
       },
     }],
   }));
@@ -47,7 +48,7 @@ export function registerPrompts(server: McpServer): void {
       role: "user",
       content: {
         type: "text",
-        text: `For ${siteUrl}, perform a launch or pre-launch SEO check. Run \`seo_audit\` and \`pagespeed\` on the key pages, use \`inspect_url\` to confirm indexing, and run \`list_sitemaps\` to confirm a sitemap is submitted. Offer to run \`submit_sitemap\` if it is missing. Output a go/no-go checklist covering technical and indexing readiness, since SEO analytics will not have data yet at launch.`,
+        text: `For ${siteUrl}, perform a launch or pre-launch SEO check. Run \`seo_audit\` and \`pagespeed\` on the key pages, use \`index_coverage\` on the sitemap (or \`inspect_url\` for a specific page) to confirm indexing, and run \`list_sitemaps\` to confirm a sitemap is submitted. Offer to run \`submit_sitemap\` if it is missing. Output a go/no-go checklist covering technical and indexing readiness, since SEO analytics will not have data yet at launch.`,
       },
     }],
   }));
