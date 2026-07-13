@@ -75,6 +75,7 @@ describe("MCP server tool registration", () => {
 
     expect(tools.map((tool) => tool.name)).toEqual([
       "search_analytics",
+      "keyword_ideas",
       "search_opportunities",
       "compare_search_periods",
       "ctr_gaps",
@@ -392,6 +393,19 @@ describe("MCP server tool registration", () => {
     });
 
     expect(result.isError).not.toBe(true);
+  });
+
+  it("allows keyword ideas calls without Search Console credentials when siteUrl is absent", async () => {
+    const keywordIdeasFetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(["seo", ["seo tools"]]), { status: 200 }));
+    const client = await connectedClient({ keywordIdeasFetchImpl });
+
+    const result = await client.callTool({
+      name: "keyword_ideas",
+      arguments: { seed: "seo", expansions: [] },
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ returned: 1, crossReferenced: false });
   });
 
   it("rejects invalid arguments before invoking the handler", async () => {

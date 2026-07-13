@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   indexNowSubmitInput,
   inspectUrlInput,
+  keywordIdeasInput,
   listSitemapsInput,
   pageSpeedInput,
   requestRecrawlInput,
@@ -110,5 +111,19 @@ describe("tool input schemas", () => {
     expect(parsed).toMatchObject({ endpoint: "api.indexnow.org", dryRun: false });
     expect(() => indexNowSubmitInput.parse({ urls: ["https://example.com/a"], key: "short" }))
       .toThrow("8-128 characters");
+  });
+
+  it("validates keyword_ideas defaults and bounds", () => {
+    const parsed = keywordIdeasInput.parse({ seed: "  SEO tools  ", siteUrl: "sc-domain:Example.COM" });
+    expect(parsed).toMatchObject({
+      seed: "SEO tools",
+      siteUrl: "sc-domain:example.com",
+      language: "en",
+      expansions: ["alphabet", "questions", "prepositions", "comparisons"],
+      days: 90,
+      limit: 100,
+    });
+    expect(() => keywordIdeasInput.parse({ seed: " ", country: "usa" })).toThrow();
+    expect(() => keywordIdeasInput.parse({ seed: "seo", days: 481, limit: 501 })).toThrow();
   });
 });

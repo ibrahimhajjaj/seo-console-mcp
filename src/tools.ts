@@ -14,6 +14,8 @@ import {
   indexNowSubmitShape,
   inspectUrlOutput,
   inspectUrlShape,
+  keywordIdeasOutput,
+  keywordIdeasShape,
   indexCoverageOutput,
   indexCoverageShape,
   listPropertiesOutput,
@@ -56,6 +58,7 @@ import {
 } from "./google-tools.js";
 import { fetchHtml } from "./fetch-page.js";
 import { submitIndexNow } from "./indexnow.js";
+import { keywordIdeas } from "./keyword-ideas.js";
 import { parseSeoHtml } from "./seo-audit.js";
 import { formatToolError } from "./errors.js";
 import { registerPrompts } from "./prompts.js";
@@ -63,6 +66,7 @@ import { registerPrompts } from "./prompts.js";
 export interface ToolDependencies {
   credentialsPath?: string;
   clients?: GoogleClients;
+  keywordIdeasFetchImpl?: typeof fetch;
 }
 
 export function registerTools(server: McpServer, dependencies: ToolDependencies = {}): void {
@@ -92,6 +96,22 @@ export function registerTools(server: McpServer, dependencies: ToolDependencies 
     outputSchema: searchAnalyticsOutput,
   },
     async (params) => safely(() => searchAnalytics(getAuthenticatedClients(), params)),
+  );
+
+  server.registerTool("keyword_ideas", {
+    description: "Expand a seed with free Google Autocomplete suggestions and optionally cross-reference Search Console rankings; no extra API key needed",
+    inputSchema: keywordIdeasShape,
+    outputSchema: keywordIdeasOutput,
+  },
+    async (params) => safely(() => keywordIdeas(params, {
+      ...(dependencies.keywordIdeasFetchImpl ? { fetchImpl: dependencies.keywordIdeasFetchImpl } : {}),
+      ...(params.siteUrl ? {
+        fetchGscRows: async (request) => {
+          const response = await getAuthenticatedClients().searchConsole.searchanalytics.query(request);
+          return response.data.rows ?? [];
+        },
+      } : {}),
+    })),
   );
 
   server.registerTool("search_opportunities", {

@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients sixteen tools for verified Search Console properties while keeping the HTML audit, PageSpeed, and IndexNow tools usable without Google service account credentials.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients seventeen tools for verified Search Console properties while keeping the HTML audit, PageSpeed, IndexNow, and keyword ideas tools usable without Google service account credentials.
 
 ## Requirements
 
@@ -150,7 +150,7 @@ For example:
 node dist/index.js --credentials /absolute/path/seo-mcp.key.json
 ```
 
-`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`.
+`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`. `keyword_ideas` only needs them when `siteUrl` is passed for the Search Console cross-reference.
 
 ## Security model
 
@@ -286,6 +286,24 @@ Queries `searchanalytics.query` and returns a compact ranked table plus structur
 ```
 
 `siteUrl` is required. `startDate` and `endDate` default to the latest 28-day UTC window. `dimensions` defaults to `["query"]`; allowed values are `query`, `page`, `country`, `device`, `date`, and `searchAppearance`. `rowLimit` defaults to 25 and is capped at 25,000. `maxTableRows` defaults to 25 and caps only the text table; structured rows remain complete. Set it to 0 for a summary without a table. `type` may be `web`, `image`, `video`, or `news`.
+
+### `keyword_ideas`
+
+Expands a seed through Google Autocomplete and returns normalized, deduplicated keyword ideas grouped by discovery family. It uses the public autocomplete endpoint, needs no extra API key, and works without Google credentials unless `siteUrl` is provided. With a Search Console property, it labels ideas already ranking with their average position, clicks, and impressions over the selected lookback window.
+
+```json
+{
+  "seed": "technical seo",
+  "siteUrl": "sc-domain:example.com",
+  "language": "en",
+  "country": "us",
+  "expansions": ["alphabet", "questions", "prepositions", "comparisons"],
+  "days": 90,
+  "limit": 100
+}
+```
+
+All four expansion families run by default. `days` defaults to 90 and is capped at 480; `limit` defaults to 100 and is capped at 500. Individual autocomplete failures are counted without discarding successful suggestions.
 
 ### `search_opportunities`
 

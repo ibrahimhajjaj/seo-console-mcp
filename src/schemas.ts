@@ -69,6 +69,36 @@ export const searchAnalyticsOutput = z.object({
   firstIncompleteDate: z.string().optional(),
 });
 
+export const keywordIdeaExpansions = ["alphabet", "questions", "prepositions", "comparisons"] as const;
+export const keywordIdeaFamilies = ["seed", ...keywordIdeaExpansions] as const;
+export const keywordIdeasShape = {
+  seed: z.string().trim().min(1).max(100).describe("Seed keyword to expand"),
+  siteUrl: siteUrl.optional().describe("Optional Search Console property used to identify queries already ranking"),
+  language: z.string().default("en").describe("Autocomplete interface language passed as hl"),
+  country: z.string().regex(/^[a-z]{2}$/, "country must be a 2-letter lowercase code").optional().describe("Autocomplete country passed as gl"),
+  expansions: z.array(z.enum(keywordIdeaExpansions)).default([...keywordIdeaExpansions]).describe("Suggestion expansion families to run beyond the bare seed"),
+  days: z.number().int().min(1).max(480).default(90).describe("Search Console lookback window in days"),
+  limit: z.number().int().min(1).max(500).default(100).describe("Maximum keyword ideas to return"),
+};
+export const keywordIdeasInput = z.object(keywordIdeasShape);
+export const keywordIdeasOutput = z.object({
+  seed: z.string(),
+  totalFound: z.number(),
+  returned: z.number(),
+  requestFailures: z.number(),
+  gscMatched: z.number(),
+  crossReferenced: z.boolean(),
+  ideas: z.array(z.object({
+    keyword: z.string(),
+    family: z.enum(keywordIdeaFamilies),
+    gsc: z.object({
+      position: z.number(),
+      clicks: z.number(),
+      impressions: z.number(),
+    }).nullable(),
+  })),
+});
+
 const analysisWindowShape = {
   siteUrl: siteUrl.describe("Search Console property to analyze"),
   startDate: isoDate.optional().describe("Start date in YYYY-MM-DD; defaults to the latest 28-day window"),
