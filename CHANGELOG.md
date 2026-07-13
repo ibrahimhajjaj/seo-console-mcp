@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+Net-new keyword discovery from Google Autocomplete, with optional Search Console cross-reference.
+
+### Added
+
+- `keyword_ideas`: expands a seed through alphabet, question, preposition, and
+  comparison families, then deduplicates the Google Autocomplete results. When
+  `siteUrl` is passed, Search Console marks each idea as already ranking, with
+  position, clicks, and impressions, or net-new. It needs no Google credentials
+  unless `siteUrl` is passed and no extra API key.
+- The `content_opportunities` and `seo_triage` prompts and the content and triage
+  command playbooks now reference `keyword_ideas` for net-new topic discovery.
+
 ## 0.3.0
 
 Bulk recrawl nudges for Google and IndexNow submission for the other engines.
