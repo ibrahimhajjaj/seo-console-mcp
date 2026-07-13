@@ -17,7 +17,7 @@ export function registerPrompts(server: McpServer): void {
 
 1. Run \`list_properties\` to confirm the property.
 2. Run \`search_analytics\` for the last 28 days, then \`compare_search_periods\` against the prior 28 days.
-3. Run \`search_opportunities\`, \`ctr_gaps\`, and \`query_cannibalization\`.
+3. Run \`search_opportunities\`, \`ctr_gaps\`, and \`query_cannibalization\`, and use \`keyword_ideas\` to surface net-new topics beyond what Search Console already shows.
 4. Run \`audit_site\` on the property's sitemap, or \`seo_audit\` on its top pages, and run \`pagespeed\` on the homepage.
 5. Run \`index_coverage\` on the sitemap to see how many pages Google has actually indexed. If pages are missing, offer \`request_recrawl\` to resubmit the sitemap and \`indexnow_submit\` for Bing/Yandex-family engines.
 6. Produce a prioritized action plan ranked by impact versus effort, with specific next steps and the numbers that justify each action.`,
@@ -34,7 +34,7 @@ export function registerPrompts(server: McpServer): void {
       role: "user",
       content: {
         type: "text",
-        text: `For ${siteUrl}, find what content to create or improve. Use \`search_opportunities\` for near-page-1 keywords, \`ctr_gaps\` for rewrite targets, and \`query_cannibalization\` for pages competing with each other. Group recommendations into create-new versus improve-existing. For each recommendation, include the query, current position, and impressions that justify it.`,
+        text: `For ${siteUrl}, find what content to create or improve. Use \`search_opportunities\` for near-page-1 keywords, \`ctr_gaps\` for rewrite targets, and \`query_cannibalization\` for pages competing with each other; these find queries the property already ranks for. Use \`keyword_ideas\` for net-new keyword and question ideas to create pages for, passing ${siteUrl} as \`siteUrl\` so ideas are cross-referenced against current rankings. Group recommendations into create-new versus improve-existing. For each Search Console-backed recommendation, include the query, current position, and impressions that justify it.`,
       },
     }],
   }));
