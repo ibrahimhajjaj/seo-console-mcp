@@ -2,11 +2,21 @@ export type CliCommand =
   | { kind: "help" }
   | { kind: "serve"; credentials?: string }
   | { kind: "setup"; projectId?: string; keyPath?: string; pagespeedKey?: boolean }
-  | { kind: "verify"; domains: string[]; credentials?: string; cfToken?: string };
+  | { kind: "verify"; domains: string[]; credentials?: string; cfToken?: string }
+  | QueryCommand;
+
+export interface QueryCommand {
+  kind: "query";
+  tool?: string;
+  params: Record<string, string>;
+  out?: string;
+  credentials?: string;
+  help: boolean;
+}
 
 export class UsageError extends Error {}
 
-type CommandKind = Exclude<CliCommand["kind"], "help">;
+type CommandKind = Exclude<CliCommand["kind"], "help" | "query">;
 
 const allowedFlags: Record<CommandKind, ReadonlySet<string>> = {
   serve: new Set(["--credentials"]),
@@ -26,6 +36,9 @@ function optionValue(args: string[], index: number): string {
 }
 
 export function parseCliArgs(args: string[]): CliCommand {
+  // `query` takes arbitrary --param flags and its own --help, so it is parsed
+  // before the global help check that the other commands share.
+  if (args[0] === "query") return parseQueryArgs(args.slice(1));
   if (args.includes("--help") || args.includes("-h")) return { kind: "help" };
 
   const first = args[0];
@@ -87,4 +100,56 @@ export function parseCliArgs(args: string[]): CliCommand {
     };
   }
   return { kind, ...(credentials ? { credentials } : {}) };
+}
+
+function parseQueryArgs(args: string[]): QueryCommand {
+  const params: Record<string, string> = {};
+  let tool: string | undefined;
+  let out: string | undefined;
+  let credentials: string | undefined;
+  let help = false;
+
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === undefined) continue;
+
+    if (arg === "--help" || arg === "-h") {
+      help = true;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      const value = optionValue(args, index);
+      index++;
+      if (arg === "--out") {
+        if (out === undefined) out = value;
+        continue;
+      }
+      if (arg === "--credentials") {
+        if (credentials === undefined) credentials = value;
+        continue;
+      }
+      // Any other flag names a tool parameter; --site-url maps to siteUrl.
+      params[kebabToCamel(arg)] = value;
+      continue;
+    }
+
+    if (tool === undefined) {
+      tool = arg;
+      continue;
+    }
+    throw new UsageError(`unexpected positional argument for query: ${arg}`);
+  }
+
+  return {
+    kind: "query",
+    params,
+    help,
+    ...(tool !== undefined ? { tool } : {}),
+    ...(out !== undefined ? { out } : {}),
+    ...(credentials !== undefined ? { credentials } : {}),
+  };
+}
+
+function kebabToCamel(flag: string): string {
+  return flag.replace(/^-+/, "").replace(/-([a-z0-9])/g, (_match, char: string) => char.toUpperCase());
 }

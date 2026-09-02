@@ -78,4 +78,48 @@ describe("parseCliArgs", () => {
   it("rejects a stray positional", () => {
     expect(() => parseCliArgs(["frobnicate"])).toThrow(UsageError);
   });
+
+  it("parses a query with tool, parameter flags, and out", () => {
+    expect(parseCliArgs([
+      "query", "search_analytics",
+      "--site-url", "sc-domain:example.com",
+      "--start-date", "2026-08-05",
+      "--dimensions", "date",
+      "--out", "/tmp/sg.json",
+    ])).toEqual({
+      kind: "query",
+      tool: "search_analytics",
+      params: { siteUrl: "sc-domain:example.com", startDate: "2026-08-05", dimensions: "date" },
+      out: "/tmp/sg.json",
+      help: false,
+    });
+  });
+
+  it("parses a bare query as a tool listing request", () => {
+    expect(parseCliArgs(["query"])).toEqual({ kind: "query", params: {}, help: false });
+  });
+
+  it("routes query --help to the query command rather than global help", () => {
+    expect(parseCliArgs(["query", "--help"])).toEqual({ kind: "query", params: {}, help: true });
+    expect(parseCliArgs(["query", "wporg_plugin", "--help"])).toEqual({
+      kind: "query",
+      tool: "wporg_plugin",
+      params: {},
+      help: true,
+    });
+  });
+
+  it("parses query credentials separately from tool parameters", () => {
+    expect(parseCliArgs(["query", "list_properties", "--credentials", "/k.json"])).toEqual({
+      kind: "query",
+      tool: "list_properties",
+      params: {},
+      credentials: "/k.json",
+      help: false,
+    });
+  });
+
+  it("rejects a query parameter flag without a value", () => {
+    expect(() => parseCliArgs(["query", "search_analytics", "--site-url"])).toThrow(/requires a value/);
+  });
 });

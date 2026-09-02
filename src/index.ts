@@ -3,12 +3,14 @@ import { parseCliArgs, UsageError } from "./cli.js";
 import { resolveCredentialsPath } from "./credentials.js";
 import { runSetupWizard } from "./setup.js";
 import { runVerify } from "./verify.js";
+import { runQuery } from "./query.js";
 import { startServer } from "./server.js";
 
 const usage = [
   "Usage: seo-mcp [--credentials /path/key.json]",
   "       seo-mcp setup [--project PROJECT_ID] [--key /path/seo-mcp.key.json] [--pagespeed-key|--no-pagespeed-key]",
   "       seo-mcp verify <domain> [<domain>...] [--cf-token TOKEN] [--credentials /path/key.json]",
+  "       seo-mcp query <tool> [--<param> value ...] [--out path.json] [--credentials /path/key.json]",
 ].join("\n");
 
 async function main(): Promise<void> {
@@ -49,6 +51,10 @@ async function main(): Promise<void> {
       ...(command.cfToken ? { cloudflareToken: command.cfToken } : {}),
     });
     if (!ok) process.exitCode = 1;
+    return;
+  }
+  if (command.kind === "query") {
+    process.exitCode = await runQuery(command);
     return;
   }
   const credentialsPath = resolveCredentialsPath(
