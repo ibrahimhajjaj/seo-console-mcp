@@ -101,6 +101,10 @@ interface ToolSpec<Shape extends z.ZodRawShape> {
   description: string;
   inputShape: Shape;
   outputSchema: z.ZodType;
+  // Tools that change something outside this process. Over MCP a person is
+  // watching the call; from a shell these are one line in a cron job, so the
+  // query command makes them opt in.
+  write?: boolean;
   run(ctx: ToolContext, params: z.infer<z.ZodObject<Shape>>): Promise<ToolResult>;
 }
 
@@ -112,6 +116,7 @@ export interface ToolDefinition {
   description: string;
   inputShape: z.ZodRawShape;
   outputSchema: z.ZodType;
+  write: boolean;
   run(ctx: ToolContext, params: unknown): Promise<ToolResult>;
 }
 
@@ -121,6 +126,7 @@ function defineTool<Shape extends z.ZodRawShape>(spec: ToolSpec<Shape>): ToolDef
     description: spec.description,
     inputShape: spec.inputShape,
     outputSchema: spec.outputSchema,
+    write: spec.write ?? false,
     run: (ctx, params) => spec.run(ctx, params as z.infer<z.ZodObject<Shape>>),
   };
 }
@@ -192,6 +198,7 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "submit_sitemap",
+    write: true,
     description: "Submit a sitemap to Google Search Console and return its current state",
     inputShape: submitSitemapShape,
     outputSchema: submitSitemapOutput,
@@ -199,6 +206,7 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "delete_sitemap",
+    write: true,
     description: "Remove a submitted sitemap from a Search Console property (write; supports dryRun)",
     inputShape: deleteSitemapShape,
     outputSchema: deleteSitemapOutput,
@@ -220,6 +228,7 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "request_recrawl",
+    write: true,
     description: "Inspect URLs' Google index status and resubmit the covering sitemap for the ones not indexed, the supported bulk recrawl nudge (write; supports dryRun)",
     inputShape: requestRecrawlShape,
     outputSchema: requestRecrawlOutput,
@@ -227,6 +236,7 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "indexnow_submit",
+    write: true,
     description: "Submit changed URLs in bulk to IndexNow search engines: Bing, Yandex, Naver, Seznam, Yep; not Google. Needs an IndexNow key hosted on the site at https://<host>/<key>.txt (write; supports dryRun)",
     inputShape: indexNowSubmitShape,
     outputSchema: indexNowSubmitOutput,

@@ -37,6 +37,12 @@ export async function runQuery(command: QueryCommand, deps: RunQueryDeps = {}): 
     write(describeTool(definition));
     return 0;
   }
+  // Over MCP these run with a person watching; from a shell they are one line in
+  // a script, so they have to be asked for explicitly.
+  if (definition.write && !command.allowWrite) {
+    writeError(`${definition.name} changes data and is not run from the CLI unless you pass --allow-write.\n`);
+    return 1;
+  }
 
   try {
     const params = z.object(definition.inputShape).parse(coerceCliParams(definition.inputShape, command.params));
@@ -114,8 +120,17 @@ function coerceValue(schema: z.ZodType, value: string): unknown {
 }
 
 function listTools(tools: ToolDefinition[]): string {
-  const rows = tools.map((tool) => `  ${tool.name}  ${tool.description}`);
-  return ["Usage: seo-mcp query <tool> [--<param> value ...] [--out path.json] [--credentials /path/key.json]", "", "Tools:", ...rows, "", "Run `seo-mcp query <tool> --help` for a tool's parameters.", ""].join("\n");
+  const rows = tools.map((tool) => `  ${tool.name}${tool.write ? " (write)" : ""}  ${tool.description}`);
+  return [
+    "Usage: seo-mcp query <tool> [--<param> value ...] [--out path.json] [--credentials /path/key.json] [--allow-write]",
+    "",
+    "Tools:",
+    ...rows,
+    "",
+    "Tools marked (write) change data and need --allow-write.",
+    "Run `seo-mcp query <tool> --help` for a tool's parameters.",
+    "",
+  ].join("\n");
 }
 
 function describeTool(definition: ToolDefinition): string {
@@ -124,7 +139,14 @@ function describeTool(definition: ToolDefinition): string {
     const optional = field instanceof z.ZodOptional || field instanceof z.ZodDefault;
     return `  --${camelToKebab(name)}  ${typeName(unwrap(field))}${optional ? " (optional)" : ""}`;
   });
-  return [`${definition.name}: ${definition.description}`, "", "Parameters:", ...(params.length ? params : ["  (none)"]), ""].join("\n");
+  return [
+    `${definition.name}: ${definition.description}`,
+    ...(definition.write ? ["", "This tool changes data and needs --allow-write."] : []),
+    "",
+    "Parameters:",
+    ...(params.length ? params : ["  (none)"]),
+    "",
+  ].join("\n");
 }
 
 function typeName(schema: z.ZodType): string {

@@ -30,10 +30,23 @@ const authTool: ToolDefinition = {
   },
 };
 
-const tools = [echoTool, authTool];
+let writeToolRuns = 0;
+const writeTool: ToolDefinition = {
+  name: "danger",
+  description: "Deletes something",
+  inputShape: {},
+  outputSchema: z.object({}),
+  write: true,
+  run: async () => {
+    writeToolRuns += 1;
+    return { content: [{ type: "text", text: "done" }], structuredContent: {} };
+  },
+};
+
+const tools = [echoTool, authTool, writeTool];
 
 function command(overrides: Partial<QueryCommand>): QueryCommand {
-  return { kind: "query", params: {}, help: false, ...overrides };
+  return { kind: "query", params: {}, help: false, allowWrite: false, ...overrides };
 }
 
 function capture() {
@@ -134,6 +147,46 @@ describe("runQuery", () => {
     expect(code).toBe(1);
     expect(bad.err.join("")).toMatch(/boolean/i);
     expect(bad.out).toHaveLength(0);
+  });
+
+  it("refuses a write tool without --allow-write and does not run it", async () => {
+    writeToolRuns = 0;
+    const io = capture();
+
+    const code = await runQuery(command({ tool: "danger" }), io.deps);
+
+    expect(code).toBe(1);
+    expect(writeToolRuns).toBe(0);
+    expect(io.err.join("")).toMatch(/--allow-write/);
+    expect(io.out).toHaveLength(0);
+  });
+
+  it("runs a write tool once --allow-write is given", async () => {
+    writeToolRuns = 0;
+    const io = capture();
+
+    const code = await runQuery(command({ tool: "danger", allowWrite: true }), io.deps);
+
+    expect(code).toBe(0);
+    expect(writeToolRuns).toBe(1);
+  });
+
+  it("does not require --allow-write for a read tool", async () => {
+    const io = capture();
+
+    const code = await runQuery(command({ tool: "echo", params: { siteUrl: "https://example.com/" } }), io.deps);
+
+    expect(code).toBe(0);
+  });
+
+  it("marks write tools in the listing and in the tool's help", async () => {
+    const listing = capture();
+    await runQuery(command({ help: true }), listing.deps);
+    expect(listing.out.join("")).toMatch(/danger \(write\)/);
+
+    const described = capture();
+    await runQuery(command({ tool: "danger", help: true }), described.deps);
+    expect(described.out.join("")).toMatch(/needs --allow-write/);
   });
 
   it("treats a bare query with no tool as a usage error on stderr", async () => {

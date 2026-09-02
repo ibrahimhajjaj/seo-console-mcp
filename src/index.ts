@@ -10,7 +10,7 @@ const usage = [
   "Usage: seo-mcp [--credentials /path/key.json]",
   "       seo-mcp setup [--project PROJECT_ID] [--key /path/seo-mcp.key.json] [--pagespeed-key|--no-pagespeed-key]",
   "       seo-mcp verify <domain> [<domain>...] [--cf-token TOKEN] [--credentials /path/key.json]",
-  "       seo-mcp query <tool> [--<param> value ...] [--out path.json] [--credentials /path/key.json]",
+  "       seo-mcp query <tool> [--<param> value ...] [--out path.json] [--credentials /path/key.json] [--allow-write]",
 ].join("\n");
 
 async function main(): Promise<void> {

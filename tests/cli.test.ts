@@ -92,20 +92,22 @@ describe("parseCliArgs", () => {
       params: { siteUrl: "sc-domain:example.com", startDate: "2026-08-05", dimensions: "date" },
       out: "/tmp/sg.json",
       help: false,
+      allowWrite: false,
     });
   });
 
   it("parses a bare query as a tool listing request", () => {
-    expect(parseCliArgs(["query"])).toEqual({ kind: "query", params: {}, help: false });
+    expect(parseCliArgs(["query"])).toEqual({ kind: "query", params: {}, help: false, allowWrite: false });
   });
 
   it("routes query --help to the query command rather than global help", () => {
-    expect(parseCliArgs(["query", "--help"])).toEqual({ kind: "query", params: {}, help: true });
+    expect(parseCliArgs(["query", "--help"])).toEqual({ kind: "query", params: {}, help: true, allowWrite: false });
     expect(parseCliArgs(["query", "wporg_plugin", "--help"])).toEqual({
       kind: "query",
       tool: "wporg_plugin",
       params: {},
       help: true,
+      allowWrite: false,
     });
   });
 
@@ -116,10 +118,21 @@ describe("parseCliArgs", () => {
       params: {},
       credentials: "/k.json",
       help: false,
+      allowWrite: false,
     });
   });
 
   it("rejects a query parameter flag without a value", () => {
     expect(() => parseCliArgs(["query", "search_analytics", "--site-url"])).toThrow(/requires a value/);
+  });
+
+  it("parses --allow-write as a flag without consuming the next argument", () => {
+    expect(parseCliArgs(["query", "delete_sitemap", "--allow-write", "--site-url", "sc-domain:example.com"])).toEqual({
+      kind: "query",
+      tool: "delete_sitemap",
+      params: { siteUrl: "sc-domain:example.com" },
+      help: false,
+      allowWrite: true,
+    });
   });
 });

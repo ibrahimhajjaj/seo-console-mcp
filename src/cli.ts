@@ -12,6 +12,7 @@ export interface QueryCommand {
   out?: string;
   credentials?: string;
   help: boolean;
+  allowWrite: boolean;
 }
 
 export class UsageError extends Error {}
@@ -108,6 +109,7 @@ function parseQueryArgs(args: string[]): QueryCommand {
   let out: string | undefined;
   let credentials: string | undefined;
   let help = false;
+  let allowWrite = false;
 
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
@@ -115,6 +117,10 @@ function parseQueryArgs(args: string[]): QueryCommand {
 
     if (arg === "--help" || arg === "-h") {
       help = true;
+      continue;
+    }
+    if (arg === "--allow-write") {
+      allowWrite = true;
       continue;
     }
     if (arg.startsWith("-")) {
@@ -144,6 +150,7 @@ function parseQueryArgs(args: string[]): QueryCommand {
     kind: "query",
     params,
     help,
+    allowWrite,
     ...(tool !== undefined ? { tool } : {}),
     ...(out !== undefined ? { out } : {}),
     ...(credentials !== undefined ? { credentials } : {}),
