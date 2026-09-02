@@ -18,6 +18,8 @@ import {
   keywordIdeasShape,
   listPropertiesOutput,
   listPropertiesShape,
+  playStoreStatsOutput,
+  playStoreStatsShape,
   listSitemapsOutput,
   listSitemapsShape,
   pageSpeedOutput,
@@ -61,6 +63,7 @@ import { fetchHtml } from "./fetch-page.js";
 import { submitIndexNow } from "./indexnow.js";
 import { keywordIdeas } from "./keyword-ideas.js";
 import { parseSeoHtml } from "./seo-audit.js";
+import { playStoreStats } from "./play-store-stats.js";
 import { wporgPlugin } from "./wporg.js";
 
 // A tool's logic lives in one place and is reached identically by the MCP server
@@ -263,6 +266,13 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: wporgPluginShape,
     outputSchema: wporgPluginOutput,
     run: (_ctx, params) => wporgPlugin(params),
+  }),
+  defineTool({
+    name: "play_store_stats",
+    description: "Read Google Play bulk reports for an app: active device installs and store-listing visitors and acquisitions by traffic source. Reads the reporting bucket named by SEO_MCP_PLAY_BUCKET; read-only",
+    inputShape: playStoreStatsShape,
+    outputSchema: playStoreStatsOutput,
+    run: (_ctx, params) => playStoreStats(params),
   }),
 ];
 

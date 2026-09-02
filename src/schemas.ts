@@ -458,3 +458,23 @@ export const wporgPluginOutput = z.object({
   tags: z.array(z.string()),
   possiblyLagging: z.boolean(),
 });
+
+export const playStoreStatsShape = {
+  packageName: z.string().trim().min(1).max(200).describe("Android package name, e.g. app.getpsst"),
+  month: z.string().regex(/^\d{6}$/, "month must be YYYYMM").optional().describe("Report month as YYYYMM; defaults to the current UTC month"),
+};
+export const playStoreStatsInput = z.object(playStoreStatsShape);
+export const playStoreStatsOutput = z.object({
+  packageName: z.string(),
+  month: z.string(),
+  lastDatePresent: z.string().nullable(),
+  activeDeviceInstalls: z.number().nullable(),
+  trafficSources: z.array(z.object({
+    source: z.string(),
+    searchTerm: z.string().nullable(),
+    visitors: z.number(),
+    acquisitions: z.number(),
+  })),
+  hasPlaySearchRows: z.boolean(),
+  notes: z.array(z.string()),
+});
