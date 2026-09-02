@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients seventeen tools for verified Search Console properties while keeping the HTML audit, PageSpeed, IndexNow, and keyword ideas tools usable without Google service account credentials.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, and WordPress.org, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context.
 
 ## Requirements
 
@@ -485,6 +485,50 @@ Fetches a sitemap and audits up to 50 of its page URLs with bounded concurrency.
 ```
 
 `maxPages` defaults to 20 and `concurrency` defaults to 5. Their maximum values are 50 and 10, respectively.
+
+### `wporg_plugin`
+
+Looks up a WordPress.org plugin by slug and returns active installs, downloads, ratings, support threads, and version dates. It uses the public wp.org API and needs no credentials or API key. A plugin published within the last few days is reported with `possiblyLagging: true` when a field looks empty, because the wp.org API under-reports fresh plugins; the field may be live on the page already.
+
+```json
+{ "slug": "akismet" }
+```
+
+### `play_store_stats`
+
+Reads the Google Play bulk reports for an app and returns Active Device Installs, plus store-listing visitors and acquisitions grouped by traffic source and search term. `hasPlaySearchRows` states outright whether any Play search traffic appears, since its absence is a finding rather than an error. Reports lag by days, so `lastDatePresent` is the last date actually in the files rather than today.
+
+```json
+{ "packageName": "com.example.app", "month": "202608" }
+```
+
+Set `SEO_MCP_PLAY_BUCKET` to the reporting bucket (`gs://pubsite_prod_...` and the bare name both work) and `SEO_MCP_PLAY_CREDENTIALS` to a service account key that can read it, falling back to `GOOGLE_APPLICATION_CREDENTIALS`. `month` defaults to the current UTC month.
+
+### `app_store_listing`
+
+Reads an App Store listing through App Store Connect and measures each locale's fields against Apple's limits: name 30, subtitle 30, keywords 100, promotional text 170. Apple indexes the name, subtitle, and keyword field only, so the description is reported but never scored, and a field one character over its limit is dropped silently rather than rejected, which is why every field is reported against its limit. Promotional text is called out separately because it is the only one of these that can be changed on a live version without a review.
+
+An app can hold a live record and an editable one at the same time, so `state` selects which is read and the result states the record and version it used.
+
+```json
+{ "bundleId": "com.example.app", "state": "live", "platform": "IOS", "storefronts": ["us", "gb"] }
+```
+
+Provide `appId` or `bundleId`. The signing key is per app: set `SEO_MCP_ASC_KEY_PATH` to the `.p8` private key and `SEO_MCP_ASC_KEY_ID` to its key id, plus `SEO_MCP_ASC_ISSUER_ID` for a team key (individual keys have no issuer id). The key and the token it signs never appear in output.
+
+## Running a tool from the command line
+
+Every tool above is also runnable without an MCP client, which is what to use when a result has to land in a file that a later run can diff:
+
+```sh
+seo-mcp query search_analytics --site-url sc-domain:example.com --start-date 2026-08-05 --out /tmp/sa.json
+seo-mcp query --help                  # list the tools
+seo-mcp query wporg_plugin --help     # list one tool's parameters
+```
+
+Flags are the tool's parameter names in kebab-case (`--site-url` for `siteUrl`); the camelCase spelling works too. List values are comma-separated. The result is written to `--out`, or to stdout when it is omitted, and a failure exits non-zero with the message on stderr. It runs the same implementation the MCP surface exposes, so the two cannot drift.
+
+Tools that change data (`submit_sitemap`, `delete_sitemap`, `request_recrawl`, `indexnow_submit`) are marked `(write)` in the listing and refuse to run from the command line unless `--allow-write` is passed.
 
 ## Development
 
