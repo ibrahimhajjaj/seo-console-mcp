@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  appStoreListingOutput,
+  appStoreListingShape,
   auditSiteOutput,
   auditSiteShape,
   compareSearchPeriodsOutput,
@@ -58,6 +60,7 @@ import {
   type ToolResult,
 } from "./google-tools.js";
 import { validateCredentials } from "./credentials.js";
+import { appStoreListing } from "./app-store-listing.js";
 import { auditSite } from "./audit-site.js";
 import { fetchHtml } from "./fetch-page.js";
 import { submitIndexNow } from "./indexnow.js";
@@ -283,6 +286,13 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: playStoreStatsShape,
     outputSchema: playStoreStatsOutput,
     run: (_ctx, params) => playStoreStats(params),
+  }),
+  defineTool({
+    name: "app_store_listing",
+    description: "Read an App Store listing's indexed fields per locale (name, subtitle, keywords) against Apple's character limits, plus promotional text, version state and public ratings. Needs SEO_MCP_ASC_KEY_PATH, SEO_MCP_ASC_KEY_ID and SEO_MCP_ASC_ISSUER_ID; read-only",
+    inputShape: appStoreListingShape,
+    outputSchema: appStoreListingOutput,
+    run: (_ctx, params) => appStoreListing(params),
   }),
 ];
 

@@ -478,3 +478,42 @@ export const playStoreStatsOutput = z.object({
   hasPlaySearchRows: z.boolean(),
   notes: z.array(z.string()),
 });
+
+const listingField = z.object({
+  text: z.string().nullable(),
+  length: z.number(),
+  limit: z.number(),
+  overLimit: z.boolean(),
+});
+export const appStoreListingShape = {
+  appId: z.string().regex(/^\d+$/, "appId must be the numeric App Store app id").optional().describe("App Store Connect numeric app id; provide this or bundleId"),
+  bundleId: z.string().trim().min(1).max(200).optional().describe("Bundle id, resolved to an app id when appId is not given; provide this or appId"),
+  platform: z.enum(["IOS", "MAC_OS", "TV_OS", "VISION_OS"]).default("IOS").describe("App Store platform whose version is read"),
+  state: z.enum(["live", "editable"]).default("live").describe("Read the live listing or the editable one being prepared for release"),
+  storefronts: z.array(z.string().regex(/^[a-z]{2}$/, "storefronts must be 2-letter lowercase country codes")).min(1).max(10).default(["us"]).describe("Storefront country codes for the public ratings lookup"),
+};
+export const appStoreListingInput = z.object(appStoreListingShape);
+export const appStoreListingOutput = z.object({
+  appId: z.string(),
+  bundleId: z.string().nullable(),
+  platform: z.string(),
+  requestedState: z.string(),
+  appInfoState: z.string().nullable(),
+  versionState: z.string().nullable(),
+  versionString: z.string().nullable(),
+  localeCount: z.number(),
+  locales: z.array(z.object({
+    locale: z.string(),
+    indexed: z.object({ name: listingField, subtitle: listingField, keywords: listingField }),
+    promotionalText: listingField,
+    description: listingField,
+    partial: z.boolean(),
+  })),
+  ratings: z.array(z.object({
+    storefront: z.string(),
+    averageUserRating: z.number().nullable(),
+    userRatingCount: z.number().nullable(),
+  })),
+  overLimit: z.array(z.string()),
+  notes: z.array(z.string()),
+});

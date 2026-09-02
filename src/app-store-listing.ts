@@ -1,0 +1,329 @@
+import { readFileSync } from "node:fs";
+import { createPrivateKey, sign as signWithKey } from "node:crypto";
+import type { z } from "zod";
+import type { ToolResult } from "./google-tools.js";
+import type { appStoreListingInput } from "./schemas.js";
+import { USER_AGENT } from "./version.js";
+
+type AppStoreListingParams = z.output<typeof appStoreListingInput>;
+
+export interface AscCredentials {
+  keyId: string;
+  issuerId?: string | undefined;
+  privateKey: string;
+}
+
+interface AscDeps {
+  fetchImpl?: typeof fetch;
+  credentials?: AscCredentials;
+  now?: Date;
+}
+
+// Apple indexes the app name, the subtitle and the keyword field. It does not
+// index the description, so its length is reported but never scored. A field one
+// character over its limit is dropped silently rather than rejected, which is why
+// every field is reported against its limit. Lengths are UTF-16 code units, which
+// is what NSString and the App Store Connect UI count.
+const LIMITS = { name: 30, subtitle: 30, keywords: 100, promotionalText: 170, description: 4000 } as const;
+
+// An app can hold a live record and an editable one at the same time. Selecting
+// the wrong one reports draft copy as if it were live, so the choice is explicit.
+const LIVE_STATES = new Set(["READY_FOR_DISTRIBUTION", "READY_FOR_SALE"]);
+
+const API = "https://api.appstoreconnect.apple.com";
+const REQUEST_TIMEOUT_MS = 20_000;
+const PUBLIC_TIMEOUT_MS = 10_000;
+const PAGE_LIMIT = 50;
+
+interface JsonApiResource {
+  type: string;
+  id: string;
+  attributes?: Record<string, unknown>;
+}
+
+interface JsonApiResponse {
+  data?: JsonApiResource | JsonApiResource[];
+  included?: JsonApiResource[];
+}
+
+export async function appStoreListing(params: AppStoreListingParams, deps: AscDeps = {}): Promise<ToolResult> {
+  if (!params.appId && !params.bundleId) {
+    throw new Error("Provide appId or bundleId to identify the app.");
+  }
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const credentials = deps.credentials ?? readCredentialsFromEnv();
+  const token = createAscToken(credentials, deps.now ?? new Date());
+  const notes: string[] = [];
+
+  const appId = params.appId ?? (await resolveAppId(params.bundleId as string, token, fetchImpl));
+
+  // Pick the record first, then read only that record's localizations. Reading
+  // an `include=` bundle would mix the live and editable copies together.
+  const infos = await ascGet(`/v1/apps/${appId}/appInfos?limit=${PAGE_LIMIT}`, token, fetchImpl);
+  const info = pickByState(asArray(infos.data), params.state);
+  if (!info) throw new Error(`No app info record found for app ${appId}.`);
+  if (info.fellBack) notes.push(`No ${params.state} app info exists; reported the ${describeState(info.state)} record instead.`);
+
+  const versionQuery = `/v1/apps/${appId}/appStoreVersions?limit=${PAGE_LIMIT}&filter%5Bplatform%5D=${encodeURIComponent(params.platform)}`;
+  const versions = await ascGet(versionQuery, token, fetchImpl);
+  const version = pickByState(asArray(versions.data), params.state);
+  if (version?.fellBack) notes.push(`No ${params.state} ${params.platform} version exists; reported the ${describeState(version.state)} version instead.`);
+  if (!version) notes.push(`No ${params.platform} app store version was returned, so keywords, promotional text and description are unavailable.`);
+
+  const infoLocalizations = await ascGet(`/v1/appInfos/${info.resource.id}/appInfoLocalizations?limit=${PAGE_LIMIT}`, token, fetchImpl);
+  const versionLocalizations = version
+    ? await ascGet(`/v1/appStoreVersions/${version.resource.id}/appStoreVersionLocalizations?limit=${PAGE_LIMIT}`, token, fetchImpl)
+    : { data: [] };
+
+  interface LocaleFields {
+    name?: string | undefined;
+    subtitle?: string | undefined;
+    keywords?: string | undefined;
+    promotionalText?: string | undefined;
+    description?: string | undefined;
+    fromInfo?: boolean;
+    fromVersion?: boolean;
+  }
+  const byLocale = new Map<string, LocaleFields>();
+  for (const resource of asArray(infoLocalizations.data)) {
+    const locale = resource.attributes?.locale as string | undefined;
+    if (!locale) continue;
+    const entry = byLocale.get(locale) ?? {};
+    entry.name = resource.attributes?.name as string | undefined;
+    entry.subtitle = resource.attributes?.subtitle as string | undefined;
+    entry.fromInfo = true;
+    byLocale.set(locale, entry);
+  }
+  for (const resource of asArray(versionLocalizations.data)) {
+    const locale = resource.attributes?.locale as string | undefined;
+    if (!locale) continue;
+    const entry = byLocale.get(locale) ?? {};
+    entry.keywords = resource.attributes?.keywords as string | undefined;
+    entry.promotionalText = resource.attributes?.promotionalText as string | undefined;
+    entry.description = resource.attributes?.description as string | undefined;
+    entry.fromVersion = true;
+    byLocale.set(locale, entry);
+  }
+
+  const locales = [...byLocale.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([locale, entry]) => ({
+      locale,
+      indexed: {
+        name: measure(entry.name, LIMITS.name),
+        subtitle: measure(entry.subtitle, LIMITS.subtitle),
+        keywords: measure(entry.keywords, LIMITS.keywords),
+      },
+      promotionalText: measure(entry.promotionalText, LIMITS.promotionalText),
+      description: measure(entry.description, LIMITS.description),
+      partial: !(entry.fromInfo && entry.fromVersion),
+    }));
+
+  const partialLocales = locales.filter((entry) => entry.partial).map((entry) => entry.locale);
+  if (partialLocales.length) {
+    notes.push(`Some locales are present in only one record, so their missing fields are unknown rather than empty: ${partialLocales.join(", ")}.`);
+  }
+
+  const ratings = await lookupRatings(appId, params.storefronts, fetchImpl, notes);
+  const overLimit = locales.flatMap((entry) => [
+    ...(entry.indexed.name.overLimit ? [`${entry.locale} name`] : []),
+    ...(entry.indexed.subtitle.overLimit ? [`${entry.locale} subtitle`] : []),
+    ...(entry.indexed.keywords.overLimit ? [`${entry.locale} keywords`] : []),
+    ...(entry.promotionalText.overLimit ? [`${entry.locale} promotionalText`] : []),
+    ...(entry.description.overLimit ? [`${entry.locale} description`] : []),
+  ]);
+
+  const structuredContent = {
+    appId,
+    bundleId: params.bundleId ?? null,
+    platform: params.platform,
+    requestedState: params.state,
+    appInfoState: info.state ?? null,
+    versionState: version?.state ?? null,
+    versionString: (version?.resource.attributes?.versionString as string | undefined) ?? null,
+    localeCount: locales.length,
+    locales,
+    ratings,
+    overLimit,
+    notes,
+  };
+
+  return { content: [{ type: "text", text: formatListing(structuredContent) }], structuredContent };
+}
+
+// The signing key never leaves this process; only the short-lived token is sent,
+// and neither is ever put in output or an error. Team keys carry an issuer id;
+// individual keys have none and identify themselves with sub: "user" instead.
+export function createAscToken(credentials: AscCredentials, now: Date): string {
+  const issuedAt = Math.floor(now.getTime() / 1000);
+  const header = { alg: "ES256", kid: credentials.keyId, typ: "JWT" };
+  const payload = {
+    ...(credentials.issuerId ? { iss: credentials.issuerId } : { sub: "user" }),
+    iat: issuedAt,
+    exp: issuedAt + 600,
+    aud: "appstoreconnect-v1",
+  };
+  const signingInput = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
+  // ES256 needs the raw r||s signature, not the DER form Node produces by default.
+  const signature = signWithKey("sha256", Buffer.from(signingInput), {
+    key: createPrivateKey(credentials.privateKey),
+    dsaEncoding: "ieee-p1363",
+  });
+  return `${signingInput}.${base64url(signature)}`;
+}
+
+function readCredentialsFromEnv(): AscCredentials {
+  const keyPath = process.env.SEO_MCP_ASC_KEY_PATH;
+  const keyId = process.env.SEO_MCP_ASC_KEY_ID;
+  const issuerId = process.env.SEO_MCP_ASC_ISSUER_ID;
+  if (!keyPath || !keyId) {
+    throw new Error("App Store Connect credentials are required. Set SEO_MCP_ASC_KEY_PATH to the .p8 private key and SEO_MCP_ASC_KEY_ID to its key id, plus SEO_MCP_ASC_ISSUER_ID for a team key (individual keys have no issuer id). The key is per app, so point them at the app you are querying.");
+  }
+  let privateKey: string;
+  try {
+    privateKey = readFileSync(keyPath, "utf8");
+  } catch {
+    throw new Error("Could not read the App Store Connect private key named by SEO_MCP_ASC_KEY_PATH. Key contents are never logged.");
+  }
+  try {
+    createPrivateKey(privateKey);
+  } catch {
+    throw new Error("The file named by SEO_MCP_ASC_KEY_PATH is not a readable PKCS8 private key; App Store Connect issues these as a .p8 file.");
+  }
+  return { keyId, privateKey, ...(issuerId ? { issuerId } : {}) };
+}
+
+function pickByState(
+  resources: JsonApiResource[],
+  want: "live" | "editable",
+): { resource: JsonApiResource; state: string | undefined; fellBack: boolean } | undefined {
+  if (resources.length === 0) return undefined;
+  const described = resources.map((resource) => ({ resource, state: stateOf(resource) }));
+  const live = described.find((entry) => entry.state && LIVE_STATES.has(entry.state));
+  const editable = described.find((entry) => !entry.state || !LIVE_STATES.has(entry.state));
+  const preferred = want === "live" ? live : editable;
+  const fallback = want === "live" ? editable : live;
+  const chosen = preferred ?? fallback;
+  if (!chosen) return undefined;
+  return { ...chosen, fellBack: !preferred };
+}
+
+// appVersionState and state are the current attributes; appStoreState is the
+// deprecated spelling still returned by older API versions.
+function stateOf(resource: JsonApiResource): string | undefined {
+  const attributes = resource.attributes ?? {};
+  for (const key of ["appVersionState", "state", "appStoreState"]) {
+    const value = attributes[key];
+    if (typeof value === "string") return value;
+  }
+  return undefined;
+}
+
+function describeState(state: string | undefined): string {
+  return state ?? "unknown-state";
+}
+
+async function resolveAppId(bundleId: string, token: string, fetchImpl: typeof fetch): Promise<string> {
+  const response = await ascGet(`/v1/apps?filter%5BbundleId%5D=${encodeURIComponent(bundleId)}&limit=1`, token, fetchImpl);
+  const app = asArray(response.data)[0];
+  if (!app) throw new Error(`No App Store Connect app found for bundle id "${bundleId}".`);
+  return app.id;
+}
+
+async function ascGet(path: string, token: string, fetchImpl: typeof fetch): Promise<JsonApiResponse> {
+  const response = await fetchImpl(`${API}${path}`, {
+    headers: { authorization: `Bearer ${token}`, "user-agent": USER_AGENT },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`App Store Connect rejected the credentials (HTTP ${response.status}). Check the key id, the issuer id if this is a team key, and that the key has access to this app.`);
+  }
+  if (!response.ok) {
+    throw new Error(`App Store Connect returned HTTP ${response.status} for ${path.split("?")[0]}.`);
+  }
+  return (await response.json()) as JsonApiResponse;
+}
+
+async function lookupRatings(
+  appId: string,
+  storefronts: string[],
+  fetchImpl: typeof fetch,
+  notes: string[],
+): Promise<Array<{ storefront: string; averageUserRating: number | null; userRatingCount: number | null }>> {
+  return Promise.all(storefronts.map(async (storefront) => {
+    const empty = { storefront, averageUserRating: null, userRatingCount: null };
+    try {
+      const response = await fetchImpl(`https://itunes.apple.com/lookup?id=${encodeURIComponent(appId)}&country=${encodeURIComponent(storefront)}`, {
+        headers: { "user-agent": USER_AGENT },
+        signal: AbortSignal.timeout(PUBLIC_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        notes.push(`The ratings lookup for ${storefront} failed with HTTP ${response.status}, so its ratings are unknown rather than absent.`);
+        return empty;
+      }
+      const body = (await response.json()) as { results?: Array<Record<string, unknown>> };
+      const entry = body.results?.[0];
+      if (!entry) return empty;
+      return {
+        storefront,
+        averageUserRating: typeof entry.averageUserRating === "number" ? entry.averageUserRating : null,
+        userRatingCount: typeof entry.userRatingCount === "number" ? entry.userRatingCount : null,
+      };
+    } catch {
+      notes.push(`The ratings lookup for ${storefront} could not be completed, so its ratings are unknown rather than absent.`);
+      return empty;
+    }
+  }));
+}
+
+function measure(text: string | undefined, limit: number) {
+  const value = text ?? null;
+  const length = value === null ? 0 : value.length;
+  return { text: value, length, limit, overLimit: length > limit };
+}
+
+function asArray(data: JsonApiResponse["data"]): JsonApiResource[] {
+  if (!data) return [];
+  return Array.isArray(data) ? data : [data];
+}
+
+function base64url(input: Buffer | string): string {
+  return Buffer.from(input).toString("base64url");
+}
+
+type Measured = ReturnType<typeof measure>;
+
+function formatListing(listing: {
+  appId: string;
+  platform: string;
+  requestedState: string;
+  appInfoState: string | null;
+  versionState: string | null;
+  versionString: string | null;
+  localeCount: number;
+  locales: Array<{ locale: string; indexed: { name: Measured; subtitle: Measured; keywords: Measured }; promotionalText: Measured; partial: boolean }>;
+  ratings: Array<{ storefront: string; averageUserRating: number | null; userRatingCount: number | null }>;
+  overLimit: string[];
+  notes: string[];
+}): string {
+  const lines = [
+    `App Store listing for app ${listing.appId} (${listing.platform}, requested the ${listing.requestedState} record)`,
+    `App info state ${listing.appInfoState ?? "unknown"}; version ${listing.versionString ?? "unknown"} state ${listing.versionState ?? "unknown"}`,
+    `${listing.localeCount} locale(s). Apple indexes name, subtitle and keywords only; the description is not indexed.`,
+  ];
+  for (const entry of listing.locales.slice(0, 10)) {
+    lines.push(
+      `- ${entry.locale}${entry.partial ? " (partial)" : ""}: name ${entry.indexed.name.length}/${entry.indexed.name.limit}, subtitle ${entry.indexed.subtitle.length}/${entry.indexed.subtitle.limit}, keywords ${entry.indexed.keywords.length}/${entry.indexed.keywords.limit}, promo ${entry.promotionalText.length}/${entry.promotionalText.limit}`,
+    );
+  }
+  if (listing.locales.length > 10) lines.push(`- ...and ${listing.locales.length - 10} more locale(s)`);
+  lines.push(listing.overLimit.length
+    ? `Over limit (Apple drops these silently): ${listing.overLimit.join(", ")}`
+    : "No field is over its character limit.");
+  lines.push("promotionalText is the only field above that can be changed on a live version without a review.");
+  for (const rating of listing.ratings) {
+    lines.push(`Ratings (${rating.storefront}): ${rating.averageUserRating ?? "none"} from ${rating.userRatingCount ?? 0} rating(s)`);
+  }
+  lines.push(...listing.notes.map((note) => `Note: ${note}`));
+  return lines.join("\n");
+}

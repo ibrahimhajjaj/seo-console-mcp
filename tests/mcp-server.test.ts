@@ -93,6 +93,7 @@ describe("MCP server tool registration", () => {
       "audit_site",
       "wporg_plugin",
       "play_store_stats",
+      "app_store_listing",
     ]);
     expect(tools.every((tool) => tool.description?.length)).toBe(true);
     expect(tools.every((tool) => tool.outputSchema)).toBe(true);
