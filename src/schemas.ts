@@ -437,3 +437,24 @@ export const auditSiteOutput = z.object({
   })),
   rollup: z.record(z.string(), z.number()),
 });
+
+export const wporgPluginShape = {
+  slug: z.string().trim().min(1).max(200).describe("WordPress.org plugin slug, e.g. akismet"),
+};
+export const wporgPluginInput = z.object(wporgPluginShape);
+export const wporgPluginOutput = z.object({
+  slug: z.string(),
+  name: z.string().nullable(),
+  version: z.string().nullable(),
+  activeInstalls: z.number().nullable(),
+  downloaded: z.number().nullable(),
+  numRatings: z.number().nullable(),
+  rating: z.number().nullable(),
+  supportThreads: z.number().nullable(),
+  supportThreadsResolved: z.number().nullable(),
+  tested: z.string().nullable(),
+  added: z.string().nullable(),
+  lastUpdated: z.string().nullable(),
+  tags: z.array(z.string()),
+  possiblyLagging: z.boolean(),
+});

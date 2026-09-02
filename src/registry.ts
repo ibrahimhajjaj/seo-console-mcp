@@ -34,6 +34,8 @@ import {
   seoAuditShape,
   submitSitemapOutput,
   submitSitemapShape,
+  wporgPluginOutput,
+  wporgPluginShape,
 } from "./schemas.js";
 import {
   compareSearchPeriods,
@@ -59,6 +61,7 @@ import { fetchHtml } from "./fetch-page.js";
 import { submitIndexNow } from "./indexnow.js";
 import { keywordIdeas } from "./keyword-ideas.js";
 import { parseSeoHtml } from "./seo-audit.js";
+import { wporgPlugin } from "./wporg.js";
 
 // A tool's logic lives in one place and is reached identically by the MCP server
 // and the `query` CLI. The context supplies clients lazily so tools that need no
@@ -253,6 +256,13 @@ export const toolDefinitions: ToolDefinition[] = [
       const result = await auditSite(params.sitemapUrl, params);
       return { content: [{ type: "text", text: formatSiteAudit(result) }], structuredContent: { ...result } };
     },
+  }),
+  defineTool({
+    name: "wporg_plugin",
+    description: "Look up a WordPress.org plugin's install base, downloads, ratings, and support stats by slug; public API, no credentials or API key needed",
+    inputShape: wporgPluginShape,
+    outputSchema: wporgPluginOutput,
+    run: (_ctx, params) => wporgPlugin(params),
   }),
 ];
 
