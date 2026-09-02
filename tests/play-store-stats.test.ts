@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { playStoreStats } from "../src/play-store-stats.js";
+import { normalizeBucket, playStoreStats } from "../src/play-store-stats.js";
 
 interface TrafficGroup {
   source: string;
@@ -106,6 +106,18 @@ describe("playStoreStats", () => {
     const { readReport } = reader({});
 
     await expect(playStoreStats({ packageName: "app.getpsst", month: "209901" }, { readReport })).rejects.toThrow(/Neither installs nor store performance/);
+  });
+
+  it("accepts a bucket with or without the gs:// prefix", () => {
+    expect(normalizeBucket("pubsite_prod_1234")).toBe("pubsite_prod_1234");
+    expect(normalizeBucket("gs://pubsite_prod_1234")).toBe("pubsite_prod_1234");
+    expect(normalizeBucket("GS://pubsite_prod_1234/")).toBe("pubsite_prod_1234");
+    expect(normalizeBucket("  gs://pubsite_prod_1234  ")).toBe("pubsite_prod_1234");
+  });
+
+  it("rejects a bucket that carries a path instead of silently finding nothing", () => {
+    expect(() => normalizeBucket("gs://pubsite_prod_1234/stats")).toThrow(/must be a bucket name/);
+    expect(() => normalizeBucket("gs://")).toThrow(/must be a bucket name/);
   });
 
   it("defaults the month to the current UTC month", async () => {
