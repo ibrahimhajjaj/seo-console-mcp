@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { accessSync, constants, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -14,4 +14,15 @@ export function resolveCredentialsPath(
   const base = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
   const fallback = join(base, "seo-mcp", "seo-mcp.key.json");
   return exists(fallback) ? fallback : undefined;
+}
+
+export function validateCredentials(credentialsPath: string | undefined): void {
+  if (!credentialsPath) {
+    throw new Error("Google service account credentials are not configured. Set GOOGLE_APPLICATION_CREDENTIALS or SEO_MCP_CREDENTIALS, or start seo-mcp with --credentials /absolute/path/key.json. The seo_audit and pagespeed tools do not require service account credentials.");
+  }
+  try {
+    accessSync(credentialsPath, constants.R_OK);
+  } catch {
+    throw new Error(`Google service account credentials are unreadable at ${credentialsPath}. Check the path and file permissions. Key contents are never logged.`);
+  }
 }
