@@ -30,6 +30,36 @@ const LIMITS = { name: 30, subtitle: 30, keywords: 100, promotionalText: 170, de
 // the wrong one reports draft copy as if it were live, so the choice is explicit.
 const LIVE_STATES = new Set(["READY_FOR_DISTRIBUTION", "READY_FOR_SALE"]);
 
+// A record actually being worked on. This has to be an explicit list rather than
+// "not live": a superseded version carries REPLACED_WITH_NEW_VERSION, so negating
+// the live set would make any app that has shipped twice look like it always has
+// a draft in preparation.
+const IN_PROGRESS_STATES = new Set([
+  "PREPARE_FOR_SUBMISSION",
+  "READY_FOR_REVIEW",
+  "WAITING_FOR_REVIEW",
+  "IN_REVIEW",
+  "PENDING_DEVELOPER_RELEASE",
+  "PENDING_APPLE_RELEASE",
+  "PROCESSING_FOR_DISTRIBUTION",
+  "PROCESSING_FOR_APP_STORE",
+  "WAITING_FOR_EXPORT_COMPLIANCE",
+  "ACCEPTED",
+  "DEVELOPER_REJECTED",
+  "REJECTED",
+  "METADATA_REJECTED",
+  "INVALID_BINARY",
+]);
+
+function isLiveState(state: string | undefined): boolean {
+  return Boolean(state && LIVE_STATES.has(state));
+}
+
+// An unreadable state is neither, so a missing attribute never reads as a draft.
+function isInProgressState(state: string | undefined): boolean {
+  return Boolean(state && IN_PROGRESS_STATES.has(state));
+}
+
 const API = "https://api.appstoreconnect.apple.com";
 const REQUEST_TIMEOUT_MS = 20_000;
 const PUBLIC_TIMEOUT_MS = 10_000;
@@ -60,13 +90,15 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
   // Pick the record first, then read only that record's localizations. Reading
   // an `include=` bundle would mix the live and editable copies together.
   const infos = await ascGet(`/v1/apps/${appId}/appInfos?limit=${PAGE_LIMIT}`, token, fetchImpl);
-  const info = pickByState(asArray(infos.data), params.state);
+  const infoResources = asArray(infos.data);
+  const info = pickByState(infoResources, params.state);
   if (!info) throw new Error(`No app info record found for app ${appId}.`);
   if (info.fellBack) notes.push(`No ${params.state} app info exists; reported the ${describeState(info.state)} record instead.`);
 
   const versionQuery = `/v1/apps/${appId}/appStoreVersions?limit=${PAGE_LIMIT}&filter%5Bplatform%5D=${encodeURIComponent(params.platform)}`;
   const versions = await ascGet(versionQuery, token, fetchImpl);
-  const version = pickByState(asArray(versions.data), params.state);
+  const versionResources = asArray(versions.data);
+  const version = pickByState(versionResources, params.state);
   if (version?.fellBack) notes.push(`No ${params.state} ${params.platform} version exists; reported the ${describeState(version.state)} version instead.`);
   if (!version) notes.push(`No ${params.platform} app store version was returned, so keywords, promotional text and description are unavailable.`);
 
@@ -133,11 +165,21 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
     ...(entry.description.overLimit ? [`${entry.locale} description`] : []),
   ]);
 
+  // Whether the other record exists is derivable from the lists already fetched,
+  // so a caller can tell "no draft prepared" from "a draft exists" without a
+  // second call and without reading the prose notes.
+  const bothLists = [...infoResources, ...versionResources];
+  const hasLiveRecord = bothLists.some((resource) => isLiveState(stateOf(resource)));
+  const hasEditableRecord = bothLists.some((resource) => isInProgressState(stateOf(resource)));
+
   const structuredContent = {
     appId,
     bundleId: params.bundleId ?? null,
     platform: params.platform,
     requestedState: params.state,
+    fellBack: Boolean(info.fellBack || version?.fellBack),
+    hasLiveRecord,
+    hasEditableRecord,
     appInfoState: info.state ?? null,
     versionState: version?.state ?? null,
     versionString: (version?.resource.attributes?.versionString as string | undefined) ?? null,
@@ -199,8 +241,8 @@ function pickByState(
 ): { resource: JsonApiResource; state: string | undefined; fellBack: boolean } | undefined {
   if (resources.length === 0) return undefined;
   const described = resources.map((resource) => ({ resource, state: stateOf(resource) }));
-  const live = described.find((entry) => entry.state && LIVE_STATES.has(entry.state));
-  const editable = described.find((entry) => !entry.state || !LIVE_STATES.has(entry.state));
+  const live = described.find((entry) => isLiveState(entry.state));
+  const editable = described.find((entry) => isInProgressState(entry.state));
   const preferred = want === "live" ? live : editable;
   const fallback = want === "live" ? editable : live;
   const chosen = preferred ?? fallback;

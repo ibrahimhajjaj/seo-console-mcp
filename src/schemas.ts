@@ -499,6 +499,9 @@ export const appStoreListingOutput = z.object({
   bundleId: z.string().nullable(),
   platform: z.string(),
   requestedState: z.string(),
+  fellBack: z.boolean(),
+  hasLiveRecord: z.boolean(),
+  hasEditableRecord: z.boolean(),
   appInfoState: z.string().nullable(),
   versionState: z.string().nullable(),
   versionString: z.string().nullable(),
@@ -516,5 +519,100 @@ export const appStoreListingOutput = z.object({
     userRatingCount: z.number().nullable(),
   })),
   overLimit: z.array(z.string()),
+  notes: z.array(z.string()),
+});
+
+const snapshotRow = z.object({
+  rank: z.number(),
+  keys: z.record(z.string(), z.string()),
+  clicks: z.number(),
+  impressions: z.number(),
+  ctr: z.number(),
+  position: z.number(),
+});
+const snapshotRows = z.object({ rows: z.array(snapshotRow), truncated: z.boolean() });
+const snapshotWindow = z.object({ startDate: z.string(), endDate: z.string() });
+const snapshotRatings = z.array(z.object({
+  storefront: z.string(),
+  averageUserRating: z.number().nullable(),
+  userRatingCount: z.number().nullable(),
+}));
+
+// The shape compare_snapshots accepts. Anything that is not this is refused, so
+// the tool cannot be pointed at an unrelated file.
+export const snapshotDocument = z.object({
+  takenAt: z.string(),
+  windowDays: z.number(),
+  window: snapshotWindow,
+  properties: z.array(z.object({
+    siteUrl: z.string(),
+    error: z.string().optional(),
+    totals: z.object({
+      clicks: z.number(),
+      impressions: z.number(),
+      ctr: z.number().nullable(),
+      position: z.number().nullable(),
+      daysWithData: z.number(),
+      firstIncompleteDate: z.string().nullable(),
+    }).optional(),
+    topQueries: snapshotRows.optional(),
+    topPages: snapshotRows.optional(),
+  })),
+  apps: z.array(z.object({
+    app: z.string(),
+    error: z.string().optional(),
+    versionString: z.string().nullable().optional(),
+    localeCount: z.number().optional(),
+    hasEditableRecord: z.boolean().optional(),
+    ratings: snapshotRatings.optional(),
+  }).loose()),
+  packages: z.array(z.object({
+    package: z.string(),
+    error: z.string().optional(),
+    activeDeviceInstalls: z.number().nullable().optional(),
+    lastDatePresent: z.string().nullable().optional(),
+  }).loose()),
+  slugs: z.array(z.object({
+    slug: z.string(),
+    error: z.string().optional(),
+    activeInstalls: z.number().nullable().optional(),
+    downloaded: z.number().nullable().optional(),
+    rating: z.number().nullable().optional(),
+    numRatings: z.number().nullable().optional(),
+  }).loose()),
+  surfacesWithErrors: z.array(z.string()),
+  writtenTo: z.string().optional(),
+});
+
+export const snapshotShape = {
+  properties: z.array(siteUrl).default([]).describe("Search Console properties to capture"),
+  apps: z.array(z.string().trim().min(1)).default([]).describe("App Store apps, each a numeric app id or a bundle id"),
+  packages: z.array(z.string().trim().min(1)).default([]).describe("Google Play package names"),
+  slugs: z.array(z.string().trim().min(1)).default([]).describe("WordPress.org plugin slugs"),
+  windowDays: z.number().int().min(1).max(480).default(28).describe("Search Console window in days, ending today"),
+  platform: z.enum(["IOS", "MAC_OS", "TV_OS", "VISION_OS"]).default("IOS").describe("App Store platform for the app surfaces"),
+  storefronts: z.array(z.string().regex(/^[a-z]{2}$/, "storefronts must be 2-letter lowercase country codes")).min(1).max(10).default(["us"]).describe("Storefront country codes for App Store ratings"),
+  outPath: z.string().trim().min(1).optional().describe("Write the document to this path so compare_snapshots can read it later"),
+};
+export const snapshotInput = z.object(snapshotShape);
+export const snapshotOutput = snapshotDocument;
+
+export const compareSnapshotsShape = {
+  from: z.string().trim().min(1).describe("Path to the earlier snapshot document"),
+  to: z.string().trim().min(1).describe("Path to the later snapshot document"),
+  minImpressions: z.number().int().min(0).default(100).describe("Ignore page position moves below this many impressions on both sides"),
+};
+export const compareSnapshotsInput = z.object(compareSnapshotsShape);
+export const compareSnapshotsOutput = z.object({
+  from: z.object({ takenAt: z.string(), window: snapshotWindow }),
+  to: z.object({ takenAt: z.string(), window: snapshotWindow }),
+  elapsedHours: z.number().nullable(),
+  argumentsReversed: z.boolean(),
+  minImpressions: z.number(),
+  properties: z.array(z.object({ siteUrl: z.string(), comparable: z.boolean() }).loose()),
+  apps: z.array(z.object({ app: z.string(), comparable: z.boolean() }).loose()),
+  packages: z.array(z.object({ package: z.string(), comparable: z.boolean() }).loose()),
+  slugs: z.array(z.object({ slug: z.string(), comparable: z.boolean() }).loose()),
+  surfacesWithErrors: z.array(z.string()),
   notes: z.array(z.string()),
 });

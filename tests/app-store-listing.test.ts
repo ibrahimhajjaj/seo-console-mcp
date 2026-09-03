@@ -139,6 +139,40 @@ describe("appStoreListing", () => {
     expect(notes.join(" ")).toMatch(/No editable app info exists/);
   });
 
+  it("does not call a superseded version a draft", async () => {
+    // An app that has shipped twice has historical versions in
+    // REPLACED_WITH_NEW_VERSION. Those are not drafts, and reading them as one
+    // would report "a draft exists" for every established app forever.
+    const superseded = { type: "appStoreVersions", id: "v-old", attributes: { appVersionState: "REPLACED_WITH_NEW_VERSION", versionString: "1.3.0" } };
+    const fetchImpl = fakeFetch({ infos: [LIVE_INFO], versions: [LIVE_VERSION, superseded] });
+
+    const result = await appStoreListing(params(), { fetchImpl, credentials: credentials() });
+
+    expect(result.structuredContent).toMatchObject({
+      hasLiveRecord: true,
+      hasEditableRecord: false,
+      fellBack: false,
+      versionString: "1.4.0",
+    });
+  });
+
+  it("reports a real draft as one", async () => {
+    const fetchImpl = fakeFetch({ infos: [LIVE_INFO, DRAFT_INFO], versions: [LIVE_VERSION, DRAFT_VERSION] });
+
+    const result = await appStoreListing(params(), { fetchImpl, credentials: credentials() });
+
+    expect(result.structuredContent).toMatchObject({ hasLiveRecord: true, hasEditableRecord: true, fellBack: false });
+  });
+
+  it("does not treat an unreadable state as a draft", async () => {
+    const stateless = { type: "appStoreVersions", id: "v-x", attributes: { versionString: "9.9.9" } };
+    const fetchImpl = fakeFetch({ infos: [LIVE_INFO], versions: [LIVE_VERSION, stateless] });
+
+    const result = await appStoreListing(params(), { fetchImpl, credentials: credentials() });
+
+    expect(result.structuredContent).toMatchObject({ hasEditableRecord: false });
+  });
+
   it("filters versions by platform", async () => {
     const fetchImpl = fakeFetch();
 
