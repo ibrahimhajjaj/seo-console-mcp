@@ -41,6 +41,19 @@ export type ToolResult = Omit<CallToolResult, "content" | "structuredContent"> &
 // Search Console will not return more rows than this in one query.
 const MAX_SEARCH_ROW_LIMIT = 25_000;
 
+// Unkeyed PageSpeed calls share a small quota, so a 429 here usually means "no
+// key configured" rather than "you are querying too hard". Say which.
+function pageSpeedFailure(error: unknown, hasKey: boolean): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  const status = (error as { status?: number; code?: number } | null)?.status
+    ?? (error as { code?: number } | null)?.code;
+  const rateLimited = status === 429 || /rateLimitExceeded|quota/i.test(message);
+  if (rateLimited && !hasKey) {
+    return new Error(`${message} PageSpeed Insights gives unkeyed callers a small shared quota. Set SEO_MCP_PAGESPEED_KEY or pass apiKey; \`seo-mcp setup --pagespeed-key\` creates one.`);
+  }
+  return error instanceof Error ? error : new Error(message);
+}
+
 type ApiResponse<T> = Promise<{ data: T }>;
 
 export interface GoogleClients {
@@ -415,12 +428,17 @@ export async function requestRecrawl(
 
 export async function runPageSpeed(clients: GoogleClients, params: PageSpeedParams): Promise<ToolResult> {
   const apiKey = params.apiKey ?? process.env.SEO_MCP_PAGESPEED_KEY;
-  const response = await clients.pageSpeed.pagespeedapi.runpagespeed({
-    url: params.url,
-    strategy: params.strategy,
-    category: params.category,
-    ...(apiKey ? { key: apiKey } : {}),
-  });
+  let response;
+  try {
+    response = await clients.pageSpeed.pagespeedapi.runpagespeed({
+      url: params.url,
+      strategy: params.strategy,
+      category: params.category,
+      ...(apiKey ? { key: apiKey } : {}),
+    });
+  } catch (error) {
+    throw pageSpeedFailure(error, Boolean(apiKey));
+  }
   const data = response.data;
   const metrics = data.loadingExperience?.metrics ?? {};
   const fieldData = {
