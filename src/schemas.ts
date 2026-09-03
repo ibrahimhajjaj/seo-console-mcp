@@ -476,7 +476,9 @@ export const wporgPluginOutput = z.object({
 
 export const playStoreStatsShape = {
   packageName: z.string().trim().min(1).max(200).describe("Android package name, e.g. app.getpsst"),
-  month: z.string().regex(/^\d{6}$/, "month must be YYYYMM").optional().describe("Report month as YYYYMM; defaults to the current UTC month"),
+  month: z.string().regex(/^\d{6}$/, "month must be YYYYMM").optional().describe("Report month as YYYYMM; defaults to the current UTC month. Ignored when startDate and endDate are given"),
+  startDate: isoDate.optional().describe("Window start in YYYY-MM-DD. With endDate, reads every month the window touches and filters rows to it"),
+  endDate: isoDate.optional().describe("Window end in YYYY-MM-DD"),
 };
 export const playStoreStatsInput = z.object(playStoreStatsShape);
 export const playStoreStatsOutput = z.object({
@@ -494,6 +496,11 @@ export const playStoreStatsOutput = z.object({
     conversionRate: z.number().nullable(),
   })),
   hasPlaySearchRows: z.boolean(),
+  window: z.object({ startDate: z.string(), endDate: z.string() }).nullable(),
+  monthsRead: z.array(z.string()),
+  datesPresent: z.array(z.string()),
+  installsLatest: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
+  installsWindowTotals: z.record(z.string(), z.number()),
   notes: z.array(z.string()),
 });
 

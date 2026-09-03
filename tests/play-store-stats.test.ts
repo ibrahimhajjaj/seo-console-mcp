@@ -136,6 +136,61 @@ describe("playStoreStats", () => {
     await expect(playStoreStats({ packageName: "app.getpsst", month: "209901" }, { readReport })).rejects.toThrow(/Neither installs nor store performance/);
   });
 
+  it("reads every month a window touches and filters rows to it", async () => {
+    const august =
+      "Date,Package Name,Active Device Installs,Daily Device Installs\r\n" +
+      "2023-08-30,app.getpsst,90,3\r\n" +
+      "2023-08-31,app.getpsst,95,5\r\n";
+    const september =
+      "Date,Package Name,Active Device Installs,Daily Device Installs\r\n" +
+      "2023-09-01,app.getpsst,100,4\r\n" +
+      "2023-09-02,app.getpsst,110,6\r\n";
+    const { readReport, calls } = reader({
+      "installs_app.getpsst_202308": august,
+      "installs_app.getpsst_202309": september,
+    });
+
+    const result = await playStoreStats(
+      { packageName: "app.getpsst", startDate: "2023-08-31", endDate: "2023-09-01" },
+      { readReport },
+    );
+
+    // Both monthly files must be fetched for a window that straddles them.
+    expect(calls.some((path) => path.includes("_202308_"))).toBe(true);
+    expect(calls.some((path) => path.includes("_202309_"))).toBe(true);
+    const content = result.structuredContent as Record<string, any>;
+    // 08-30 and 09-02 are outside the window and must not count.
+    expect(content.datesPresent).toEqual(["2023-08-31", "2023-09-01"]);
+    expect(content.activeDeviceInstalls).toBe(100);
+    expect(content.installsWindowTotals["Daily Device Installs"]).toBe(9);
+    expect(content.window).toEqual({ startDate: "2023-08-31", endDate: "2023-09-01" });
+  });
+
+  it("keeps every install column rather than only the one it reads", async () => {
+    const csv =
+      "Date,Package Name,Active Device Installs,Daily Device Uninstalls,Total User Installs\r\n" +
+      "2023-10-01,app.getpsst,100,2,500\r\n";
+    const { readReport } = reader({ "installs_app.getpsst_202310": csv });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310" }, { readReport });
+
+    const latest = (result.structuredContent as { installsLatest: Record<string, unknown> }).installsLatest;
+    expect(latest).toMatchObject({ "Daily Device Uninstalls": 2, "Total User Installs": 500, "Active Device Installs": 100 });
+  });
+
+  it("says how much of the window is missing rather than implying zero", async () => {
+    const csv = "Date,Package Name,Active Device Installs\r\n2023-10-01,app.getpsst,100\r\n";
+    const { readReport } = reader({ "installs_app.getpsst_202310": csv });
+
+    const result = await playStoreStats(
+      { packageName: "app.getpsst", startDate: "2023-10-01", endDate: "2023-10-07" },
+      { readReport },
+    );
+
+    expect((result.structuredContent as { notes: string[] }).notes.join(" "))
+      .toMatch(/covers 7 days but only 1 have install rows/);
+  });
+
   it("accepts a bucket with or without the gs:// prefix", () => {
     expect(normalizeBucket("pubsite_prod_1234")).toBe("pubsite_prod_1234");
     expect(normalizeBucket("gs://pubsite_prod_1234")).toBe("pubsite_prod_1234");
