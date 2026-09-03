@@ -260,7 +260,7 @@ export function readCredentialsFromEnv(): AscCredentials {
   const keyId = process.env.SEO_MCP_ASC_KEY_ID;
   const issuerId = process.env.SEO_MCP_ASC_ISSUER_ID;
   if (!keyPath || !keyId) {
-    throw new Error("App Store Connect credentials are required. Set SEO_MCP_ASC_KEY_PATH to the .p8 private key and SEO_MCP_ASC_KEY_ID to its key id, plus SEO_MCP_ASC_ISSUER_ID for a team key (individual keys have no issuer id). The key is per app, so point them at the app you are querying.");
+    throw new Error("App Store Connect credentials are required. Set SEO_MCP_ASC_KEY_PATH to the .p8 private key and SEO_MCP_ASC_KEY_ID to its key id, plus SEO_MCP_ASC_ISSUER_ID for a team key (individual keys have no issuer id). A team key reaches every app on the team; what limits it is its role, and a role cannot be changed after the key is created.");
   }
   let privateKey: string;
   try {

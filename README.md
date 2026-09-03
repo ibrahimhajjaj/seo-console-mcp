@@ -516,7 +516,9 @@ The reported state comes from `appVersionState`, falling back to the deprecated 
 { "bundleId": "com.example.app", "state": "live", "platform": "IOS", "storefronts": ["us", "gb"] }
 ```
 
-Provide `appId` or `bundleId`. The signing key is per app: set `SEO_MCP_ASC_KEY_PATH` to the `.p8` private key and `SEO_MCP_ASC_KEY_ID` to its key id, plus `SEO_MCP_ASC_ISSUER_ID` for a team key (individual keys have no issuer id). The key and the token it signs never appear in output.
+Provide `appId` or `bundleId`. Set `SEO_MCP_ASC_KEY_PATH` to the `.p8` private key and `SEO_MCP_ASC_KEY_ID` to its key id, plus `SEO_MCP_ASC_ISSUER_ID` for a team key (individual keys have no issuer id). The key and the token it signs never appear in output.
+
+A team key reaches every app on the team, so one key can serve them all. What limits it is the role it was given, and Apple does not let a key's role be changed afterwards: the only edit offered is Revoke. An App Manager key reads listings but not Sales and Trends or analytics reports, so those need a separate key created with Admin, Finance, or Sales and Reports rather than an upgrade of the one you have.
 
 `ratings` is a list, one entry per requested storefront, not an object keyed by storefront:
 

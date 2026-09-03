@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The docs no longer claim an App Store Connect key is per app. A team key
+  reaches every app on the team; what limits it is the role it was created with,
+  and Apple does not allow that role to be changed afterwards, so reading Sales
+  and Trends or analytics needs a key created with Admin, Finance, or Sales and
+  Reports rather than an upgrade of an App Manager key.
+
 ## 0.7.0
 
 The remaining store surfaces, and quality data alongside acquisition data.
