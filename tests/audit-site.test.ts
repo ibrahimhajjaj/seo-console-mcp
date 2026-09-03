@@ -35,6 +35,14 @@ describe("parseSitemapUrls", () => {
       childSitemaps: ["https://example.com/posts.xml", "https://example.com/pages.xml"],
     });
   });
+
+  it("throws for a document with no sitemap root", () => {
+    expect(() => parseSitemapUrls("<html><body>Not found</body></html>")).toThrow(/not a sitemap/);
+  });
+
+  it("returns nothing for an empty but well-formed URL set", () => {
+    expect(parseSitemapUrls("<urlset></urlset>")).toEqual({ urls: [], childSitemaps: [] });
+  });
 });
 
 describe("auditSite", () => {
@@ -140,5 +148,12 @@ describe("auditSite", () => {
     expect(result.audited).toBe(5);
     expect(result.truncated).toBe(true);
     expect(result.childSitemapsSkipped).toBe(2);
+  });
+
+  it("fails loudly when the sitemap URL serves something that is not a sitemap", async () => {
+    const sitemapUrl = "https://example.com/sitemap.xml";
+    const fetchImpl: typeof fetchHtml = async (url) => page("<html><body>Not found</body></html>", url);
+
+    await expect(auditSite(sitemapUrl, { fetchImpl })).rejects.toThrow(/not a sitemap/);
   });
 });

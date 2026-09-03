@@ -1,6 +1,7 @@
 import { lookup as dnsLookupCallback } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
+import { gunzipSync } from "node:zlib";
 import { Agent } from "undici";
 import { USER_AGENT } from "./version.js";
 
@@ -143,9 +144,26 @@ export async function fetchHtml(
   if (!response.ok) throw new Error(`Page fetch failed with HTTP ${response.status} ${response.statusText}`);
   const contentLength = Number(response.headers.get("content-length") ?? 0);
   if (contentLength > MAX_HTML_BYTES) throw new Error("Page HTML exceeds the 10 MB audit limit");
-  const bytes = await readCappedBody(response);
+  const bytes = gunzipIfNeeded(await readCappedBody(response));
   const charset = detectCharset(response.headers.get("content-type"), bytes);
   return { html: decodeBytes(bytes, charset), finalUrl: currentUrl.toString(), status: response.status };
+}
+
+// A `.xml.gz` sitemap is served with whatever content type the host feels like
+// (application/gzip, application/octet-stream, text/xml), so the label cannot
+// decide this; the two-byte gzip magic number can. A body compressed with
+// Content-Encoding is already inflated by fetch before it reaches here, so
+// anything still gzipped at this point is a gzip file, not a transfer encoding.
+function gunzipIfNeeded(bytes: Uint8Array): Uint8Array {
+  if (bytes.length < 2 || bytes[0] !== 0x1f || bytes[1] !== 0x8b) return bytes;
+  try {
+    // Cap the inflated size too, otherwise a small gzip bomb walks straight
+    // past the 10 MB budget the compressed body was checked against.
+    return new Uint8Array(gunzipSync(bytes, { maxOutputLength: MAX_HTML_BYTES }));
+  } catch (error) {
+    if (error instanceof RangeError) throw new Error("Page body exceeds the 10 MB audit limit after decompression");
+    throw new Error("Page body looks gzipped but could not be decompressed");
+  }
 }
 
 // Read the body incrementally so a missing/false content-length cannot force an

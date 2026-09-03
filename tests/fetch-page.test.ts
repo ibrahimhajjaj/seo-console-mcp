@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 import { createPublicOnlyLookup, fetchHtml } from "../src/fetch-page.js";
 
@@ -189,6 +190,31 @@ describe("fetchHtml", () => {
       lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
     });
     expect(result.html).toContain("café");
+  });
+
+  it("decompresses a gzipped sitemap body", async () => {
+    const body = gzipSync(Buffer.from("<urlset><url><loc>https://e.com/</loc></url></urlset>"));
+    const fetchImpl = vi.fn(async () => new Response(body, {
+      status: 200,
+      headers: { "content-type": "application/gzip" },
+    }));
+
+    const result = await fetchHtml("https://e.com/sitemap.xml.gz", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
+    });
+
+    expect(result.html).toContain("<urlset>");
+  });
+
+  it("rejects a body that carries the gzip magic bytes but will not inflate", async () => {
+    const body = new Uint8Array([0x1f, 0x8b, 0x00, 0x01, 0x02]);
+    const fetchImpl = vi.fn(async () => new Response(body, { status: 200 }));
+
+    await expect(fetchHtml("https://e.com/sitemap.xml.gz", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
+    })).rejects.toThrow(/could not be decompressed/);
   });
 
   it("allows private targets when explicitly enabled", async () => {

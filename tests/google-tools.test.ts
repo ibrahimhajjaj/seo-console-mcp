@@ -545,6 +545,20 @@ describe("Google-backed tool operations", () => {
     expect(output.structuredContent).toMatchObject({ totalDiscovered: 0, checked: 0, truncated: true, childSitemapsSkipped: 2 });
   });
 
+  it("reports an unreadable sitemap instead of zero coverage", async () => {
+    const clients = fakeClients();
+
+    await expect(indexCoverage(clients, {
+      siteUrl: "sc-domain:example.com",
+      sitemapUrl: "https://example.com/sitemap.xml",
+      maxUrls: 20,
+      concurrency: 3,
+    }, { fetchImpl: vi.fn().mockResolvedValue({ html: "<html><body>Not found</body></html>" }) }))
+      .rejects.toThrow(/not a sitemap/);
+
+    expect(clients.searchConsole.urlInspection.index.inspect).not.toHaveBeenCalled();
+  });
+
   it("resubmits the sitemap when checked URLs are not indexed", async () => {
     const clients = fakeClients();
     vi.mocked(clients.searchConsole.urlInspection.index.inspect)

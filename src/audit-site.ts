@@ -34,6 +34,12 @@ export interface AuditSiteResult {
 
 export function parseSitemapUrls(xml: string): { urls: string[]; childSitemaps: string[] } {
   const $ = cheerio.load(xml, { xmlMode: true });
+  // An HTML error page or an undecompressed .gz blob has no <loc> elements
+  // either, and returning zero URLs for it would report a broken sitemap as a
+  // healthy empty one. Only a real sitemap root earns the right to say zero.
+  if ($("urlset").length === 0 && $("sitemapindex").length === 0) {
+    throw new Error("The document is not a sitemap: it has no <urlset> or <sitemapindex> root. If it is a .gz file that could not be decompressed, or an HTML error page, that is what this is reporting.");
+  }
   const collect = (selector: string): string[] => $(selector)
     .map((_, element) => $(element).text().trim())
     .get()
