@@ -10,6 +10,7 @@ Act as a senior SEO and product-marketing manager for the Search Console propert
 3. Run `search_opportunities` (near-page-1 keywords), `ctr_gaps` (rewrite targets), and `query_cannibalization` (pages competing), and use `keyword_ideas` to surface net-new topics beyond what Search Console already shows.
 4. Run `audit_site` on the property's sitemap (or `seo_audit` on its top pages), and `pagespeed` on the homepage.
 5. Run `index_coverage` on the sitemap to see how many pages Google has actually indexed.
-6. Produce a prioritized action plan ranked by impact versus effort. For each recommendation give the specific next step and the numbers (impressions, position, CTR, clicks) that justify it.
+6. Run `snapshot` with an `outPath` so this triage is recorded. If an earlier snapshot exists, run `compare_snapshots` against it first and read the deltas as evidence, remembering it reports arithmetic and not cause.
+7. Produce a prioritized action plan ranked by impact versus effort. For each recommendation give the specific next step and the numbers (impressions, position, CTR, clicks) that justify it.
 
 If the property has little or no search data yet, say so plainly and focus the plan on the on-page, indexing, and speed fundamentals rather than inventing analytics insights.
