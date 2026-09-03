@@ -5,9 +5,23 @@
 ## Requirements
 
 - Node.js 20.18.1 or newer
-- A verified Google Search Console property for the Search Console tools
-- A Google Cloud service account added to that property
 - `gcloud` only if you use the setup wizard
+
+What else you need depends on which tools you use. The setup wizard covers Search Console and PageSpeed; the App Store, Google Play, and Chrome UX Report tools each need a credential you create yourself.
+
+| Tools | Needs | Where it comes from |
+|---|---|---|
+| `seo_audit`, `audit_site`, `keyword_ideas` (without `siteUrl`), `wporg_plugin` | nothing | public endpoints |
+| `pagespeed` | optional `SEO_MCP_PAGESPEED_KEY` | setup wizard `--pagespeed-key`, or a Google Cloud API key |
+| `crux_field_data`, `crux_history` | `SEO_MCP_CRUX_KEY` (or the PageSpeed key if it may call the CrUX API) | Google Cloud API key |
+| `indexnow_submit` | `SEO_MCP_INDEXNOW_KEY` | any key you host at `/<key>.txt` |
+| Search Console tools, `snapshot` properties | service account key | setup wizard, then add the account to the property |
+| `snapshot`, `compare_snapshots` | optional `SEO_MCP_SNAPSHOT_DIR` | where snapshot files live, defaulting to `~/.config/seo-mcp/snapshots` |
+| `verify` | `CLOUDFLARE_API_TOKEN` | Cloudflare, Zone.DNS:Edit |
+| `app_store_listing`, `app_store_discovery`, `app_store_reviews` | `SEO_MCP_ASC_KEY_PATH`, `SEO_MCP_ASC_KEY_ID`, `SEO_MCP_ASC_ISSUER_ID` | App Store Connect team key, any role that can read the app |
+| `app_store_sales` | the above plus `SEO_MCP_ASC_VENDOR_NUMBER` | team key created with Admin, Finance, or Sales and Reports |
+| `play_store_stats` | `SEO_MCP_PLAY_BUCKET`, `SEO_MCP_PLAY_CREDENTIALS` | service account with read access to the reporting bucket |
+| `play_vitals` | `SEO_MCP_PLAY_CREDENTIALS` | service account invited in Play Console with app quality access |
 
 ## Install and build
 
@@ -150,7 +164,7 @@ For example:
 node dist/index.js --credentials /absolute/path/seo-mcp.key.json
 ```
 
-`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`. `keyword_ideas` only needs them when `siteUrl` is passed for the Search Console cross-reference. App Store Sales and Trends reads `SEO_MCP_ASC_VENDOR_NUMBER`. The Chrome UX Report tools read `SEO_MCP_CRUX_KEY`, falling back to `SEO_MCP_PAGESPEED_KEY` when the same key is allowed to call `chromeuxreport.googleapis.com`. `snapshot` and `compare_snapshots` keep their documents in `SEO_MCP_SNAPSHOT_DIR`, defaulting to `~/.config/seo-mcp/snapshots`, and cannot read or write outside it.
+`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`. `keyword_ideas` only needs them when `siteUrl` is passed for the Search Console cross-reference. App Store Sales and Trends reads `SEO_MCP_ASC_VENDOR_NUMBER`. The Chrome UX Report tools read `SEO_MCP_CRUX_KEY`, falling back to `SEO_MCP_PAGESPEED_KEY` when the same key is allowed to call `chromeuxreport.googleapis.com`. `snapshot` and `compare_snapshots` keep their documents in `SEO_MCP_SNAPSHOT_DIR`, defaulting to `~/.config/seo-mcp/snapshots`, and cannot read or write outside it. The table under Requirements maps every tool to what it needs.
 
 ## Security model
 
@@ -502,7 +516,7 @@ Reads the Google Play bulk reports for an app and returns Active Device Installs
 { "packageName": "com.example.app", "month": "202608" }
 ```
 
-Set `SEO_MCP_PLAY_BUCKET` to the reporting bucket (`gs://pubsite_prod_...` and the bare name both work) and `SEO_MCP_PLAY_CREDENTIALS` to a service account key that can read it, falling back to `GOOGLE_APPLICATION_CREDENTIALS`. `month` defaults to the current UTC month.
+Set `SEO_MCP_PLAY_BUCKET` to the reporting bucket (`gs://pubsite_prod_...` and the bare name both work) and `SEO_MCP_PLAY_CREDENTIALS` to a service account key with read access to that bucket, falling back to `GOOGLE_APPLICATION_CREDENTIALS`. Read access to the bucket is a different grant from the Play Console invite `play_vitals` needs. `month` defaults to the current UTC month.
 
 ### `app_store_listing`
 
@@ -626,6 +640,8 @@ Reads Android vitals from the Play Developer Reporting API: crash rate, ANR rate
 ```json
 { "packageName": "com.example.app", "metricSets": ["crashRate", "anrRate"], "days": 28 }
 ```
+
+Set `SEO_MCP_PLAY_CREDENTIALS` to the service account key, falling back to `GOOGLE_APPLICATION_CREDENTIALS`. The account also has to be invited in Play Console under Users and permissions with the permission to view app information and app quality. The token is minted for the `playdeveloperreporting` scope, which is a separate grant from the Cloud Storage read `play_store_stats` needs. One account can hold both, but a key that only has the bucket grant gets a 403 here.
 
 The window is clamped to the freshness the API reports for itself, since it refuses an end date past that and asking through today always fails. The result says how current the data actually is, so zero rows through a known date is distinguishable from zero rows because the day has not landed. This API carries no acquisition or conversion data; `play_store_stats` has that.
 
