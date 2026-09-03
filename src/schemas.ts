@@ -443,6 +443,8 @@ export const auditSiteOutput = z.object({
 
 export const wporgPluginShape = {
   slug: z.string().trim().min(1).max(200).describe("WordPress.org plugin slug, e.g. akismet"),
+  downloadDays: z.number().int().min(0).max(365).default(30).describe("Days of daily download history to fetch; 0 skips it"),
+  includeVersionDistribution: z.boolean().default(true).describe("Also fetch the share of active installs on each plugin version"),
 };
 export const wporgPluginInput = z.object(wporgPluginShape);
 export const wporgPluginOutput = z.object({
@@ -458,8 +460,18 @@ export const wporgPluginOutput = z.object({
   tested: z.string().nullable(),
   added: z.string().nullable(),
   lastUpdated: z.string().nullable(),
+  requires: z.string().nullable(),
+  requiresPhp: z.string().nullable(),
+  downloadLink: z.string().nullable(),
+  versionCount: z.number().nullable(),
+  activeInstallsIsBucketed: z.boolean(),
+  ratings: z.record(z.string(), z.number()).nullable(),
+  dailyDownloads: z.array(z.object({ date: z.string(), downloads: z.number() })).nullable(),
+  downloadSummary: z.record(z.string(), z.number()).nullable(),
+  versionDistribution: z.array(z.object({ version: z.string(), percentage: z.number() })).nullable(),
   tags: z.array(z.string()),
   possiblyLagging: z.boolean(),
+  notes: z.array(z.string()),
 });
 
 export const playStoreStatsShape = {
