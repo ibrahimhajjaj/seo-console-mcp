@@ -69,6 +69,20 @@ describe("playVitals", () => {
     expect((result.structuredContent as any).metricSets.crashRate.error).toMatch(/At least one 'metric' should be specified/);
   });
 
+  it("keeps the package name a single path segment", async () => {
+    const { fetchImpl, calls } = router((url) => url.endsWith(":query")
+      ? { status: 200, body: { rows: [] } }
+      : { status: 200, body: FRESHNESS });
+
+    await playVitals(
+      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }),
+      { fetchImpl, accessToken: "t", now: NOW },
+    );
+
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) expect(call.url).toContain("/apps/app.example/");
+  });
+
   it("says it carries no acquisition data", async () => {
     const { fetchImpl } = router(() => ({ status: 200, body: FRESHNESS }));
 

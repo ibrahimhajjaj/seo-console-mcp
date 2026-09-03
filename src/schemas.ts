@@ -25,6 +25,10 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD").r
   return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 }, "Invalid calendar date");
 
+// Android package names are dotted Java identifiers. Anything else would be
+// spliced into a URL path on an authenticated host.
+const androidPackageName = z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/, "packageName must be an Android package name such as com.example.app").max(200);
+
 export const searchDimensions = ["query", "page", "country", "device", "date", "searchAppearance"] as const;
 const filterOperator = z.enum(["equals", "notEquals", "contains", "notContains", "includingRegex", "excludingRegex"]);
 const dimensionFilter = z.object({
@@ -491,7 +495,7 @@ const playDimensionReport = z.object({
 }).nullable();
 
 export const playStoreStatsShape = {
-  packageName: z.string().trim().min(1).max(200).describe("Android package name, e.g. app.getpsst"),
+  packageName: androidPackageName.describe("Android package name, e.g. app.getpsst"),
   month: z.string().regex(/^\d{6}$/, "month must be YYYYMM").optional().describe("Report month as YYYYMM; defaults to the current UTC month. Ignored when startDate and endDate are given"),
   installsDimension: z.enum(["overview", "country", "language", "device", "os_version", "carrier", "app_version"]).default("overview").describe("Which installs report to read. overview is undocumented by Google but present in real buckets; the others are the documented breakdowns"),
   include: z.array(z.enum(["ratings", "crashes", "reviews"])).default([]).describe("Extra report families to read. Missing files are normal: Google emits a report only when there is something to report"),
@@ -778,7 +782,7 @@ export const appStoreDiscoveryOutput = z.object({
 });
 
 export const playVitalsShape = {
-  packageName: z.string().trim().min(1).max(200).describe('Android package name'),
+  packageName: androidPackageName.describe("Android package name"),
   metricSets: z.array(z.enum(['crashRate','anrRate','errorCount','slowStartRate','excessiveWakeupRate'])).min(1).max(5).default(['crashRate','anrRate']).describe('Which Android vitals metric sets to query'),
   aggregationPeriod: z.enum(['DAILY','HOURLY']).default('DAILY').describe('DAILY is reported in America/Los_Angeles, HOURLY in UTC'),
   days: z.number().int().min(1).max(90).default(28).describe('How many days back to query'),

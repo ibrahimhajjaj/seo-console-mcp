@@ -40,6 +40,7 @@ interface CruxResponse {
 }
 
 export async function cruxFieldData(params: FieldDataParams, deps: CruxDeps = {}): Promise<ToolResult> {
+  requireOneTarget(params);
   const outcome = await queryCrux("queryRecord", body(params), deps);
   if (!outcome.hasData) return noData(params, "There is no Chrome UX Report data for this origin or URL.");
 
@@ -77,6 +78,7 @@ export async function cruxFieldData(params: FieldDataParams, deps: CruxDeps = {}
 }
 
 export async function cruxHistory(params: HistoryParams, deps: CruxDeps = {}): Promise<ToolResult> {
+  requireOneTarget(params);
   const request = { ...body(params), ...(params.collectionPeriodCount ? { collectionPeriodCount: params.collectionPeriodCount } : {}) };
   const outcome = await queryCrux("queryHistoryRecord", request, deps);
   if (!outcome.hasData) return noData(params, "There is no Chrome UX Report history for this origin or URL.");
@@ -162,6 +164,14 @@ function noData(params: FieldDataParams | HistoryParams, message: string): ToolR
     notes: [`${message} Chrome only publishes a record once an origin has enough anonymized samples, so this is an absence of data rather than a fault, and it is not zero.`],
   };
   return { content: [{ type: "text", text: structuredContent.notes[0] as string }], structuredContent };
+}
+
+// Neither target posts an empty body and earns an opaque 400; both silently
+// measures the origin and quietly answers about a page the caller did not ask for.
+function requireOneTarget(params: FieldDataParams | HistoryParams): void {
+  if (Boolean(params.origin) === Boolean(params.url)) {
+    throw new Error("Give exactly one of origin or url.");
+  }
 }
 
 function body(params: FieldDataParams | HistoryParams): Record<string, unknown> {

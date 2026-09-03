@@ -183,6 +183,30 @@ describe("playStoreStats", () => {
     ).rejects.toThrow(/startDate must be on or before endDate/);
   });
 
+  it("refuses half a window instead of answering for a single month", async () => {
+    const { readReport, calls } = reader({});
+
+    await expect(
+      playStoreStats({ packageName: "app.getpsst", startDate: "2023-10-01" }, { readReport }),
+    ).rejects.toThrow(/both startDate and endDate/);
+    await expect(
+      playStoreStats({ packageName: "app.getpsst", endDate: "2023-10-07" }, { readReport }),
+    ).rejects.toThrow(/both startDate and endDate/);
+    expect(calls).toEqual([]);
+  });
+
+  it("says the month was ignored rather than letting it look honoured", async () => {
+    const csv = "Date,Package Name,Active Device Installs\r\n2023-10-01,app.getpsst,100\r\n";
+    const { readReport } = reader({ "installs_app.getpsst_202310": csv });
+
+    const result = await playStoreStats(
+      { packageName: "app.getpsst", month: "202309", startDate: "2023-10-01", endDate: "2023-10-07" },
+      { readReport },
+    );
+
+    expect((result.structuredContent as { notes: string[] }).notes.join(" ")).toMatch(/month was ignored/);
+  });
+
   it("reads a window that sits exactly on the 24-month cap", async () => {
     const { readReport, calls } = reader({});
 

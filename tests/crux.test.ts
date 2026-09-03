@@ -73,6 +73,22 @@ describe("cruxFieldData", () => {
       .rejects.toThrow(/rejected the key/);
   });
 
+  it("refuses a request with no target rather than posting an empty body", async () => {
+    const fetchImpl = responding(RECORD);
+
+    await expect(cruxFieldData(cruxFieldDataInput.parse({}), { fetchImpl, apiKey: KEY }))
+      .rejects.toThrow(/exactly one of origin or url/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses both targets rather than silently measuring the origin", async () => {
+    const fetchImpl = responding(RECORD);
+
+    await expect(cruxFieldData(cruxFieldDataInput.parse({ origin: "https://example.com", url: "https://example.com/a" }), { fetchImpl, apiKey: KEY }))
+      .rejects.toThrow(/exactly one of origin or url/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("requires a key and says which variable to set", async () => {
     const fetchImpl = responding(RECORD);
     const saved = { crux: process.env.SEO_MCP_CRUX_KEY, ps: process.env.SEO_MCP_PAGESPEED_KEY };
@@ -104,6 +120,22 @@ describe("cruxHistory", () => {
     // so the series still lines up with collectionPeriods.
     expect(content.metrics.largest_contentful_paint.p75s).toEqual([1220, null]);
     expect(() => cruxHistoryOutput.parse(content)).not.toThrow();
+  });
+
+  it("refuses a request with no target rather than posting an empty body", async () => {
+    const fetchImpl = responding(HISTORY);
+
+    await expect(cruxHistory(cruxHistoryInput.parse({}), { fetchImpl, apiKey: KEY }))
+      .rejects.toThrow(/exactly one of origin or url/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses both targets rather than silently measuring the origin", async () => {
+    const fetchImpl = responding(HISTORY);
+
+    await expect(cruxHistory(cruxHistoryInput.parse({ origin: "https://example.com", url: "https://example.com/a" }), { fetchImpl, apiKey: KEY }))
+      .rejects.toThrow(/exactly one of origin or url/);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("warns that consecutive periods overlap", async () => {

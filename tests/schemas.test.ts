@@ -5,6 +5,7 @@ import {
   keywordIdeasInput,
   listSitemapsInput,
   pageSpeedInput,
+  playVitalsInput,
   requestRecrawlInput,
   searchAnalyticsInput,
   seoAuditInput,
@@ -125,5 +126,13 @@ describe("tool input schemas", () => {
     });
     expect(() => keywordIdeasInput.parse({ seed: " ", country: "usa" })).toThrow();
     expect(() => keywordIdeasInput.parse({ seed: "seo", days: 481, limit: 501 })).toThrow();
+  });
+
+  it("rejects a packageName that would reshape the vitals request path", () => {
+    expect(playVitalsInput.parse({ packageName: "com.example.app" }).packageName).toBe("com.example.app");
+    expect(playVitalsInput.parse({ packageName: "app.getpsst" }).packageName).toBe("app.getpsst");
+    expect(() => playVitalsInput.parse({ packageName: "com.example/../x" })).toThrow(/Android package name/);
+    expect(() => playVitalsInput.parse({ packageName: "com.example?x=1" })).toThrow(/Android package name/);
+    expect(() => playVitalsInput.parse({ packageName: "nodots" })).toThrow(/Android package name/);
   });
 });

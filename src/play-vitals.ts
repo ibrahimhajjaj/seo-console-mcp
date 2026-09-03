@@ -38,7 +38,7 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
     try {
       // freshnessInfo says how current the data actually is, which is the only
       // way to tell "nothing happened yesterday" from "yesterday is not in yet".
-      const meta = await request(`${API}/apps/${params.packageName}/${set.path}`, { method: "GET" }, token, fetchImpl);
+      const meta = await request(`${API}/apps/${encodeURIComponent(params.packageName)}/${set.path}`, { method: "GET" }, token, fetchImpl);
       const freshness = (meta as { freshnessInfo?: { freshnesses?: Array<{ aggregationPeriod?: string; latestEndTime?: Record<string, number> }> } }).freshnessInfo;
       const latest = freshness?.freshnesses?.find((entry) => entry.aggregationPeriod === params.aggregationPeriod);
       if (!latest) notes.push(`${name} reported no freshness for ${params.aggregationPeriod}, so the window was not clamped.`);
@@ -61,7 +61,7 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
         ...(params.dimensions.length ? { dimensions: [...params.dimensions] } : {}),
         pageSize: params.pageSize,
       };
-      const queried = await request(`${API}/apps/${params.packageName}/${set.path}:query`, {
+      const queried = await request(`${API}/apps/${encodeURIComponent(params.packageName)}/${set.path}:query`, {
         method: "POST",
         body: JSON.stringify(body),
       }, token, fetchImpl);

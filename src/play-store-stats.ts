@@ -34,6 +34,11 @@ export async function playStoreStats(
   // The total_ sibling carries only the headline acquisitions, which is cheaper
   // when the per-source split is not needed.
   const storePerformancePrefix = params.storePerformanceTotals ? "total_" : "";
+  // Half a window used to fall through to a single month, so a caller asking for
+  // a range got the current month's numbers under a range's name.
+  if (Boolean(params.startDate) !== Boolean(params.endDate)) {
+    throw new Error("Give both startDate and endDate for a window, or neither to read a single month.");
+  }
   const window = params.startDate && params.endDate ? { startDate: params.startDate, endDate: params.endDate } : null;
   // Reports are monthly files but their rows are daily, so a window is served by
   // reading every month it touches and filtering the rows locally. A seven-day
@@ -76,6 +81,9 @@ export async function playStoreStats(
   }
 
   const notes: string[] = [];
+  if (window && params.month) {
+    notes.push("month was ignored because startDate and endDate were given.");
+  }
   if (monthsMissing.length) {
     notes.push(`No reports exist for ${monthsMissing.join(", ")}, so days in those months are missing rather than zero.`);
   }
