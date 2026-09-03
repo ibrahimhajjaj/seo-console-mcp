@@ -27,6 +27,10 @@ export async function playStoreStats(
   const installsDimension = params.installsDimension ?? "overview";
   const ratingsDimension = params.ratingsDimension ?? "country";
   const crashesDimension = params.crashesDimension ?? "app_version";
+  const storePerformanceDimension = params.storePerformanceDimension ?? "traffic_source";
+  // The total_ sibling carries only the headline acquisitions, which is cheaper
+  // when the per-source split is not needed.
+  const storePerformancePrefix = params.storePerformanceTotals ? "total_" : "";
   const window = params.startDate && params.endDate ? { startDate: params.startDate, endDate: params.endDate } : null;
   // Reports are monthly files but their rows are daily, so a window is served by
   // reading every month it touches and filtering the rows locally. A seven-day
@@ -37,6 +41,7 @@ export async function playStoreStats(
   const installsBuffers: Buffer[] = [];
   const trafficBuffers: Buffer[] = [];
   const ratingsBuffers: Buffer[] = [];
+  const reviewsBuffers: Buffer[] = [];
   const crashesBuffers: Buffer[] = [];
   const monthsRead: string[] = [];
   const monthsMissing: string[] = [];
@@ -46,11 +51,15 @@ export async function playStoreStats(
       const ratings = await readReport(`stats/ratings/ratings_${params.packageName}_${current}_${ratingsDimension}.csv`);
       if (ratings) ratingsBuffers.push(ratings);
     }
+    if (include.includes("reviews")) {
+      const reviews = await readReport(`reviews/reviews_${params.packageName}_${current}.csv`);
+      if (reviews) reviewsBuffers.push(reviews);
+    }
     if (include.includes("crashes")) {
       const crashes = await readReport(`stats/crashes/crashes_${params.packageName}_${current}_${crashesDimension}.csv`);
       if (crashes) crashesBuffers.push(crashes);
     }
-    const traffic = await readReport(`stats/store_performance/store_performance_${params.packageName}_${current}_traffic_source.csv`);
+    const traffic = await readReport(`stats/store_performance/${storePerformancePrefix}store_performance_${params.packageName}_${current}_${storePerformanceDimension}.csv`);
     if (installs) installsBuffers.push(installs);
     if (traffic) trafficBuffers.push(traffic);
     (installs || traffic ? monthsRead : monthsMissing).push(current);
@@ -59,7 +68,7 @@ export async function playStoreStats(
   const trafficBuffer = trafficBuffers.length ? trafficBuffers : null;
   // Only fail when nothing at all was found: a caller asking for ratings alone
   // has a complete answer without installs or store performance.
-  if (!installsBuffer && !trafficBuffer && !ratingsBuffers.length && !crashesBuffers.length) {
+  if (!installsBuffer && !trafficBuffer && !ratingsBuffers.length && !crashesBuffers.length && !reviewsBuffers.length) {
     throw new Error(`Neither installs nor store performance report found for ${params.packageName} in ${month}. Check the package name, the month, and that SEO_MCP_PLAY_BUCKET names the right reporting bucket; the reports also lag by days, so a very recent month may not exist yet.`);
   }
 
@@ -77,6 +86,10 @@ export async function playStoreStats(
 
   const ratingsReading = ratingsBuffers.length ? readDimensionReport(ratingsBuffers, window) : null;
   const crashesReading = crashesBuffers.length ? readDimensionReport(crashesBuffers, window) : null;
+  const reviewRows = reviewsBuffers.length ? readRowsReport(reviewsBuffers) : null;
+  if (include.includes("reviews") && !reviewRows) {
+    notes.push("No reviews report exists for this package and period. Google emits one only when there are reviews, so this is an absence rather than a fetch failure.");
+  }
   if (include.includes("ratings") && !ratingsReading) {
     notes.push("No ratings report exists for this package and period. Google emits a report only when there is something to report, so this is an absence rather than a fetch failure.");
   }
@@ -115,8 +128,11 @@ export async function playStoreStats(
       installsLatest: installs?.latest ?? null,
       installsWindowTotals: installs?.windowTotals ?? {},
       installsDimension,
+      storePerformanceDimension,
+      storePerformanceTotals: Boolean(params.storePerformanceTotals),
       ratings: ratingsReading,
       crashes: crashesReading,
+      reviews: reviewRows,
       notes,
     },
   };
@@ -179,6 +195,19 @@ interface DimensionReading {
   dimension: string;
   lastDate: string | null;
   rows: Array<{ value: string; latest: Record<string, number | string>; totals: Record<string, number> }>;
+}
+
+function readRowsReport(buffers: Buffer[]): Array<Record<string, string>> {
+  const out: Array<Record<string, string>> = [];
+  for (const buffer of buffers) {
+    const rows = parseCsv(buffer);
+    const header = rows[0]?.map((cell) => cell.trim()) ?? [];
+    for (const row of rows.slice(1)) {
+      if (row.every((cell) => cell === '')) continue;
+      out.push(Object.fromEntries(header.map((name, index) => [name, row[index] ?? ''])));
+    }
+  }
+  return out;
 }
 
 function readDimensionReport(buffers: Buffer[], window: DateWindow | null): DimensionReading {

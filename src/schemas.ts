@@ -488,7 +488,9 @@ export const playStoreStatsShape = {
   packageName: z.string().trim().min(1).max(200).describe("Android package name, e.g. app.getpsst"),
   month: z.string().regex(/^\d{6}$/, "month must be YYYYMM").optional().describe("Report month as YYYYMM; defaults to the current UTC month. Ignored when startDate and endDate are given"),
   installsDimension: z.enum(["overview", "country", "language", "device", "os_version", "carrier", "app_version"]).default("overview").describe("Which installs report to read. overview is undocumented by Google but present in real buckets; the others are the documented breakdowns"),
-  include: z.array(z.enum(["ratings", "crashes"])).default([]).describe("Extra report families to read. Missing files are normal: Google emits a report only when there is something to report"),
+  include: z.array(z.enum(["ratings", "crashes", "reviews"])).default([]).describe("Extra report families to read. Missing files are normal: Google emits a report only when there is something to report"),
+  storePerformanceDimension: z.enum(["traffic_source", "country"]).default("traffic_source").describe("Which store performance breakdown to read"),
+  storePerformanceTotals: z.boolean().default(false).describe("Read the cheaper total_ variant, which carries only headline acquisitions"),
   ratingsDimension: z.enum(["country", "language", "device", "os_version", "carrier", "app_version"]).default("country").describe("Dimension for the ratings report"),
   crashesDimension: z.enum(["device", "os_version", "app_version"]).default("app_version").describe("Dimension for the crashes report"),
   startDate: isoDate.optional().describe("Window start in YYYY-MM-DD. With endDate, reads every month the window touches and filters rows to it"),
@@ -516,8 +518,11 @@ export const playStoreStatsOutput = z.object({
   installsLatest: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
   installsWindowTotals: z.record(z.string(), z.number()),
   installsDimension: z.string(),
+  storePerformanceDimension: z.string(),
+  storePerformanceTotals: z.boolean(),
   ratings: playDimensionReport,
   crashes: playDimensionReport,
+  reviews: z.array(z.record(z.string(), z.string())).nullable(),
   notes: z.array(z.string()),
 });
 

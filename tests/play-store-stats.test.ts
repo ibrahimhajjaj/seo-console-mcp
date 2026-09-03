@@ -264,3 +264,52 @@ describe("playStoreStats report families", () => {
     expect(calls.some((path) => path.includes("_overview.csv"))).toBe(false);
   });
 });
+
+describe("playStoreStats remaining families", () => {
+  it("reads the reviews CSV, preserving every column", async () => {
+    const reviews =
+      "Package Name,Reviewer Language,Star Rating,Review Title,Review Text\r\n" +
+      "app.azkarly,en,5,Great,Love it\r\n" +
+      "app.azkarly,ar,3,Ok,Fine\r\n";
+    const { readReport } = reader({ "reviews_app.azkarly_202310": reviews });
+
+    const result = await playStoreStats(
+      { packageName: "app.azkarly", month: "202310", include: ["reviews"] } as any,
+      { readReport },
+    );
+
+    const rows = (result.structuredContent as any).reviews;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({
+      "Package Name": "app.azkarly",
+      "Reviewer Language": "en",
+      "Star Rating": "5",
+      "Review Title": "Great",
+      "Review Text": "Love it",
+    });
+  });
+
+  it("reads the country breakdown and the cheaper total_ variant when asked", async () => {
+    const { readReport, calls } = reader({});
+
+    await playStoreStats(
+      { packageName: "app.getpsst", month: "202310", storePerformanceDimension: "country", storePerformanceTotals: true } as any,
+      { readReport },
+    ).catch(() => undefined);
+
+    expect(calls.some((path) => path.includes("total_store_performance_app.getpsst_202310_country.csv"))).toBe(true);
+  });
+
+  it("treats a missing reviews report as an absence, not a failure", async () => {
+    const installs = "Date,Package Name,Active Device Installs\r\n2023-10-01,app.getpsst,100\r\n";
+    const { readReport } = reader({ "installs_app.getpsst_202310": installs });
+
+    const result = await playStoreStats(
+      { packageName: "app.getpsst", month: "202310", include: ["reviews"] } as any,
+      { readReport },
+    );
+
+    expect((result.structuredContent as any).reviews).toBeNull();
+    expect((result.structuredContent as any).notes.join(" ")).toMatch(/absence rather than a fetch failure/);
+  });
+});
