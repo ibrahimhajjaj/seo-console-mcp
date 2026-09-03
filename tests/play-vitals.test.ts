@@ -56,6 +56,44 @@ describe("playVitals", () => {
     expect((result.structuredContent as any).metricSets.anrRate).toMatchObject({ available: true, rowCount: 0, latestDataAt: "2026-09-01" });
   });
 
+  it("issues every metric set's freshness read before answering any of them", async () => {
+    const seen: string[] = [];
+    let releaseGets = (): void => {};
+    const gate = new Promise<void>((resolve) => { releaseGets = resolve; });
+    let bothArrived = (): void => {};
+    const arrived = new Promise<void>((resolve) => { bothArrived = resolve; });
+    const isQuery = (url: string): boolean => url.endsWith(":query");
+
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      seen.push(url);
+      if (isQuery(url)) return new Response(JSON.stringify({ rows: [] }), { status: 200 });
+      // The first freshness read is held until the second has been issued, so a
+      // reader that took the sets one at a time would never reach this twice.
+      if (seen.filter((entry) => !isQuery(entry)).length === 2) bothArrived();
+      await gate;
+      return new Response(JSON.stringify(FRESHNESS), { status: 200 });
+    });
+
+    const pending = playVitals(
+      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate", "anrRate"] }),
+      { fetchImpl, accessToken: "t", now: NOW },
+    );
+
+    await arrived;
+    const gets = seen.filter((url) => !isQuery(url));
+    expect(gets.some((url) => url.includes("crashRateMetricSet"))).toBe(true);
+    expect(gets.some((url) => url.includes("anrRateMetricSet"))).toBe(true);
+    // Neither query can have gone out: both depend on their own freshness answer.
+    expect(seen.filter(isQuery)).toHaveLength(0);
+
+    releaseGets();
+    const result = await pending;
+
+    // Overlapping calls must not reorder the document.
+    expect(Object.keys((result.structuredContent as any).metricSets)).toEqual(["crashRate", "anrRate"]);
+  });
+
   it("carries the API's own message through instead of a bare status", async () => {
     const { fetchImpl } = router((url) => url.endsWith(":query")
       ? { status: 400, body: { error: { message: "At least one 'metric' should be specified" } } }

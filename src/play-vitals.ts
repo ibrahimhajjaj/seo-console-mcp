@@ -26,6 +26,14 @@ const METRIC_SETS = {
   excessiveWakeupRate: { path: "excessiveWakeupRateMetricSet", metrics: ["excessiveWakeupRate", "distinctUsers"] },
 } as const;
 
+type MetricSetName = keyof typeof METRIC_SETS;
+
+interface SetOutcome {
+  name: MetricSetName;
+  entry: Record<string, unknown>;
+  notes: string[];
+}
+
 export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): Promise<ToolResult> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const token = deps.accessToken ?? (await accessToken());
@@ -33,15 +41,19 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
   const notes: string[] = [];
   const results: Record<string, unknown> = {};
 
-  for (const name of params.metricSets) {
+  // A set's freshness GET only clamps that same set's query, so the sets have no
+  // reason to wait on each other. Notes are collected per set and merged in the
+  // requested order afterwards, so overlapping calls cannot shuffle the output.
+  const readSet = async (name: MetricSetName): Promise<SetOutcome> => {
     const set = METRIC_SETS[name];
+    const setNotes: string[] = [];
     try {
       // freshnessInfo says how current the data actually is, which is the only
       // way to tell "nothing happened yesterday" from "yesterday is not in yet".
       const meta = await request(`${API}/apps/${encodeURIComponent(params.packageName)}/${set.path}`, { method: "GET" }, token, fetchImpl);
       const freshness = (meta as { freshnessInfo?: { freshnesses?: Array<{ aggregationPeriod?: string; latestEndTime?: Record<string, number> }> } }).freshnessInfo;
       const latest = freshness?.freshnesses?.find((entry) => entry.aggregationPeriod === params.aggregationPeriod);
-      if (!latest) notes.push(`${name} reported no freshness for ${params.aggregationPeriod}, so the window was not clamped.`);
+      if (!latest) setNotes.push(`${name} reported no freshness for ${params.aggregationPeriod}, so the window was not clamped.`);
 
       // The API refuses an end date past its own freshness, so the window has
       // to be clamped to what it actually holds rather than to today.
@@ -49,7 +61,7 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
       const requestedEnd = asApiTime(now);
       const endTime = freshEnd ? asApiTime(new Date(`${freshEnd}T00:00:00Z`)) : requestedEnd;
       if (freshEnd && freshEnd < isoFromApiTime(requestedEnd)!) {
-        notes.push(`${name} is fresh only through ${freshEnd}, so the window ends there rather than today.`);
+        setNotes.push(`${name} is fresh only through ${freshEnd}, so the window ends there rather than today.`);
       }
       const body = {
         timelineSpec: {
@@ -71,17 +83,31 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
         dimensions: row.dimensions ?? [],
         metrics: row.metrics ?? [],
       }));
-      results[name] = {
-        available: true,
-        rowCount: rows.length,
-        latestDataAt: latest?.latestEndTime ? isoFromApiTime(latest.latestEndTime) : null,
-        rows,
+      return {
+        name,
+        entry: {
+          available: true,
+          rowCount: rows.length,
+          latestDataAt: latest?.latestEndTime ? isoFromApiTime(latest.latestEndTime) : null,
+          rows,
+        },
+        notes: setNotes,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      results[name] = { available: false, rowCount: null, latestDataAt: null, rows: [], error: message };
-      notes.push(`${name} could not be read (${message.split(".")[0]}), so it is unknown rather than zero.`);
+      setNotes.push(`${name} could not be read (${message.split(".")[0]}), so it is unknown rather than zero.`);
+      return {
+        name,
+        entry: { available: false, rowCount: null, latestDataAt: null, rows: [], error: message },
+        notes: setNotes,
+      };
     }
+  };
+
+  const settled = await Promise.all(params.metricSets.map((name) => readSet(name)));
+  for (const outcome of settled) {
+    results[outcome.name] = outcome.entry;
+    notes.push(...outcome.notes);
   }
 
   const structuredContent = {

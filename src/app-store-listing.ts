@@ -91,14 +91,19 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
 
   // Pick the record first, then read only that record's localizations. Reading
   // an `include=` bundle would mix the live and editable copies together.
-  const infos = await ascGet(`/v1/apps/${appId}/appInfos?limit=${PAGE_LIMIT}&include=primaryCategory,secondaryCategory,ageRatingDeclaration`, token, fetchImpl);
+  const versionQuery = `/v1/apps/${appId}/appStoreVersions?limit=${PAGE_LIMIT}&filter%5Bplatform%5D=${encodeURIComponent(params.platform)}&include=appStoreVersionPhasedRelease`;
+  // Neither list is derived from the other; only the localization reads below
+  // need the ids these two settle on.
+  const [infos, versions] = await Promise.all([
+    ascGet(`/v1/apps/${appId}/appInfos?limit=${PAGE_LIMIT}&include=primaryCategory,secondaryCategory,ageRatingDeclaration`, token, fetchImpl),
+    ascGet(versionQuery, token, fetchImpl),
+  ]);
+
   const infoResources = asArray(infos.data);
   const info = pickByState(infoResources, params.state);
   if (!info) throw new Error(`No app info record found for app ${appId}.`);
   if (info.fellBack) notes.push(`No ${params.state} app info exists; reported the ${describeState(info.state)} record instead.`);
 
-  const versionQuery = `/v1/apps/${appId}/appStoreVersions?limit=${PAGE_LIMIT}&filter%5Bplatform%5D=${encodeURIComponent(params.platform)}&include=appStoreVersionPhasedRelease`;
-  const versions = await ascGet(versionQuery, token, fetchImpl);
   const versionResources = asArray(versions.data);
   const version = pickByState(versionResources, params.state);
   if (version?.fellBack) notes.push(`No ${params.state} ${params.platform} version exists; reported the ${describeState(version.state)} version instead.`);

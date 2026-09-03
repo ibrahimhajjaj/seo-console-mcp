@@ -111,7 +111,14 @@ async function captureProperty(ctx: ToolContext, siteUrl: string, window: Window
   const clients = ctx.getAuthenticatedClients();
   const base = { siteUrl, startDate: window.startDate, endDate: window.endDate, maxTableRows: 0 };
 
-  const byDate = await searchAnalytics(clients, searchAnalyticsInput.parse({ ...base, dimensions: ["date"], rowLimit: 500 }));
+  // Three views of the same window that share nothing but the query, so they go
+  // out together rather than three round trips deep for every property.
+  const [byDate, byQuery, byPage] = await Promise.all([
+    searchAnalytics(clients, searchAnalyticsInput.parse({ ...base, dimensions: ["date"], rowLimit: 500 })),
+    searchAnalytics(clients, searchAnalyticsInput.parse({ ...base, dimensions: ["query"], rowLimit: TOP_ROWS })),
+    searchAnalytics(clients, searchAnalyticsInput.parse({ ...base, dimensions: ["page"], rowLimit: TOP_ROWS })),
+  ]);
+
   const dateRows = rowsOf(byDate);
   const clicks = sum(dateRows, "clicks");
   const impressions = sum(dateRows, "impressions");
@@ -130,9 +137,6 @@ async function captureProperty(ctx: ToolContext, siteUrl: string, window: Window
     // is what tells a later reader the trailing days were still filling in.
     firstIncompleteDate: firstIncompleteOf(byDate),
   };
-
-  const byQuery = await searchAnalytics(clients, searchAnalyticsInput.parse({ ...base, dimensions: ["query"], rowLimit: TOP_ROWS }));
-  const byPage = await searchAnalytics(clients, searchAnalyticsInput.parse({ ...base, dimensions: ["page"], rowLimit: TOP_ROWS }));
 
   return {
     siteUrl,

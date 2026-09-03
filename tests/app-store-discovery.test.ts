@@ -52,6 +52,30 @@ describe("appStoreDiscovery", () => {
     expect(keywords.rows.map((row: any) => row.locale)).toEqual(["en-GB", "ar-SA"]);
   });
 
+  it("reads the locales concurrently rather than one round trip at a time", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      const locale = decodeURIComponent(String(input).match(/locale%5D=([^&]+)/)?.[1] ?? "");
+      return new Response(JSON.stringify({ data: [{ type: "appKeywords", id: `kw-${locale}` }] }), { status: 200 });
+    });
+
+    const result = await appStoreDiscovery(
+      appStoreDiscoveryInput.parse({ appId: "1", locales: ["en-US", "en-GB", "ar-SA"], include: ["searchKeywords"] }),
+      { fetchImpl, credentials: credentials() },
+    );
+
+    expect(maxInFlight).toBeGreaterThan(1);
+    // Overlapping calls must not reorder the answer: rows still follow the
+    // requested locales, not whichever response landed first.
+    const rows = (result.structuredContent as any).resources.searchKeywords.rows;
+    expect(rows.map((row: any) => row.locale)).toEqual(["en-US", "en-GB", "ar-SA"]);
+  });
+
   it("separates a resource it cannot read from one that is genuinely empty", async () => {
     const fetchImpl = router((url) => url.includes("appEvents")
       ? { status: 403, body: { errors: [{ detail: "forbidden" }] } }

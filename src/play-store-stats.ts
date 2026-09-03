@@ -3,9 +3,12 @@ import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
 import type { playStoreStatsInput } from "./schemas.js";
 import { USER_AGENT } from "./version.js";
+import { mapWithConcurrency } from "./concurrency.js";
 
 const OBJECT_TIMEOUT_MS = 30_000;
 const MAX_WINDOW_MONTHS = 24;
+// A ceiling for politeness towards the reporting bucket, not a throughput knob.
+const MONTH_CONCURRENCY = 3;
 
 type PlayStoreStatsParams = z.output<typeof playStoreStatsInput>;
 
@@ -53,21 +56,21 @@ export async function playStoreStats(
   const crashesBuffers: Buffer[] = [];
   const monthsRead: string[] = [];
   const monthsMissing: string[] = [];
-  for (const current of months) {
-    const installs = await readReport(`stats/installs/installs_${params.packageName}_${current}_${installsDimension}.csv`);
-    if (include.includes("ratings")) {
-      const ratings = await readReport(`stats/ratings/ratings_${params.packageName}_${current}_${ratingsDimension}.csv`);
-      if (ratings) ratingsBuffers.push(ratings);
-    }
-    if (include.includes("reviews")) {
-      const reviews = await readReport(`reviews/reviews_${params.packageName}_${current}.csv`);
-      if (reviews) reviewsBuffers.push(reviews);
-    }
-    if (include.includes("crashes")) {
-      const crashes = await readReport(`stats/crashes/crashes_${params.packageName}_${current}_${crashesDimension}.csv`);
-      if (crashes) crashesBuffers.push(crashes);
-    }
-    const traffic = await readReport(`stats/store_performance/${storePerformancePrefix}store_performance_${params.packageName}_${current}_${storePerformanceDimension}.csv`);
+  // Months share nothing, so a two-year window need not be 24 serial reads. The
+  // pool preserves input order, which is what keeps the buffers in month order.
+  const monthly = await mapWithConcurrency(months, MONTH_CONCURRENCY, async (current) => ({
+    current,
+    installs: await readReport(`stats/installs/installs_${params.packageName}_${current}_${installsDimension}.csv`),
+    ratings: include.includes("ratings") ? await readReport(`stats/ratings/ratings_${params.packageName}_${current}_${ratingsDimension}.csv`) : null,
+    reviews: include.includes("reviews") ? await readReport(`reviews/reviews_${params.packageName}_${current}.csv`) : null,
+    crashes: include.includes("crashes") ? await readReport(`stats/crashes/crashes_${params.packageName}_${current}_${crashesDimension}.csv`) : null,
+    traffic: await readReport(`stats/store_performance/${storePerformancePrefix}store_performance_${params.packageName}_${current}_${storePerformanceDimension}.csv`),
+  }));
+
+  for (const { current, installs, ratings, reviews, crashes, traffic } of monthly) {
+    if (ratings) ratingsBuffers.push(ratings);
+    if (reviews) reviewsBuffers.push(reviews);
+    if (crashes) crashesBuffers.push(crashes);
     if (installs) installsBuffers.push(installs);
     if (traffic) trafficBuffers.push(traffic);
     (installs || traffic ? monthsRead : monthsMissing).push(current);

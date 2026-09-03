@@ -1,6 +1,9 @@
 import * as cheerio from "cheerio";
 import { fetchHtml } from "./fetch-page.js";
 import { parseSeoHtml } from "./seo-audit.js";
+import { mapWithConcurrency } from "./concurrency.js";
+
+export { mapWithConcurrency } from "./concurrency.js";
 
 const MAX_CHILD_SITEMAPS = 5;
 
@@ -114,23 +117,4 @@ export async function auditSite(
     pages,
     rollup,
   };
-}
-
-export async function mapWithConcurrency<T, R>(
-  values: T[],
-  concurrency: number,
-  operation: (value: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(values.length);
-  let nextIndex = 0;
-  const worker = async (): Promise<void> => {
-    while (nextIndex < values.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      const value = values[index];
-      if (value !== undefined) results[index] = await operation(value);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), values.length) }, worker));
-  return results;
 }
