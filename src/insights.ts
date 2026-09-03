@@ -33,6 +33,8 @@ export function strikingDistance(rows: InsightRow[], options: StrikingOptions = 
 
 export interface CompareOptions {
   limit?: number;
+  currentTruncated?: boolean;
+  previousTruncated?: boolean;
 }
 
 export interface CompareItem {
@@ -47,33 +49,44 @@ export interface CompareItem {
 export interface CompareResult {
   gainers: CompareItem[];
   losers: CompareItem[];
+  droppedAsUnknown: number;
 }
 
 export function comparePeriods(current: InsightRow[], previous: InsightRow[], options: CompareOptions = {}): CompareResult {
-  const { limit = 50 } = options;
+  const { limit = 50, currentTruncated = false, previousTruncated = false } = options;
   const currentByKey = new Map(current.map((row) => [row.keys.join("\0"), row]));
   const previousByKey = new Map(previous.map((row) => [row.keys.join("\0"), row]));
   const joinedKeys = new Set([...currentByKey.keys(), ...previousByKey.keys()]);
-  const items = [...joinedKeys].map((key): CompareItem => {
+  const items: CompareItem[] = [];
+  let droppedAsUnknown = 0;
+  for (const key of joinedKeys) {
     const currentRow = currentByKey.get(key);
     const previousRow = previousByKey.get(key);
+    // A cut-off list says nothing about the rows below the cut, so a key absent
+    // from a truncated side is unknown there, not zero. Scoring it as zero turns
+    // a row that merely slipped past the cut into a total gain or total loss.
+    if ((currentRow === undefined && currentTruncated) || (previousRow === undefined && previousTruncated)) {
+      droppedAsUnknown += 1;
+      continue;
+    }
     const currentPosition = currentRow?.position ?? 0;
     const previousPosition = previousRow?.position ?? 0;
     const clicksCurrent = currentRow?.clicks ?? 0;
     const clicksPrevious = previousRow?.clicks ?? 0;
-    return {
+    items.push({
       keys: currentRow?.keys ?? previousRow?.keys ?? [],
       clicksCurrent,
       clicksPrevious,
       clicksDelta: clicksCurrent - clicksPrevious,
       impressionsDelta: (currentRow?.impressions ?? 0) - (previousRow?.impressions ?? 0),
       positionDelta: currentPosition === 0 || previousPosition === 0 ? 0 : currentPosition - previousPosition,
-    };
-  });
+    });
+  }
 
   return {
     gainers: items.filter(({ clicksDelta }) => clicksDelta > 0).sort((left, right) => right.clicksDelta - left.clicksDelta).slice(0, limit),
     losers: items.filter(({ clicksDelta }) => clicksDelta < 0).sort((left, right) => left.clicksDelta - right.clicksDelta).slice(0, limit),
+    droppedAsUnknown,
   };
 }
 

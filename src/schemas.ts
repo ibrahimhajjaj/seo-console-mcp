@@ -124,6 +124,7 @@ export const searchOpportunitiesInput = z.object(searchOpportunitiesShape);
 export const searchOpportunitiesOutput = z.object({
   siteUrl: z.string().describe("Search Console property analyzed"),
   window: windowOutput.describe("Analysis window"),
+  truncated: z.boolean().describe("Whether Search Console held more than 5000 rows for this window, so the list was computed from the top rows only"),
   opportunities: z.array(z.object({
     keys: insightKeys,
     impressions: z.number().describe("Search impressions"),
@@ -152,6 +153,9 @@ export const compareSearchPeriodsOutput = z.object({
   siteUrl: z.string().describe("Search Console property analyzed"),
   currentWindow: windowOutput.describe("Current comparison window"),
   previousWindow: windowOutput.describe("Immediately preceding equal-length window"),
+  currentTruncated: z.boolean().describe("Whether Search Console held more than 5000 rows for the current window"),
+  previousTruncated: z.boolean().describe("Whether Search Console held more than 5000 rows for the previous window"),
+  droppedAsUnknown: z.number().describe("Rows present on only one side whose other side was cut off, and so were excluded rather than counted as zero"),
   gainers: z.array(compareItemOutput).describe("Rows with increased clicks"),
   losers: z.array(compareItemOutput).describe("Rows with decreased clicks"),
 });
@@ -166,6 +170,7 @@ export const ctrGapsInput = z.object(ctrGapsShape);
 export const ctrGapsOutput = z.object({
   siteUrl: z.string().describe("Search Console property analyzed"),
   window: windowOutput.describe("Analysis window"),
+  truncated: z.boolean().describe("Whether Search Console held more than 5000 rows for this window, so the list was computed from the top rows only"),
   gaps: z.array(z.object({
     keys: insightKeys,
     impressions: z.number().describe("Search impressions"),
@@ -184,6 +189,7 @@ export const queryCannibalizationInput = z.object(queryCannibalizationShape);
 export const queryCannibalizationOutput = z.object({
   siteUrl: z.string().describe("Search Console property analyzed"),
   window: windowOutput.describe("Analysis window"),
+  truncated: z.boolean().describe("Whether Search Console held more than 5000 rows for this window, so the list was computed from the top rows only"),
   groups: z.array(z.object({
     query: z.string().describe("Query served by multiple pages"),
     pages: z.array(z.object({

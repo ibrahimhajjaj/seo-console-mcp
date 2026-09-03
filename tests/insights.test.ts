@@ -55,7 +55,28 @@ describe("comparePeriods", () => {
         { keys: ["falling"], clicksCurrent: 3, clicksPrevious: 12, clicksDelta: -9, impressionsDelta: -80, positionDelta: 3 },
         { keys: ["lost"], clicksCurrent: 0, clicksPrevious: 5, clicksDelta: -5, impressionsDelta: -80, positionDelta: 0 },
       ],
+      droppedAsUnknown: 0,
     });
+  });
+
+  it("leaves out a current-only key when the previous window was cut off", () => {
+    const current = [row(["growing"], 150, 20, 0.13, 4), row(["only current"], 60, 6, 0.1, 8)];
+    const previous = [row(["growing"], 100, 10, 0.1, 6)];
+
+    const { gainers, droppedAsUnknown } = comparePeriods(current, previous, { previousTruncated: true });
+
+    expect(gainers.map(({ keys }) => keys)).toEqual([["growing"]]);
+    expect(droppedAsUnknown).toBe(1);
+  });
+
+  it("keeps a current-only key as a real gain when the previous window was complete", () => {
+    const current = [row(["growing"], 150, 20, 0.13, 4), row(["only current"], 60, 6, 0.1, 8)];
+    const previous = [row(["growing"], 100, 10, 0.1, 6)];
+
+    const { gainers, droppedAsUnknown } = comparePeriods(current, previous, { previousTruncated: false });
+
+    expect(gainers.map(({ keys }) => keys)).toEqual([["growing"], ["only current"]]);
+    expect(droppedAsUnknown).toBe(0);
   });
 });
 

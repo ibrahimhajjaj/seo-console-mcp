@@ -39,12 +39,29 @@ describe("Google-backed tool operations", () => {
     const output = await searchOpportunities(clients, { siteUrl: "https://example.com/" }, new Date("2026-07-11T12:00:00Z"));
 
     expect(clients.searchConsole.searchanalytics.query).toHaveBeenCalledWith({ siteUrl: "https://example.com/", requestBody: {
-      startDate: "2026-06-14", endDate: "2026-07-11", dimensions: ["query", "page"], rowLimit: 5000,
+      startDate: "2026-06-14", endDate: "2026-07-11", dimensions: ["query", "page"], rowLimit: 5001,
     } });
     expect(output.structuredContent).toMatchObject({
       window: { startDate: "2026-06-14", endDate: "2026-07-11" },
+      truncated: false,
       opportunities: [{ keys: ["seo guide", "https://example.com/guide"], opportunity: 4000 }],
     });
+  });
+
+  it("says search opportunities came from the top rows when the window held more", async () => {
+    const clients = fakeClients();
+    const rows = Array.from({ length: 5001 }, (_, index) => ({
+      keys: [`query ${index}`, "https://example.com/guide"], clicks: 1, impressions: 500, ctr: 0.002, position: 8,
+    }));
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows } });
+
+    const output = await searchOpportunities(clients, { siteUrl: "https://example.com/", limit: 1 }, new Date("2026-07-11T12:00:00Z"));
+
+    expect(clients.searchConsole.searchanalytics.query).toHaveBeenCalledWith({ siteUrl: "https://example.com/", requestBody: {
+      startDate: "2026-06-14", endDate: "2026-07-11", dimensions: ["query", "page"], rowLimit: 5001,
+    } });
+    expect(output.structuredContent).toMatchObject({ truncated: true });
+    expect(output.content[0]?.text).toContain("computed from the top 5000");
   });
 
   it("compares current search performance with the preceding equal window", async () => {
@@ -58,16 +75,40 @@ describe("Google-backed tool operations", () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(1, { siteUrl: "https://example.com/", requestBody: {
-      startDate: "2026-07-01", endDate: "2026-07-10", dimensions: ["query"], rowLimit: 5000,
+      startDate: "2026-07-01", endDate: "2026-07-10", dimensions: ["query"], rowLimit: 5001,
     } });
     expect(query).toHaveBeenNthCalledWith(2, { siteUrl: "https://example.com/", requestBody: {
-      startDate: "2026-06-21", endDate: "2026-06-30", dimensions: ["query"], rowLimit: 5000,
+      startDate: "2026-06-21", endDate: "2026-06-30", dimensions: ["query"], rowLimit: 5001,
     } });
     expect(output.structuredContent).toMatchObject({
       currentWindow: { startDate: "2026-07-01", endDate: "2026-07-10" },
       previousWindow: { startDate: "2026-06-21", endDate: "2026-06-30" },
       gainers: [{ keys: ["seo"], clicksDelta: 7 }], losers: [],
+      currentTruncated: false, previousTruncated: false, droppedAsUnknown: 0,
     });
+  });
+
+  it("holds back current-only keys when the previous window was cut off", async () => {
+    const clients = fakeClients();
+    const query = vi.mocked(clients.searchConsole.searchanalytics.query);
+    query.mockResolvedValueOnce({ data: { rows: [
+      { keys: ["seo"], clicks: 12, impressions: 100, ctr: 0.12, position: 4 },
+      { keys: ["fresh one"], clicks: 4, impressions: 40, ctr: 0.1, position: 7 },
+      { keys: ["fresh two"], clicks: 2, impressions: 20, ctr: 0.1, position: 9 },
+    ] } });
+    query.mockResolvedValueOnce({ data: { rows: Array.from({ length: 5001 }, (_, index) => ({
+      keys: [index === 0 ? "seo" : `query ${index}`], clicks: 1, impressions: 10, ctr: 0.1, position: 9,
+    })) } });
+
+    const output = await compareSearchPeriods(clients, {
+      siteUrl: "https://example.com/", startDate: "2026-07-01", endDate: "2026-07-10", by: "query",
+    });
+
+    expect(output.structuredContent).toMatchObject({
+      currentTruncated: false, previousTruncated: true, droppedAsUnknown: 2,
+      gainers: [{ keys: ["seo"], clicksDelta: 11 }],
+    });
+    expect(output.content[0]?.text).toContain("keys left out of this comparison for that reason: 2");
   });
 
   it("finds rows whose CTR trails peers at the same position", async () => {

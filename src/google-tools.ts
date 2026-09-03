@@ -41,6 +41,11 @@ export type ToolResult = Omit<CallToolResult, "content" | "structuredContent"> &
 // Search Console will not return more rows than this in one query.
 const MAX_SEARCH_ROW_LIMIT = 25_000;
 
+// How many rows the insight tools analyze per window.
+const INSIGHT_ROW_LIMIT = 5000;
+
+const INSIGHT_TRUNCATION_NOTE = `Note: Search Console returned more than ${INSIGHT_ROW_LIMIT} rows for this window, so this list was computed from the top ${INSIGHT_ROW_LIMIT} by clicks; a row that is absent here is unknown rather than absent.`;
+
 // Unkeyed PageSpeed calls share a small quota, so a 429 here usually means "no
 // key configured" rather than "you are querying too hard". Say which.
 function pageSpeedFailure(error: unknown, hasKey: boolean): Error {
@@ -165,7 +170,7 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
 
 export async function searchOpportunities(clients: GoogleClients, params: SearchOpportunitiesParams, now = new Date()): Promise<ToolResult> {
   const window = analysisWindow(params, now);
-  const rows = await fetchInsightRows(clients, params.siteUrl, insightRequest(window, ["query", "page"]));
+  const { rows, truncated } = await fetchInsightRows(clients, params.siteUrl, insightRequest(window, ["query", "page"]));
   const opportunities = strikingDistance(rows, {
     minPosition: params.minPosition ?? 5,
     maxPosition: params.maxPosition ?? 20,
@@ -179,7 +184,8 @@ export async function searchOpportunities(clients: GoogleClients, params: Search
     ...opportunities.map((item) => `${tableCell(item.keys[0] ?? "")} | ${tableCell(item.keys[1] ?? "")} | ${item.impressions} | ${item.position.toFixed(2)} | ${item.opportunity.toFixed(0)}`),
   ];
   if (opportunities.length === 0) lines.push("No opportunities found.");
-  return result(lines.join("\n"), { siteUrl: params.siteUrl, window, opportunities });
+  if (truncated) lines.push(INSIGHT_TRUNCATION_NOTE);
+  return result(lines.join("\n"), { siteUrl: params.siteUrl, window, truncated, opportunities });
 }
 
 export async function compareSearchPeriods(clients: GoogleClients, params: CompareSearchPeriodsParams, now = new Date()): Promise<ToolResult> {
@@ -188,7 +194,11 @@ export async function compareSearchPeriods(clients: GoogleClients, params: Compa
   const dimensions = [params.by];
   const current = await fetchInsightRows(clients, params.siteUrl, insightRequest(currentWindow, dimensions));
   const previous = await fetchInsightRows(clients, params.siteUrl, insightRequest(previousWindow, dimensions));
-  const { gainers, losers } = comparePeriods(current, previous, { limit: params.limit ?? 50 });
+  const { gainers, losers, droppedAsUnknown } = comparePeriods(current.rows, previous.rows, {
+    limit: params.limit ?? 50,
+    currentTruncated: current.truncated,
+    previousTruncated: previous.truncated,
+  });
   const lines = [
     `Search period comparison for ${params.siteUrl} (${currentWindow.startDate} to ${currentWindow.endDate})`,
     `${params.by} | Click delta | Impression delta | Position delta`,
@@ -197,12 +207,27 @@ export async function compareSearchPeriods(clients: GoogleClients, params: Compa
     ...losers.map((item) => compareLine(item, "")),
   ];
   if (gainers.length === 0 && losers.length === 0) lines.push("No click changes found.");
-  return result(lines.join("\n"), { siteUrl: params.siteUrl, currentWindow, previousWindow, gainers, losers });
+  if (current.truncated || previous.truncated) {
+    const cutOff = current.truncated && previous.truncated
+      ? "both windows"
+      : current.truncated ? "the current window" : "the previous window";
+    lines.push(`Note: Search Console returned more than ${INSIGHT_ROW_LIMIT} rows for ${cutOff}, so a key missing from a cut-off window is unknown there rather than lost; keys left out of this comparison for that reason: ${droppedAsUnknown}.`);
+  }
+  return result(lines.join("\n"), {
+    siteUrl: params.siteUrl,
+    currentWindow,
+    previousWindow,
+    currentTruncated: current.truncated,
+    previousTruncated: previous.truncated,
+    droppedAsUnknown,
+    gainers,
+    losers,
+  });
 }
 
 export async function ctrGapsTool(clients: GoogleClients, params: CtrGapsParams, now = new Date()): Promise<ToolResult> {
   const window = analysisWindow(params, now);
-  const rows = await fetchInsightRows(clients, params.siteUrl, insightRequest(window, [params.by]));
+  const { rows, truncated } = await fetchInsightRows(clients, params.siteUrl, insightRequest(window, [params.by]));
   const gaps = ctrGaps(rows, { minImpressions: params.minImpressions ?? 100, limit: params.limit ?? 50 });
   const lines = [
     `CTR gaps for ${params.siteUrl} (${window.startDate} to ${window.endDate})`,
@@ -211,12 +236,13 @@ export async function ctrGapsTool(clients: GoogleClients, params: CtrGapsParams,
     ...gaps.map((item) => `${tableCell(item.keys[0] ?? "")} | ${item.impressions} | ${(item.ctr * 100).toFixed(2)}% | ${(item.expectedCtr * 100).toFixed(2)}% | ${item.missedClicks}`),
   ];
   if (gaps.length === 0) lines.push("No CTR gaps found.");
-  return result(lines.join("\n"), { siteUrl: params.siteUrl, window, gaps });
+  if (truncated) lines.push(INSIGHT_TRUNCATION_NOTE);
+  return result(lines.join("\n"), { siteUrl: params.siteUrl, window, truncated, gaps });
 }
 
 export async function queryCannibalization(clients: GoogleClients, params: QueryCannibalizationParams, now = new Date()): Promise<ToolResult> {
   const window = analysisWindow(params, now);
-  const rows = await fetchInsightRows(clients, params.siteUrl, insightRequest(window, ["query", "page"]));
+  const { rows, truncated } = await fetchInsightRows(clients, params.siteUrl, insightRequest(window, ["query", "page"]));
   const groups = cannibalization(rows, { minImpressions: params.minImpressions ?? 10 });
   const lines = [
     `Query cannibalization for ${params.siteUrl} (${window.startDate} to ${window.endDate})`,
@@ -225,7 +251,8 @@ export async function queryCannibalization(clients: GoogleClients, params: Query
     ...groups.map((group) => `${tableCell(group.query)} | ${group.pages.length} | ${group.pages.reduce((sum, page) => sum + page.impressions, 0)}`),
   ];
   if (groups.length === 0) lines.push("No competing pages found.");
-  return result(lines.join("\n"), { siteUrl: params.siteUrl, window, groups });
+  if (truncated) lines.push(INSIGHT_TRUNCATION_NOTE);
+  return result(lines.join("\n"), { siteUrl: params.siteUrl, window, truncated, groups });
 }
 
 export async function listProperties(clients: GoogleClients): Promise<ToolResult> {
@@ -584,22 +611,29 @@ function precedingWindow(window: AnalysisWindow): AnalysisWindow {
 }
 
 function insightRequest(window: AnalysisWindow, dimensions: string[]): searchconsole_v1.Schema$SearchAnalyticsQueryRequest {
-  return { ...window, dimensions, rowLimit: 5000 };
+  // The one extra row is the probe described in fetchInsightRows.
+  return { ...window, dimensions, rowLimit: INSIGHT_ROW_LIMIT + 1 };
 }
 
 async function fetchInsightRows(
   clients: GoogleClients,
   siteUrl: string,
   requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest,
-): Promise<InsightRow[]> {
+): Promise<{ rows: InsightRow[]; truncated: boolean }> {
   const response = await clients.searchConsole.searchanalytics.query({ siteUrl, requestBody });
-  return (response.data.rows ?? []).map((row) => ({
+  // Asking for one row more than is analyzed is what separates "there were
+  // exactly this many rows" from "the list was cut off". Rows come back ordered
+  // by clicks, so a cut-off list loses precisely the low-click rows these tools
+  // look for, and the caller has to be told. The probe row is never analyzed.
+  const fetched = response.data.rows ?? [];
+  const rows = fetched.slice(0, INSIGHT_ROW_LIMIT).map((row) => ({
     keys: row.keys ?? [],
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
     ctr: row.ctr ?? 0,
     position: row.position ?? 0,
   }));
+  return { rows, truncated: fetched.length > INSIGHT_ROW_LIMIT };
 }
 
 function compareLine(item: { keys: string[]; clicksDelta: number; impressionsDelta: number; positionDelta: number }, positivePrefix: string): string {
