@@ -473,8 +473,11 @@ export const playStoreStatsOutput = z.object({
   trafficSources: z.array(z.object({
     source: z.string(),
     searchTerm: z.string().nullable(),
+    utmSource: z.string().nullable(),
+    utmCampaign: z.string().nullable(),
     visitors: z.number(),
     acquisitions: z.number(),
+    conversionRate: z.number().nullable(),
   })),
   hasPlaySearchRows: z.boolean(),
   notes: z.array(z.string()),

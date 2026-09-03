@@ -4,8 +4,11 @@ import { normalizeBucket, playStoreStats } from "../src/play-store-stats.js";
 interface TrafficGroup {
   source: string;
   searchTerm: string | null;
+  utmSource: string | null;
+  utmCampaign: string | null;
   visitors: number;
   acquisitions: number;
+  conversionRate: number | null;
 }
 
 const INSTALLS_202310 =
@@ -15,15 +18,15 @@ const INSTALLS_202310 =
   "2023-10-03,app.getpsst,110\r\n";
 
 const TRAFFIC_202310 =
-  "Date,Package Name,Traffic source,Search term,Store listing visitors,Store listing acquisitions\r\n" +
-  "2023-10-01,app.getpsst,Play search,cool app,10,2\r\n" +
-  "2023-10-02,app.getpsst,Play search,cool app,20,4\r\n" +
-  "2023-10-03,app.getpsst,Other,,50,1\r\n";
+  "Date,Package Name,Traffic source,Search term,UTM source,UTM campaign,Store listing visitors,Store listing acquisitions\r\n" +
+  "2023-10-01,app.getpsst,Play search,cool app,,,10,2\r\n" +
+  "2023-10-02,app.getpsst,Play search,cool app,,,20,4\r\n" +
+  "2023-10-03,app.getpsst,Other,,,,50,1\r\n";
 
 const TRAFFIC_202311_NO_SEARCH =
-  "Date,Package Name,Traffic source,Search term,Store listing visitors,Store listing acquisitions\r\n" +
-  "2023-11-01,app.getpsst,Other,,50,1\r\n" +
-  "2023-11-02,app.getpsst,Third-party referrers,,10,0\r\n";
+  "Date,Package Name,Traffic source,Search term,UTM source,UTM campaign,Store listing visitors,Store listing acquisitions\r\n" +
+  "2023-11-01,app.getpsst,Other,,,,50,1\r\n" +
+  "2023-11-02,app.getpsst,Third-party referrers,,,,10,0\r\n";
 
 function utf16le(text: string): Buffer {
   return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, "utf16le")]);
@@ -68,7 +71,32 @@ describe("playStoreStats", () => {
     expect(result.structuredContent).toMatchObject({ hasPlaySearchRows: true });
     const groups = traffic(result);
     expect(groups).toHaveLength(2);
-    expect(groups.find((group) => group.source === "Play search")).toEqual({ source: "Play search", searchTerm: "cool app", visitors: 30, acquisitions: 6 });
+    expect(groups.find((group) => group.source === "Play search")).toEqual({
+      source: "Play search",
+      searchTerm: "cool app",
+      utmSource: null,
+      utmCampaign: null,
+      visitors: 30,
+      acquisitions: 6,
+      // Recomputed from the group totals: averaging the two rows' own rates
+      // would weight a 10-visitor day the same as a 20-visitor one.
+      conversionRate: 6 / 30,
+    });
+  });
+
+  it("separates acquisition paths that differ only by UTM campaign", async () => {
+    const utmTraffic =
+      "Date,Package Name,Traffic source,Search term,UTM source,UTM campaign,Store listing visitors,Store listing acquisitions\r\n" +
+      "2023-10-01,app.getpsst,Third-party referrers,,newsletter,launch,40,4\r\n" +
+      "2023-10-02,app.getpsst,Third-party referrers,,newsletter,retarget,10,5\r\n";
+    const { readReport } = reader({ "store_performance_app.getpsst_202310": utmTraffic });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310" }, { readReport });
+
+    const groups = traffic(result);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ utmCampaign: "launch", visitors: 40, conversionRate: 0.1 });
+    expect(groups[1]).toMatchObject({ utmCampaign: "retarget", visitors: 10, conversionRate: 0.5 });
   });
 
   it("flags when no Play search rows are present", async () => {
