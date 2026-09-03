@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
 import type { appStoreReviewsInput } from "./schemas.js";
-import { ascGet, resolveAppId, readCredentialsFromEnv, createAscToken, type AscCredentials } from "./app-store-listing.js";
+import { ascGet, resolveAppId, readCredentialsFromEnv, createAscToken, asArray, type AscCredentials } from "./app-store-listing.js";
 
 type ReviewParams = z.output<typeof appStoreReviewsInput>;
 
@@ -102,11 +102,6 @@ export async function appStoreReviews(params: ReviewParams, deps: ReviewDeps = {
     `${withoutResponse} of them have no developer response.`,
   ];
   return { content: [{ type: "text", text: lines.join("\n") }], structuredContent };
-}
-
-function asArray(data: unknown): Array<{ type: string; id: string; attributes?: Record<string, unknown> }> {
-  if (!data) return [];
-  return (Array.isArray(data) ? data : [data]) as Array<{ type: string; id: string; attributes?: Record<string, unknown> }>;
 }
 
 function numberOrNull(value: unknown): number | null {

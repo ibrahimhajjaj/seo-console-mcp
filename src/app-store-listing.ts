@@ -65,7 +65,7 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const PUBLIC_TIMEOUT_MS = 10_000;
 const PAGE_LIMIT = 50;
 
-interface JsonApiResource {
+export interface JsonApiResource {
   type: string;
   id: string;
   attributes?: Record<string, unknown>;
@@ -414,7 +414,7 @@ function measure(text: string | undefined, limit: number) {
   return { text: value, length, limit, overLimit: length > limit };
 }
 
-function asArray(data: JsonApiResponse["data"]): JsonApiResource[] {
+export function asArray(data: JsonApiResponse["data"]): JsonApiResource[] {
   if (!data) return [];
   return Array.isArray(data) ? data : [data];
 }

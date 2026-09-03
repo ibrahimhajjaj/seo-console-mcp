@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
 import type { appStoreDiscoveryInput } from "./schemas.js";
-import { ascGet, resolveAppId, readCredentialsFromEnv, createAscToken, type AscCredentials } from "./app-store-listing.js";
+import { ascGet, resolveAppId, readCredentialsFromEnv, createAscToken, asArray, type AscCredentials } from "./app-store-listing.js";
 import { mapWithConcurrency } from "./concurrency.js";
 
 // App Store Connect rate-limits, and a full discovery run over 13 locales is 19
@@ -123,9 +123,4 @@ export async function appStoreDiscovery(params: DiscoveryParams, deps: Discovery
   }
   lines.push("An unavailable resource is one this key or app could not serve; that is not the same as having none.");
   return { content: [{ type: "text", text: lines.join("\n") }], structuredContent };
-}
-
-function asArray(data: unknown): Array<{ type: string; id: string; attributes?: Record<string, unknown> }> {
-  if (!data) return [];
-  return (Array.isArray(data) ? data : [data]) as Array<{ type: string; id: string; attributes?: Record<string, unknown> }>;
 }
