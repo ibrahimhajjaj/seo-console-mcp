@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, and WordPress.org, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty-two tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, and WordPress.org, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records every surface at one moment so a later run can diff against it.
 
 ## Requirements
 
@@ -523,6 +523,37 @@ Provide `appId` or `bundleId`. The signing key is per app: set `SEO_MCP_ASC_KEY_
 ```json
 { "ratings": [{ "storefront": "us", "averageUserRating": 4.5, "userRatingCount": 12 }] }
 ```
+
+### `snapshot`
+
+Captures every surface into one timestamped document: Search Console totals and top rows per property, App Store listings, Google Play installs and traffic, and WordPress.org stats. This is the tool for recording a point in a series, because none of the consoles keep a history you can diff against later.
+
+Search Console totals come from the **date** dimension, never by summing the query dimension. Google withholds low-volume queries, so a query-level sum undercounts, and that gap reads later as a decline that never happened.
+
+A surface that cannot be read is recorded in place with its error and named in `surfacesWithErrors`, never omitted, because a surface that silently vanishes reads later as a drop to zero. One slow surface times out without taking the document down.
+
+```json
+{
+  "properties": ["sc-domain:example.com"],
+  "apps": ["1234567890"],
+  "packages": ["com.example.app"],
+  "slugs": ["akismet"],
+  "windowDays": 28,
+  "outPath": "/path/to/2026-09-03.json"
+}
+```
+
+Pass `outPath` to write the document where `compare_snapshots` can read it later. Position and CTR are `null` rather than `0` when a window has no impressions, so an empty window never compares against real data as a collapse.
+
+### `compare_snapshots`
+
+Reads two snapshot documents and reports what changed between them: clicks, impressions and position per property, page-level movers above an impressions floor, install and rating deltas, App Store version and locale-count changes.
+
+```json
+{ "from": "/path/to/2026-08-06.json", "to": "/path/to/2026-09-03.json", "minImpressions": 100 }
+```
+
+It does arithmetic, never judgement. It will not tell you whether a change was good or what caused it, because a diff cannot support that claim. A surface that failed or is missing on either side is marked not comparable and named, so a collection failure is never read as a change, and a file that is not a snapshot document is refused rather than half-parsed.
 
 ## Running a tool from the command line
 
