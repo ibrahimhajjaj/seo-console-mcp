@@ -69,7 +69,7 @@ function isNonPublicAddress(address: string): boolean {
   return inner !== null && nonPublic.check(inner, "ipv4");
 }
 
-type DnsResolver = (
+export type DnsResolver = (
   hostname: string,
   options: { all: true },
   callback: (
@@ -106,7 +106,13 @@ export function createPublicOnlyLookup(resolve: DnsResolver) {
 
 let publicOnlyAgent: Agent | undefined;
 
-function publicOnlyDispatcher(): Agent {
+// The process-wide agent is cached so every fetch shares one connection pool.
+// A caller-supplied resolver gets its own uncached agent instead: that is the
+// only way to hand the socket a different answer than the pre-check saw, which
+// is exactly the shape of a DNS rebinding attack, so it is what the integration
+// test needs to prove the dispatcher is honored at all.
+function publicOnlyDispatcher(resolver?: DnsResolver): Agent {
+  if (resolver) return new Agent({ connect: { lookup: createPublicOnlyLookup(resolver) } });
   publicOnlyAgent ??= new Agent({
     connect: { lookup: createPublicOnlyLookup(dnsLookupCallback as unknown as DnsResolver) },
   });
@@ -125,6 +131,7 @@ export interface FetchHtmlOptions {
   fetchImpl?: typeof fetch;
   lookupHost?: (hostname: string) => Promise<Array<{ address: string; family: number }>>;
   allowPrivateHosts?: boolean;
+  connectResolver?: DnsResolver;
 }
 
 export async function fetchHtml(
@@ -135,6 +142,7 @@ export async function fetchHtml(
     fetchImpl = fetch,
     lookupHost = (hostname: string) => lookup(hostname, { all: true }),
     allowPrivateHosts = process.env.SEO_MCP_ALLOW_PRIVATE_HOSTS === "1",
+    connectResolver,
   } = options;
   const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   let currentUrl = new URL(url);
@@ -153,7 +161,7 @@ export async function fetchHtml(
         "user-agent": USER_AGENT,
         accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1",
       },
-      ...(allowPrivateHosts ? {} : { dispatcher: publicOnlyDispatcher() }),
+      ...(allowPrivateHosts ? {} : { dispatcher: publicOnlyDispatcher(connectResolver) }),
     };
     response = await fetchImpl(currentUrl.toString(), init);
 
