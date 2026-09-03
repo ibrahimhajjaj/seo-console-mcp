@@ -1,4 +1,5 @@
 const CF_API = "https://api.cloudflare.com/client/v4";
+const REQUEST_TIMEOUT_MS = 20_000;
 
 export interface CloudflareClient {
   findZoneId(domain: string): Promise<string>;
@@ -19,6 +20,7 @@ export function createCloudflareClient(token: string, fetchImpl: FetchLike = fet
     try {
       response = await fetchImpl(`${CF_API}${path}`, {
         ...init,
+        signal: init?.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -26,6 +28,11 @@ export function createCloudflareClient(token: string, fetchImpl: FetchLike = fet
         },
       });
     } catch (error) {
+      // An aborted fetch reports only "This operation was aborted", which reads
+      // as a bug in the caller rather than an unanswered request.
+      if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+        throw new Error("The Cloudflare API did not answer within 20s.");
+      }
       throw new Error(`Could not reach the Cloudflare API: ${error instanceof Error ? error.message : String(error)}`);
     }
     const body = (await response.json().catch(() => null)) as CloudflareEnvelope<T> | null;

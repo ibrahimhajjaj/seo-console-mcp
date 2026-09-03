@@ -166,6 +166,34 @@ describe("playStoreStats", () => {
     expect(content.window).toEqual({ startDate: "2023-08-31", endDate: "2023-09-01" });
   });
 
+  it("refuses a window longer than 24 months before reading anything", async () => {
+    const { readReport, calls } = reader({});
+
+    await expect(
+      playStoreStats({ packageName: "app.getpsst", startDate: "2024-01-01", endDate: "2026-01-31" }, { readReport }),
+    ).rejects.toThrow(/more than 24 months/);
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a reversed window instead of reading it as a single month", async () => {
+    const { readReport } = reader({});
+
+    await expect(
+      playStoreStats({ packageName: "app.getpsst", startDate: "2023-10-07", endDate: "2023-10-01" }, { readReport }),
+    ).rejects.toThrow(/startDate must be on or before endDate/);
+  });
+
+  it("reads a window that sits exactly on the 24-month cap", async () => {
+    const { readReport, calls } = reader({});
+
+    // Failing on the missing reports rather than the cap is what proves the
+    // window was accepted.
+    await expect(
+      playStoreStats({ packageName: "app.getpsst", startDate: "2024-01-01", endDate: "2025-12-31" }, { readReport }),
+    ).rejects.toThrow(/Neither installs nor store performance report found/);
+    expect(calls.filter((path) => path.startsWith("stats/installs/"))).toHaveLength(24);
+  });
+
   it("keeps every install column rather than only the one it reads", async () => {
     const csv =
       "Date,Package Name,Active Device Installs,Daily Device Uninstalls,Total User Installs\r\n" +

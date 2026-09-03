@@ -55,6 +55,28 @@ describe("cloudflare client", () => {
     expect(state).toBe("exists");
   });
 
+  it("gives every request an abort signal so a stalled socket cannot hang verify", async () => {
+    const signals: Array<AbortSignal | null | undefined> = [];
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      signals.push(init?.signal);
+      return jsonResponse({ success: true, errors: [], result: [{ id: "zone1", name: "verdelic.com" }] });
+    });
+    const cf = createCloudflareClient("tok", fetchImpl as unknown as typeof fetch);
+    await cf.findZoneId("verdelic.com");
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+  });
+
+  it("reports an aborted request as a timeout rather than an opaque abort", async () => {
+    const aborted = new Error("This operation was aborted");
+    aborted.name = "TimeoutError";
+    const fetchImpl = vi.fn(async () => {
+      throw aborted;
+    });
+    const cf = createCloudflareClient("tok", fetchImpl as unknown as typeof fetch);
+    await expect(cf.findZoneId("verdelic.com")).rejects.toThrow(/did not answer within 20s/);
+  });
+
   it("surfaces Cloudflare error envelopes", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ success: false, errors: [{ code: 9109, message: "Invalid access token" }], result: null }, false, 403));
     const cf = createCloudflareClient("tok", fetchImpl as unknown as typeof fetch);

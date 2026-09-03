@@ -4,6 +4,9 @@ import type { ToolResult } from "./google-tools.js";
 import type { playStoreStatsInput } from "./schemas.js";
 import { USER_AGENT } from "./version.js";
 
+const OBJECT_TIMEOUT_MS = 30_000;
+const MAX_WINDOW_MONTHS = 24;
+
 type PlayStoreStatsParams = z.output<typeof playStoreStatsInput>;
 
 interface TrafficGroup {
@@ -371,7 +374,20 @@ function liveReader(): (objectPath: string) => Promise<Buffer | null> {
     const token = await client.getAccessToken();
     if (!token.token) throw new Error("Could not obtain a Google Cloud Storage access token for the Play reports reader.");
     const url = `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
-    const response = await fetch(url, { headers: { authorization: `Bearer ${token.token}`, "user-agent": USER_AGENT } });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: { authorization: `Bearer ${token.token}`, "user-agent": USER_AGENT },
+        signal: AbortSignal.timeout(OBJECT_TIMEOUT_MS),
+      });
+    } catch (error) {
+      // A window reads one object per month in sequence, so a stalled socket
+      // must name the file it stalled on rather than the whole tool call.
+      if (error instanceof Error && error.name === "TimeoutError") {
+        throw new Error(`Reading ${objectPath} from the Play reports bucket timed out after 30s.`);
+      }
+      throw error;
+    }
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`Failed to read ${objectPath}: HTTP ${response.status} ${response.statusText}.`);
     return Buffer.from(await response.arrayBuffer());
@@ -424,18 +440,25 @@ function daysBetween(window: DateWindow): number {
   return Math.floor((end - start) / 86400000) + 1;
 }
 
-// Every month the window touches, so a window spanning a boundary reads both files.
+// A window is served by reading every month it touches, and each month costs up
+// to five sequential object reads, so a long window quietly turns into hundreds
+// of authenticated requests. A reversed window would walk forward until the cap
+// stopped it, so it is refused by name instead.
 function monthsInWindow(window: DateWindow): string[] {
+  if (window.startDate > window.endDate) throw new Error("startDate must be on or before endDate.");
   const months: string[] = [];
   let year = Number(window.startDate.slice(0, 4));
   let month = Number(window.startDate.slice(5, 7));
   const endKey = window.endDate.slice(0, 7).replace('-', '');
-  for (let guard = 0; guard < 480; guard++) {
+  for (let guard = 0; guard < MAX_WINDOW_MONTHS + 1; guard++) {
     const key = `${year}${String(month).padStart(2, '0')}`;
     months.push(key);
     if (key >= endKey) break;
     month += 1;
     if (month > 12) { month = 1; year += 1; }
+  }
+  if (months.length > MAX_WINDOW_MONTHS) {
+    throw new Error("The window spans more than 24 months; read it in smaller windows so one call does not fan out into hundreds of report files.");
   }
   return months;
 }
