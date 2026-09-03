@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.0
+
+The remaining store surfaces, and quality data alongside acquisition data.
+
+### Added
+
+- `app_store_sales` reads Sales and Trends: units downloaded per day per
+  territory per app, summarized by SKU. Needs a vendor number, which App Store
+  Connect shows under Payments and Financial Reports. A period with no sales is
+  reported as an absence rather than an error, since a quiet day should not look
+  like a broken integration. Units come from a different pipeline than App
+  Analytics and can differ from it, which the output says.
+- `play_vitals` reads Android vitals from the Play Developer Reporting API:
+  crash rate, ANR rate, error counts and startup metrics, daily or hourly. The
+  window is clamped to the API's own reported freshness, because it refuses an
+  end date past that and asking for today always fails. It carries no
+  acquisition data, which the output also says.
+- `play_store_stats` reads the reviews CSV and the store performance country
+  breakdown, plus the cheaper `total_` variant.
+
 ## 0.6.0
 
 Parity with what the consoles actually expose, and honest reporting of what they
