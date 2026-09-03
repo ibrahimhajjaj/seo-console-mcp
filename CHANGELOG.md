@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.6.0
+
+Parity with what the consoles actually expose, and honest reporting of what they
+do not.
+
+### Added
+
+- `crux_field_data` and `crux_history` read real-user Core Web Vitals from the
+  Chrome UX Report, the second as a weekly series. Google is discontinuing
+  PageSpeed's own field data, so field measurements move here while PageSpeed
+  keeps the Lighthouse lab audits. An origin with too few anonymized samples
+  reports `hasData: false` rather than zeros, and history periods with no samples
+  keep their place as null so the series stays aligned with its periods.
+- `app_store_reviews` reads customer reviews and developer responses. It reports
+  the mean and star split of the reviews it fetched, never the app's rating:
+  Apple's own OpenAPI specification has no aggregate rating resource, only age
+  ratings.
+- `app_store_discovery` reads the surfaces beyond the listing text, including
+  Apple's indexed search keywords, which are held per locale. Each resource
+  carries its own required filters, and one this key cannot serve is reported as
+  unavailable rather than as empty.
+- `app_store_listing` now also reports categories, age rating, phased release,
+  release notes, and screenshot and preview sets per locale, naming any locale
+  with no screenshots of its own since those fall back to another locale's.
+- `play_store_stats` reads a date window across month boundaries, every install
+  column rather than only the one it used, and the ratings and crashes report
+  families. Store listing conversion rate and UTM attribution are surfaced, with
+  the rate recomputed from grouped totals because averaging per-row rates would
+  weight a quiet day like a busy one.
+- `wporg_plugin` reads daily download history, the full five-to-one ratings
+  histogram, the active version split, and the version requirements.
+- `search_analytics` accepts the `discover` and `googleNews` result types and
+  pages with `startRow`. Ranks continue across pages rather than restarting.
+
+### Changed
+
+- A superseded App Store version is no longer mistaken for a draft. Apple marks
+  old versions REPLACED_WITH_NEW_VERSION, so defining "editable" as "not live"
+  claimed a draft in preparation for every app that had ever shipped twice.
+- `search_analytics` states that an exhausted page is still not proof of
+  completeness, since Search Console returns top rows subject to its own limits.
+
 ## 0.5.0
 
 Every tool now runs from the command line, and the server covers the other three

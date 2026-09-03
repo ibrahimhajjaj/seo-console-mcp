@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty-two tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, and WordPress.org, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records every surface at one moment so a later run can diff against it.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty-six tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, WordPress.org, and real-user Core Web Vitals, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records every surface at one moment so a later run can diff against it.
 
 ## Requirements
 
@@ -150,7 +150,7 @@ For example:
 node dist/index.js --credentials /absolute/path/seo-mcp.key.json
 ```
 
-`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`. `keyword_ideas` only needs them when `siteUrl` is passed for the Search Console cross-reference.
+`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`. `keyword_ideas` only needs them when `siteUrl` is passed for the Search Console cross-reference. The Chrome UX Report tools read `SEO_MCP_CRUX_KEY`, falling back to `SEO_MCP_PAGESPEED_KEY` when the same key is allowed to call `chromeuxreport.googleapis.com`.
 
 ## Security model
 
@@ -554,6 +554,46 @@ Reads two snapshot documents and reports what changed between them: clicks, impr
 ```
 
 It does arithmetic, never judgement. It will not tell you whether a change was good or what caused it, because a diff cannot support that claim. A surface that failed or is missing on either side is marked not comparable and named, so a collection failure is never read as a change, and a file that is not a snapshot document is refused rather than half-parsed.
+
+### `app_store_reviews`
+
+Reads App Store customer reviews and your responses, filtered by star rating or storefront, following Apple's own paging cursor.
+
+```json
+{ "bundleId": "com.example.app", "rating": [1, 2], "territory": "USA", "limit": 100 }
+```
+
+It reports `meanOfFetched` and `histogramOfFetched`, never "the rating". Those describe only the reviews this call returned, and a filtered or truncated page would make a mean a different number wearing the same name. App Store Connect exposes no aggregate rating resource at all, which is verifiable in Apple's own OpenAPI specification: every path matching "rating" is an *age* rating.
+
+### `app_store_discovery`
+
+Reads the App Store surfaces beyond the listing text: **search keywords** (Apple's actual indexed keyword list, held per locale), app tags, product page optimization experiments, custom product pages, in-app events, territory availability, and review summarizations.
+
+```json
+{ "bundleId": "com.example.app", "locales": ["en-US", "ar-SA"], "platform": "IOS" }
+```
+
+Each resource carries its own required parameters: `searchKeywords` needs both a platform and a locale filter, `appAvailabilityV2` is a to-one relationship that rejects `limit` outright. A resource this key or app cannot serve is reported as `available: false`, never as an empty list, because "no experiments" and "cannot read experiments" are different answers.
+
+### `crux_field_data`
+
+Real-user Core Web Vitals for an origin or a single URL from the Chrome UX Report: the current 28-day field record, with p75s and full histogram bins.
+
+```json
+{ "origin": "https://example.com", "formFactor": "PHONE" }
+```
+
+This is field data, not a lab test; keep `pagespeed` for Lighthouse audits. Google is discontinuing PageSpeed's own real-world data, so this is where field measurements move. An origin with too few anonymized samples returns `hasData: false` with a note rather than an error or zeros, since a zeroed LCP would read as a catastrophic regression.
+
+### `crux_history`
+
+The same field metrics as a weekly series, roughly six months of history.
+
+```json
+{ "origin": "https://example.com", "formFactor": "PHONE", "collectionPeriodCount": 25 }
+```
+
+Each period is a 28-day rolling window stepped weekly, so consecutive points overlap by three weeks and a single week-on-week move is not an independent change. Periods with too few samples keep their place in the series as `null` rather than being dropped, so the values stay aligned with `collectionPeriods`.
 
 ## Running a tool from the command line
 
