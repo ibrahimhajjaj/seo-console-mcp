@@ -766,6 +766,7 @@ export const appStoreDiscoveryShape = {
   limit: z.number().int().min(1).max(200).default(50).describe("Rows per resource"),
   locales: z.array(z.string().trim().min(2).max(10)).min(1).max(20).default(["en-US"]).describe("Locales for per-locale resources such as searchKeywords"),
   platform: z.enum(["IOS","MAC_OS","TV_OS","VISION_OS"]).default("IOS").describe("Platform for resources that require one"),
+  includeRows: z.boolean().default(false).describe("Include every raw row as well as the counts; off by default so a summary call stays small"),
 };
 export const appStoreDiscoveryInput = z.object(appStoreDiscoveryShape);
 export const appStoreDiscoveryOutput = z.object({
@@ -788,6 +789,7 @@ export const playVitalsShape = {
   days: z.number().int().min(1).max(90).default(28).describe('How many days back to query'),
   dimensions: z.array(z.string().trim().min(1)).max(5).default([]).describe('Breakdown dimensions such as versionCode or countryCode'),
   pageSize: z.number().int().min(1).max(100000).default(1000).describe('Rows per metric set'),
+  includeRows: z.boolean().default(false).describe("Include every raw row as well as the counts; off by default so a summary call stays small"),
 };
 export const playVitalsInput = z.object(playVitalsShape);
 export const playVitalsOutput = z.object({

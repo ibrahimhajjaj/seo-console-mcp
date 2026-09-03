@@ -43,7 +43,7 @@ describe("appStoreDiscovery", () => {
     });
 
     const result = await appStoreDiscovery(
-      appStoreDiscoveryInput.parse({ appId: "1", locales: ["en-GB", "ar-SA"], include: ["searchKeywords"] }),
+      appStoreDiscoveryInput.parse({ appId: "1", locales: ["en-GB", "ar-SA"], include: ["searchKeywords"], includeRows: true }),
       { fetchImpl, credentials: credentials() },
     );
 
@@ -65,7 +65,7 @@ describe("appStoreDiscovery", () => {
     });
 
     const result = await appStoreDiscovery(
-      appStoreDiscoveryInput.parse({ appId: "1", locales: ["en-US", "en-GB", "ar-SA"], include: ["searchKeywords"] }),
+      appStoreDiscoveryInput.parse({ appId: "1", locales: ["en-US", "en-GB", "ar-SA"], include: ["searchKeywords"], includeRows: true }),
       { fetchImpl, credentials: credentials() },
     );
 
@@ -91,6 +91,33 @@ describe("appStoreDiscovery", () => {
     expect(resources.appEvents).toMatchObject({ available: false, count: null });
     expect((result.structuredContent as any).notes.join(" ")).toMatch(/unknown rather than empty/);
     expect(() => appStoreDiscoveryOutput.parse(result.structuredContent)).not.toThrow();
+  });
+
+  it("keeps the count but withholds the rows unless they were asked for", async () => {
+    const fetchImpl = router(() => ({ status: 200, body: { data: [{ type: "appKeywords", id: "kw" }] } }));
+
+    const result = await appStoreDiscovery(
+      appStoreDiscoveryInput.parse({ appId: "1", include: ["appTags"] }),
+      { fetchImpl, credentials: credentials() },
+    );
+    const content = result.structuredContent as any;
+
+    expect(content.resources.appTags).toMatchObject({ available: true, count: 1 });
+    expect(content.resources.appTags.rows).toEqual([]);
+    expect(content.notes.join(" ")).toMatch(/pass includeRows to see them/);
+  });
+
+  it("returns the rows and drops the note when includeRows is set", async () => {
+    const fetchImpl = router(() => ({ status: 200, body: { data: [{ type: "appKeywords", id: "kw" }] } }));
+
+    const result = await appStoreDiscovery(
+      appStoreDiscoveryInput.parse({ appId: "1", include: ["appTags"], includeRows: true }),
+      { fetchImpl, credentials: credentials() },
+    );
+    const content = result.structuredContent as any;
+
+    expect(content.resources.appTags.rows).toHaveLength(1);
+    expect(content.notes.join(" ")).not.toMatch(/pass includeRows to see them/);
   });
 
   it("requires an appId or a bundleId", async () => {

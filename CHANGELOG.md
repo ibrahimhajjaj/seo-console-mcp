@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `play_vitals` and `app_store_discovery` no longer return their raw rows unless
+  asked. Between them they could put a thousand row objects into a caller's
+  context in one call, when the row counts and the freshness date already answer
+  what was being asked. Pass `includeRows` to get the rows themselves, the same
+  switch `app_store_sales` already carries, and the output says when it held rows
+  back so a count with no rows beside it cannot be read as empty.
+
 ## 0.8.0
 
 Where an App Store number came from, said out loud.

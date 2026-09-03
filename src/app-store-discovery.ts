@@ -83,6 +83,7 @@ export async function appStoreDiscovery(params: DiscoveryParams, deps: Discovery
     }
   });
 
+  let withheldRows = false;
   // Folded back in requested order, and within a resource in locale order,
   // because the pool preserves its input order and the jobs were built that way.
   for (const name of requested) {
@@ -100,8 +101,12 @@ export async function appStoreDiscovery(params: DiscoveryParams, deps: Discovery
       continue;
     }
     const rows = own.flatMap((entry) => entry.rows ?? []);
-    resources[name] = { available: true, count: rows.length, rows };
+    if (!params.includeRows && rows.length) withheldRows = true;
+    // Counted off the full list even when the rows themselves are held back, so
+    // a withheld resource still reads as "there is something here".
+    resources[name] = { available: true, count: rows.length, rows: params.includeRows ? rows : [] };
   }
+  if (withheldRows) notes.push("Rows were not returned; pass includeRows to see them.");
 
   const structuredContent = {
     appId,

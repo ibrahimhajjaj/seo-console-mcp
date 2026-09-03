@@ -121,6 +121,37 @@ describe("playVitals", () => {
     for (const call of calls) expect(call.url).toContain("/apps/app.example/");
   });
 
+  it("keeps the row count but withholds the rows unless they were asked for", async () => {
+    const { fetchImpl } = router((url) => url.endsWith(":query")
+      ? { status: 200, body: { rows: [{ startTime: { year: 2026, month: 9, day: 1 }, metrics: [] }] } }
+      : { status: 200, body: FRESHNESS });
+
+    const result = await playVitals(
+      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }),
+      { fetchImpl, accessToken: "t", now: NOW },
+    );
+    const content = result.structuredContent as any;
+
+    expect(content.metricSets.crashRate).toMatchObject({ available: true, rowCount: 1 });
+    expect(content.metricSets.crashRate.rows).toEqual([]);
+    expect(content.notes.join(" ")).toMatch(/pass includeRows to see them/);
+  });
+
+  it("returns the rows and drops the note when includeRows is set", async () => {
+    const { fetchImpl } = router((url) => url.endsWith(":query")
+      ? { status: 200, body: { rows: [{ startTime: { year: 2026, month: 9, day: 1 }, metrics: [] }] } }
+      : { status: 200, body: FRESHNESS });
+
+    const result = await playVitals(
+      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"], includeRows: true }),
+      { fetchImpl, accessToken: "t", now: NOW },
+    );
+    const content = result.structuredContent as any;
+
+    expect(content.metricSets.crashRate.rows).toHaveLength(1);
+    expect(content.notes.join(" ")).not.toMatch(/pass includeRows to see them/);
+  });
+
   it("says it carries no acquisition data", async () => {
     const { fetchImpl } = router(() => ({ status: 200, body: FRESHNESS }));
 

@@ -87,9 +87,11 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
         name,
         entry: {
           available: true,
+          // Counted off the full list even when the rows themselves are held
+          // back, so a withheld set still reads as "there is data here".
           rowCount: rows.length,
           latestDataAt: latest?.latestEndTime ? isoFromApiTime(latest.latestEndTime) : null,
-          rows,
+          rows: params.includeRows ? rows : [],
         },
         notes: setNotes,
       };
@@ -105,9 +107,11 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
   };
 
   const settled = await Promise.all(params.metricSets.map((name) => readSet(name)));
+  let withheldRows = false;
   for (const outcome of settled) {
     results[outcome.name] = outcome.entry;
     notes.push(...outcome.notes);
+    if (!params.includeRows && ((outcome.entry.rowCount as number | null) ?? 0) > 0) withheldRows = true;
   }
 
   const structuredContent = {
@@ -117,6 +121,7 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
     metricSets: results,
     notes: [
       ...notes,
+      ...(withheldRows ? ["Rows were not returned; pass includeRows to see them."] : []),
       "These are Android vitals. This API carries no acquisition or conversion data; use play_store_stats for that.",
     ],
   };
