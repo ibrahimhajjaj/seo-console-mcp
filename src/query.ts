@@ -85,12 +85,12 @@ export function coerceCliParams(shape: z.ZodRawShape, raw: Record<string, string
       const valid = Object.keys(shape).map((name) => `--${camelToKebab(name)}`).join(", ");
       throw new Error(`Unknown parameter --${camelToKebab(key)}. Valid parameters: ${valid || "(none)"}.`);
     }
-    coerced[key] = coerceValue(unwrap(field as z.ZodType), value);
+    coerced[key] = coerceValue(unwrap(field as z.ZodType), value, `--${camelToKebab(key)}`);
   }
   return coerced;
 }
 
-function unwrap(schema: z.ZodType): z.ZodType {
+export function unwrap(schema: z.ZodType): z.ZodType {
   let current = schema;
   while (current instanceof z.ZodOptional || current instanceof z.ZodDefault || current instanceof z.ZodNullable) {
     current = (current.def as unknown as { innerType: z.ZodType }).innerType;
@@ -98,7 +98,36 @@ function unwrap(schema: z.ZodType): z.ZodType {
   return current;
 }
 
-function coerceValue(schema: z.ZodType, value: string): unknown {
+// A field declared with .transform() is a pipe; what a shell types is its input
+// side, so that is the shape the flag value has to satisfy.
+function pipeInput(schema: z.ZodType): z.ZodType {
+  let current = unwrap(schema);
+  while (current instanceof z.ZodPipe) {
+    current = unwrap((current.def as unknown as { in: z.ZodType }).in);
+  }
+  return current;
+}
+
+// A nested parameter such as a Search Console filter group has no comma-separated
+// form to split: commas appear inside the value itself. Those flags take JSON.
+function jsonShape(schema: z.ZodType): "object" | "list" | undefined {
+  const resolved = pipeInput(schema);
+  if (resolved instanceof z.ZodObject) return "object";
+  if (resolved instanceof z.ZodArray) {
+    const element = pipeInput((resolved.def as unknown as { element: z.ZodType }).element);
+    if (element instanceof z.ZodObject) return "list";
+  }
+  return undefined;
+}
+
+export function coerceValue(schema: z.ZodType, value: string, flag?: string): unknown {
+  if (jsonShape(schema)) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      throw new Error(`Expected JSON for ${flag ?? "this parameter"} but got "${value}".`);
+    }
+  }
   if (schema instanceof z.ZodNumber) {
     const parsed = Number(value);
     if (Number.isNaN(parsed)) throw new Error(`Expected a number but got "${value}".`);
@@ -150,6 +179,8 @@ function describeTool(definition: ToolDefinition): string {
 }
 
 function typeName(schema: z.ZodType): string {
+  const json = jsonShape(schema);
+  if (json) return json === "object" ? "JSON object" : "JSON list";
   if (schema instanceof z.ZodNumber) return "number";
   if (schema instanceof z.ZodBoolean) return "boolean";
   if (schema instanceof z.ZodArray) return "list (comma-separated)";

@@ -43,7 +43,28 @@ const writeTool: ToolDefinition = {
   },
 };
 
-const tools = [echoTool, authTool, writeTool];
+const filterShape = {
+  siteUrl: z.string().min(1),
+  dimensions: z.array(z.string()).default([]),
+  dimensionFilterGroups: z.array(z.object({
+    groupType: z.enum(["and"]).default("and"),
+    filters: z.array(z.object({
+      dimension: z.string(),
+      operator: z.string(),
+      expression: z.string(),
+    })).min(1),
+  })).optional(),
+};
+
+const filterTool: ToolDefinition = {
+  name: "filtered",
+  description: "Echo a nested filter parameter",
+  inputShape: filterShape,
+  outputSchema: z.object({ params: z.unknown() }),
+  run: async (_ctx, params) => ({ content: [{ type: "text", text: "ok" }], structuredContent: { params } }),
+};
+
+const tools = [echoTool, authTool, writeTool, filterTool];
 
 function command(overrides: Partial<QueryCommand>): QueryCommand {
   return { kind: "query", params: {}, help: false, allowWrite: false, ...overrides };
@@ -147,6 +168,54 @@ describe("runQuery", () => {
     expect(code).toBe(1);
     expect(bad.err.join("")).toMatch(/boolean/i);
     expect(bad.out).toHaveLength(0);
+  });
+
+  it("reaches the tool with a nested parameter given as JSON", async () => {
+    const io = capture();
+    const groups = '[{"groupType":"and","filters":[{"dimension":"query","operator":"contains","expression":"seo"}]}]';
+
+    const code = await runQuery(command({
+      tool: "filtered",
+      params: { siteUrl: "https://example.com/", dimensionFilterGroups: groups },
+    }), io.deps);
+
+    expect(code).toBe(0);
+    expect(JSON.parse(io.out.join("")).params.dimensionFilterGroups).toEqual([
+      { groupType: "and", filters: [{ dimension: "query", operator: "contains", expression: "seo" }] },
+    ]);
+  });
+
+  it("rejects malformed JSON by naming the flag rather than repeating the parser's complaint", async () => {
+    const io = capture();
+
+    const code = await runQuery(command({
+      tool: "filtered",
+      params: { siteUrl: "https://example.com/", dimensionFilterGroups: "[{groupType: and}]" },
+    }), io.deps);
+
+    expect(code).toBe(1);
+    expect(io.err.join("")).toContain('Expected JSON for --dimension-filter-groups but got "[{groupType: and}]".');
+    expect(io.out).toHaveLength(0);
+  });
+
+  it("still splits a list of scalars on commas", async () => {
+    const io = capture();
+
+    const code = await runQuery(command({
+      tool: "filtered",
+      params: { siteUrl: "https://example.com/", dimensions: "date,query" },
+    }), io.deps);
+
+    expect(code).toBe(0);
+    expect(JSON.parse(io.out.join("")).params.dimensions).toEqual(["date", "query"]);
+  });
+
+  it("describes a nested parameter as JSON instead of a comma list", async () => {
+    const io = capture();
+
+    expect(await runQuery(command({ tool: "filtered", help: true }), io.deps)).toBe(0);
+    expect(io.out.join("")).toMatch(/--dimension-filter-groups {2}JSON list/);
+    expect(io.out.join("")).toMatch(/--dimensions {2}list \(comma-separated\)/);
   });
 
   it("refuses a write tool without --allow-write and does not run it", async () => {
