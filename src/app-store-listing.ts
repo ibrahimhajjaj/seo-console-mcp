@@ -69,6 +69,7 @@ interface JsonApiResource {
   type: string;
   id: string;
   attributes?: Record<string, unknown>;
+  relationships?: Record<string, { data?: { id?: string; type?: string } | Array<{ id?: string; type?: string }> }>;
 }
 
 export interface JsonApiResponse {
@@ -90,13 +91,13 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
 
   // Pick the record first, then read only that record's localizations. Reading
   // an `include=` bundle would mix the live and editable copies together.
-  const infos = await ascGet(`/v1/apps/${appId}/appInfos?limit=${PAGE_LIMIT}`, token, fetchImpl);
+  const infos = await ascGet(`/v1/apps/${appId}/appInfos?limit=${PAGE_LIMIT}&include=primaryCategory,secondaryCategory,ageRatingDeclaration`, token, fetchImpl);
   const infoResources = asArray(infos.data);
   const info = pickByState(infoResources, params.state);
   if (!info) throw new Error(`No app info record found for app ${appId}.`);
   if (info.fellBack) notes.push(`No ${params.state} app info exists; reported the ${describeState(info.state)} record instead.`);
 
-  const versionQuery = `/v1/apps/${appId}/appStoreVersions?limit=${PAGE_LIMIT}&filter%5Bplatform%5D=${encodeURIComponent(params.platform)}`;
+  const versionQuery = `/v1/apps/${appId}/appStoreVersions?limit=${PAGE_LIMIT}&filter%5Bplatform%5D=${encodeURIComponent(params.platform)}&include=appStoreVersionPhasedRelease`;
   const versions = await ascGet(versionQuery, token, fetchImpl);
   const versionResources = asArray(versions.data);
   const version = pickByState(versionResources, params.state);
@@ -105,7 +106,7 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
 
   const infoLocalizations = await ascGet(`/v1/appInfos/${info.resource.id}/appInfoLocalizations?limit=${PAGE_LIMIT}`, token, fetchImpl);
   const versionLocalizations = version
-    ? await ascGet(`/v1/appStoreVersions/${version.resource.id}/appStoreVersionLocalizations?limit=${PAGE_LIMIT}`, token, fetchImpl)
+    ? await ascGet(`/v1/appStoreVersions/${version.resource.id}/appStoreVersionLocalizations?limit=${PAGE_LIMIT}&include=appScreenshotSets,appPreviewSets`, token, fetchImpl)
     : { data: [] };
 
   interface LocaleFields {
@@ -140,6 +141,32 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
     byLocale.set(locale, entry);
   }
 
+  // The linkage lives on the localization, not on the set: a set carries no
+  // back-reference to the locale it belongs to. A locale with no sets falls back
+  // to another locale's screenshots in the store, so an empty list is a finding.
+  const includedById = new Map((versionLocalizations.included ?? []).map((resource) => [resource.id, resource]));
+  const assetsByLocale = new Map<string, { screenshotSets: string[]; previewSets: string[] }>();
+  for (const resource of asArray(versionLocalizations.data)) {
+    const locale = resource.attributes?.locale as string | undefined;
+    if (!locale) continue;
+    const displayTypes = (name: string): string[] => {
+      const linked = resource.relationships?.[name]?.data;
+      const entries = Array.isArray(linked) ? linked : linked ? [linked] : [];
+      return entries.map((entry) => {
+        const set = entry.id ? includedById.get(entry.id) : undefined;
+        return (set?.attributes?.screenshotDisplayType as string | undefined)
+          ?? (set?.attributes?.previewType as string | undefined)
+          ?? entry.id
+          ?? "unknown";
+      });
+    };
+    assetsByLocale.set(locale, { screenshotSets: displayTypes("appScreenshotSets"), previewSets: displayTypes("appPreviewSets") });
+  }
+
+  const categories = readCategories(infos, info.resource);
+  const ageRating = readAgeRating(infos, info.resource);
+  const phasedRelease = readPhasedRelease(versions, version?.resource);
+
   const locales = [...byLocale.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([locale, entry]) => ({
@@ -152,8 +179,15 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
       promotionalText: measure(entry.promotionalText, LIMITS.promotionalText),
       description: measure(entry.description, LIMITS.description),
       whatsNew: measure(entry.whatsNew, LIMITS.whatsNew),
+      screenshotSets: assetsByLocale.get(locale)?.screenshotSets ?? [],
+      previewSets: assetsByLocale.get(locale)?.previewSets ?? [],
       partial: !(entry.fromInfo && entry.fromVersion),
     }));
+
+  const withoutScreenshots = locales.filter((entry) => entry.screenshotSets.length === 0).map((entry) => entry.locale);
+  if (withoutScreenshots.length && withoutScreenshots.length < locales.length) {
+    notes.push(`These locales have no screenshots of their own and fall back to another locale's: ${withoutScreenshots.join(", ")}.`);
+  }
 
   const partialLocales = locales.filter((entry) => entry.partial).map((entry) => entry.locale);
   if (partialLocales.length) {
@@ -185,6 +219,9 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
     hasLiveRecord,
     hasEditableRecord,
     appInfoState: info.state ?? null,
+    categories,
+    ageRating,
+    phasedRelease,
     versionState: version?.state ?? null,
     versionString: (version?.resource.attributes?.versionString as string | undefined) ?? null,
     localeCount: locales.length,
@@ -263,6 +300,39 @@ function stateOf(resource: JsonApiResource): string | undefined {
     if (typeof value === "string") return value;
   }
   return undefined;
+}
+
+function relatedId(resource: JsonApiResource | undefined, name: string): string | null {
+  const data = resource?.relationships?.[name]?.data;
+  const id = Array.isArray(data) ? data[0]?.id : data?.id;
+  return id ?? null;
+}
+
+function findIncluded(response: JsonApiResponse, id: string | null): JsonApiResource | undefined {
+  if (!id) return undefined;
+  return (response.included ?? []).find((resource) => resource.id === id);
+}
+
+// The category a listing sits in is an ASO lever, and it is only visible here as
+// a relationship rather than an attribute.
+function readCategories(response: JsonApiResponse, info: JsonApiResource): { primary: string | null; secondary: string | null } {
+  const primary = findIncluded(response, relatedId(info, "primaryCategory"));
+  const secondary = findIncluded(response, relatedId(info, "secondaryCategory"));
+  return {
+    primary: (primary?.id as string | undefined) ?? null,
+    secondary: (secondary?.id as string | undefined) ?? null,
+  };
+}
+
+function readAgeRating(response: JsonApiResponse, info: JsonApiResource): Record<string, unknown> | null {
+  const declaration = findIncluded(response, relatedId(info, "ageRatingDeclaration"));
+  return declaration?.attributes ?? null;
+}
+
+function readPhasedRelease(response: JsonApiResponse, version: JsonApiResource | undefined): Record<string, unknown> | null {
+  if (!version) return null;
+  const phased = findIncluded(response, relatedId(version, "appStoreVersionPhasedRelease"));
+  return phased?.attributes ?? null;
 }
 
 function describeState(state: string | undefined): string {

@@ -527,6 +527,9 @@ export const appStoreListingOutput = z.object({
   hasLiveRecord: z.boolean(),
   hasEditableRecord: z.boolean(),
   appInfoState: z.string().nullable(),
+  categories: z.object({ primary: z.string().nullable(), secondary: z.string().nullable() }),
+  ageRating: z.record(z.string(), z.unknown()).nullable(),
+  phasedRelease: z.record(z.string(), z.unknown()).nullable(),
   versionState: z.string().nullable(),
   versionString: z.string().nullable(),
   localeCount: z.number(),
@@ -536,6 +539,8 @@ export const appStoreListingOutput = z.object({
     promotionalText: listingField,
     description: listingField,
     whatsNew: listingField,
+    screenshotSets: z.array(z.string()),
+    previewSets: z.array(z.string()),
     partial: z.boolean(),
   })),
   ratings: z.array(z.object({

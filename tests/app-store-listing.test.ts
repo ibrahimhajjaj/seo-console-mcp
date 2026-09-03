@@ -22,8 +22,8 @@ const DRAFT_INFO = { type: "appInfos", id: "info-draft", attributes: { state: "P
 const LIVE_VERSION = { type: "appStoreVersions", id: "v-live", attributes: { appVersionState: "READY_FOR_DISTRIBUTION", versionString: "1.4.0" } };
 const DRAFT_VERSION = { type: "appStoreVersions", id: "v-draft", attributes: { appVersionState: "PREPARE_FOR_SUBMISSION", versionString: "1.5.0" } };
 
-function localization(type: string, id: string, attributes: Record<string, unknown>) {
-  return { type, id, attributes };
+function localization(type: string, id: string, attributes: Record<string, unknown>, relationships?: Record<string, unknown>) {
+  return { type, id, attributes, ...(relationships ? { relationships } : {}) };
 }
 
 interface RouteOptions {
@@ -273,5 +273,40 @@ describe("appStoreListing", () => {
     expect(message).not.toContain(token);
     expect(message).not.toContain(signature);
     expect(message).not.toContain(creds.privateKey.split("\n")[1] as string);
+  });
+});
+
+describe("appStoreListing assets", () => {
+  it("reads screenshot sets from the localization linkage and names locales without any", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("itunes.apple.com")) return new Response(JSON.stringify({ results: [] }), { status: 200 });
+      if (url.includes("/appInfoLocalizations")) {
+        return new Response(JSON.stringify({ data: [
+          { type: "appInfoLocalizations", id: "a", attributes: { locale: "en-GB", name: "N", subtitle: "S" } },
+          { type: "appInfoLocalizations", id: "b", attributes: { locale: "fr-FR", name: "N", subtitle: "S" } },
+        ] }), { status: 200 });
+      }
+      if (url.includes("/appStoreVersionLocalizations")) {
+        return new Response(JSON.stringify({
+          data: [
+            { type: "appStoreVersionLocalizations", id: "vl-en", attributes: { locale: "en-GB", keywords: "k" },
+              relationships: { appScreenshotSets: { data: [{ type: "appScreenshotSets", id: "s1" }] }, appPreviewSets: { data: [] } } },
+            { type: "appStoreVersionLocalizations", id: "vl-fr", attributes: { locale: "fr-FR", keywords: "k" },
+              relationships: { appScreenshotSets: { data: [] }, appPreviewSets: { data: [] } } },
+          ],
+          included: [{ type: "appScreenshotSets", id: "s1", attributes: { screenshotDisplayType: "APP_IPHONE_67" } }],
+        }), { status: 200 });
+      }
+      if (url.includes("/appInfos")) return new Response(JSON.stringify({ data: [LIVE_INFO] }), { status: 200 });
+      return new Response(JSON.stringify({ data: [LIVE_VERSION] }), { status: 200 });
+    });
+
+    const result = await appStoreListing(params(), { fetchImpl, credentials: credentials() });
+    const content = result.structuredContent as Record<string, any>;
+
+    expect(content.locales.find((l: any) => l.locale === "en-GB").screenshotSets).toEqual(["APP_IPHONE_67"]);
+    expect(content.locales.find((l: any) => l.locale === "fr-FR").screenshotSets).toEqual([]);
+    expect(content.notes.join(" ")).toMatch(/no screenshots of their own.*fr-FR/);
   });
 });
