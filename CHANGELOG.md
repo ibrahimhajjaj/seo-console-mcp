@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
+
+Where an App Store number came from, said out loud.
 
 ### Changed
 
