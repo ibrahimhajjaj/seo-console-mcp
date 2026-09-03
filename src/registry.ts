@@ -265,7 +265,7 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "audit_site",
-    description: "Audit the on-page SEO of up to N pages from a sitemap and roll up the most common issues across the site.",
+    description: "Audit the on-page SEO of up to N pages from a sitemap and roll up the most common issues across the site. Takes a sitemap URL rather than a Search Console property, and needs no Google credentials",
     inputShape: auditSiteShape,
     outputSchema: auditSiteOutput,
     run: async (_ctx, params) => {

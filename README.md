@@ -508,13 +508,21 @@ Set `SEO_MCP_PLAY_BUCKET` to the reporting bucket (`gs://pubsite_prod_...` and t
 
 Reads an App Store listing through App Store Connect and measures each locale's fields against Apple's limits: name 30, subtitle 30, keywords 100, promotional text 170. Apple indexes the name, subtitle, and keyword field only, so the description is reported but never scored, and a field one character over its limit is dropped silently rather than rejected, which is why every field is reported against its limit. Promotional text is called out separately because it is the only one of these that can be changed on a live version without a review.
 
-An app can hold a live record and an editable one at the same time, so `state` selects which is read and the result states the record and version it used.
+An app can hold a live record and an editable one at the same time, so `state` selects which is read and the result states the record and version it used. When the record you asked for does not exist, the other one is reported and a note says so rather than passing it off as what you asked for.
+
+The reported state comes from `appVersionState`, falling back to the deprecated `appStoreState`. The two spell the same thing differently: a live listing reads `READY_FOR_DISTRIBUTION` where the deprecated attribute said `READY_FOR_SALE`. Output captured before and after that change will differ on the string alone, with nothing having happened to the listing.
 
 ```json
 { "bundleId": "com.example.app", "state": "live", "platform": "IOS", "storefronts": ["us", "gb"] }
 ```
 
 Provide `appId` or `bundleId`. The signing key is per app: set `SEO_MCP_ASC_KEY_PATH` to the `.p8` private key and `SEO_MCP_ASC_KEY_ID` to its key id, plus `SEO_MCP_ASC_ISSUER_ID` for a team key (individual keys have no issuer id). The key and the token it signs never appear in output.
+
+`ratings` is a list, one entry per requested storefront, not an object keyed by storefront:
+
+```json
+{ "ratings": [{ "storefront": "us", "averageUserRating": 4.5, "userRatingCount": 12 }] }
+```
 
 ## Running a tool from the command line
 
