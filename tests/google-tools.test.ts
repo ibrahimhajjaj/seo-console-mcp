@@ -187,6 +187,57 @@ describe("Google-backed tool operations", () => {
     expect(result.content[0]?.text).not.toContain("more rows exist");
   });
 
+  it("pages with startRow and continues the ranking", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: Array.from({ length: 3 }, (_, index) => ({
+      keys: [`query ${index + 1}`], clicks: 1, impressions: 10, ctr: 0.1, position: index + 1,
+    })) } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "https://example.com/", dimensions: ["query"], rowLimit: 5, startRow: 25, maxTableRows: 25,
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    const request = vi.mocked(clients.searchConsole.searchanalytics.query).mock.calls[0]?.[0];
+    expect(request?.requestBody?.startRow).toBe(25);
+    // Row 26 must not be presented as row 1.
+    expect((result.structuredContent as { rows: Array<{ rank: number }> }).rows[0]?.rank).toBe(26);
+    expect(result.structuredContent).toMatchObject({ startRow: 25 });
+  });
+
+  it("passes the discover result type through", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [] } });
+
+    await searchAnalytics(clients, {
+      siteUrl: "https://example.com/", dimensions: ["page"], rowLimit: 25, maxTableRows: 0, type: "discover",
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    const request = vi.mocked(clients.searchConsole.searchanalytics.query).mock.calls[0]?.[0];
+    expect(request?.requestBody?.type).toBe("discover");
+  });
+
+  it("says an exhausted page is still not proof of completeness", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [] } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "https://example.com/", dimensions: ["query"], rowLimit: 25, maxTableRows: 25,
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    expect(result.content[0]?.text).toContain("internal limits");
+  });
+
+  it("keeps the summary-only mode to a single line", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [] } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "https://example.com/", dimensions: ["query"], rowLimit: 25, maxTableRows: 0,
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    expect(result.content[0]?.text.split("\n")).toHaveLength(1);
+  });
+
   it("falls back to the row count at the API ceiling, where no probe row is available", async () => {
     const clients = fakeClients();
     vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: Array.from({ length: 25_000 }, () => ({

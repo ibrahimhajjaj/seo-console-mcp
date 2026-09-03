@@ -93,6 +93,7 @@ export function createGoogleClients(credentialsPath?: string): GoogleClients {
 
 export async function searchAnalytics(clients: GoogleClients, params: SearchAnalyticsParams, now = new Date()): Promise<ToolResult> {
   const { startDate, endDate } = analysisWindow(params, now);
+  const startRow = params.startRow ?? 0;
 
   // Ask for one row past the caller's limit so a full page can be told apart
   // from a page that happens to hold exactly rowLimit rows. Without it a
@@ -104,6 +105,7 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     endDate,
     dimensions: params.dimensions,
     rowLimit: atApiCeiling ? MAX_SEARCH_ROW_LIMIT : params.rowLimit + 1,
+    ...(startRow > 0 ? { startRow } : {}),
     ...(params.dimensionFilterGroups ? { dimensionFilterGroups: params.dimensionFilterGroups } : {}),
     ...(params.type ? { type: params.type } : {}),
     ...(params.dataState ? { dataState: params.dataState } : {}),
@@ -117,7 +119,9 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
   // means "there may be more" rather than a certainty.
   const truncated = atApiCeiling ? fetched.length >= MAX_SEARCH_ROW_LIMIT : fetched.length > params.rowLimit;
   const rows = fetched.slice(0, params.rowLimit).map((row, index) => ({
-    rank: index + 1,
+    // Ranks continue from where the page started, so paging does not restart
+    // the numbering and make row 26 look like row 1.
+    rank: startRow + index + 1,
     keys: Object.fromEntries(params.dimensions.map((dimension, keyIndex) => [dimension, row.keys?.[keyIndex] ?? ""])),
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
@@ -138,7 +142,12 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     lines.push(`... ${rows.length - params.maxTableRows} more rows (see structured data).`);
   }
   if (truncated) {
-    lines.push(`Note: more rows exist beyond rowLimit ${params.rowLimit}. This result is cut off, so treat a missing query as unknown rather than absent; raise rowLimit to see the rest.`);
+    lines.push(`Note: more rows exist beyond rowLimit ${params.rowLimit}. This result is cut off, so treat a missing query as unknown rather than absent; raise rowLimit or page with startRow ${startRow + params.rowLimit} to see the rest.`);
+  }
+  // Even a page that is not cut off is not proof of completeness: Search Console
+  // documents that it may return only top rows regardless of the limit asked for.
+  if (params.maxTableRows > 0) {
+    lines.push("Search Console returns top rows subject to its own internal limits, so an exhausted page still does not guarantee every row was returned.");
   }
   if (firstIncompleteDate) lines.push(`Note: data from ${firstIncompleteDate} onward is still being collected.`);
   return result(lines.join("\n"), {
@@ -147,6 +156,7 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     endDate,
     dimensions: params.dimensions,
     rowCount: rows.length,
+    startRow,
     truncated,
     rows,
     ...(firstIncompleteDate ? { firstIncompleteDate } : {}),

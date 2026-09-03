@@ -45,9 +45,10 @@ export const searchAnalyticsShape = {
     .refine((values) => new Set(values).size === values.length, "dimensions must be unique")
     .default(["query"]).describe("Dimensions used to group results"),
   rowLimit: z.number().int().min(1).max(25_000).default(25).describe("Maximum rows to return"),
+  startRow: z.number().int().min(0).default(0).describe("Zero-based row to start from, for paging through a large result"),
   maxTableRows: z.number().int().min(0).max(25_000).default(25).describe("Cap rows shown in the text table; structured rows are always complete. 0 = summary only."),
   dimensionFilterGroups: z.array(dimensionFilterGroup).optional().describe("Search Console dimension filters"),
-  type: z.enum(["web", "image", "video", "news"]).optional().describe("Search result type"),
+  type: z.enum(["web", "image", "video", "news", "discover", "googleNews"]).optional().describe("Result type. discover is the Discover feed and googleNews is the Google News app and news.google.com, not the News tab in Search. Both support fewer dimensions than web: neither reports a query dimension"),
   dataState: z.enum(["full", "all"]).optional().describe("full = finalized data (default, ~2-3 day lag); all = include recent partial data"),
   aggregationType: z.enum(["auto", "byProperty", "byPage"]).optional().describe("How Search Console aggregates rows"),
 };
@@ -58,7 +59,8 @@ export const searchAnalyticsOutput = z.object({
   endDate: z.string(),
   dimensions: z.array(z.string()),
   rowCount: z.number(),
-  truncated: z.boolean(),
+  startRow: z.number(),
+  truncated: z.boolean().describe("More rows follow this page. False does not mean the result is complete: Search Console returns top rows subject to its own internal limits"),
   rows: z.array(z.object({
     rank: z.number(),
     keys: z.record(z.string(), z.string()),
