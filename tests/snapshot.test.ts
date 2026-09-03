@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { snapshot } from "../src/snapshot.js";
 import { snapshotInput, snapshotOutput } from "../src/schemas.js";
 import type { ToolContext } from "../src/registry.js";
-import type { GoogleClients } from "../src/google-tools.js";
+import type { GoogleClients, ToolResult } from "../src/google-tools.js";
 
 const NOW = new Date("2026-09-03T11:30:45Z");
 const SNAPSHOT_DIR = "/snapshots";
@@ -189,5 +189,150 @@ describe("snapshot", () => {
     const result = await snapshot(ctx, params({ properties: ["https://example.com/"], windowDays: 7 }), deps);
 
     expect((result.structuredContent as Record<string, any>).window).toEqual({ startDate: "2026-08-28", endDate: "2026-09-03" });
+  });
+});
+
+// Only the structured half of a tool result is read by the capture functions,
+// so the text body stays empty here.
+function toolResult(structuredContent: Record<string, unknown>): ToolResult {
+  return { content: [{ type: "text", text: "" }], structuredContent };
+}
+
+const LISTING: Record<string, unknown> = {
+  appId: "1",
+  platform: "IOS",
+  versionString: "1.4.0",
+  appInfoState: "READY_FOR_DISTRIBUTION",
+  versionState: "READY_FOR_DISTRIBUTION",
+  hasLiveRecord: true,
+  hasEditableRecord: false,
+  fellBack: false,
+  localeCount: 2,
+  overLimit: ["en-US keywords"],
+  ratings: [{ storefront: "us", source: "itunes-lookup", averageUserRating: 4.5, userRatingCount: 12 }],
+  locales: [{
+    locale: "en-US",
+    indexed: { name: { length: 4 }, subtitle: { length: 12 }, keywords: { length: 101 } },
+    promotionalText: { length: 0 },
+    description: { length: 300 },
+    partial: false,
+  }],
+  notes: [],
+};
+
+// These exercise the real capture functions with the tool behind each surface
+// faked, which is the code every other snapshot test replaces wholesale.
+describe("surface readers", () => {
+  it("maps the listing into the fields the document keeps", async () => {
+    const identities: Array<{ appId?: string; bundleId?: string }> = [];
+    const listApp = async (input: { appId?: string; bundleId?: string }) => {
+      identities.push(input);
+      return toolResult({ ...LISTING });
+    };
+
+    const result = await snapshot(ctx, params({ apps: ["1234567890"] }), { now: NOW, listApp });
+
+    const document = result.structuredContent as Record<string, any>;
+    expect(document.apps[0]).toEqual({
+      app: "1234567890",
+      appId: "1",
+      platform: "IOS",
+      versionString: "1.4.0",
+      appInfoState: "READY_FOR_DISTRIBUTION",
+      versionState: "READY_FOR_DISTRIBUTION",
+      hasLiveRecord: true,
+      hasEditableRecord: false,
+      fellBack: false,
+      localeCount: 2,
+      overLimit: ["en-US keywords"],
+      ratings: [{ storefront: "us", source: "itunes-lookup", averageUserRating: 4.5, userRatingCount: 12 }],
+      locales: [{ locale: "en-US", name: 4, subtitle: 12, keywords: 101, promotionalText: 0, description: 300, partial: false }],
+      notes: [],
+    });
+    expect(identities[0]).toMatchObject({ appId: "1234567890" });
+    expect(identities[0]?.bundleId).toBeUndefined();
+
+    // An app that is not all digits is a bundle id, and the two are different
+    // lookups on the App Store Connect side.
+    await snapshot(ctx, params({ apps: ["app.example"] }), { now: NOW, listApp });
+
+    expect(identities[1]).toMatchObject({ bundleId: "app.example" });
+    expect(identities[1]?.appId).toBeUndefined();
+  });
+
+  it("writes a field the listing no longer carries as undefined, and the document schema still accepts it", async () => {
+    const renamed = { ...LISTING };
+    delete renamed.overLimit;
+    const listApp = async () => toolResult(renamed);
+
+    const result = await snapshot(ctx, params({ apps: ["1234567890"] }), { now: NOW, listApp });
+
+    const document = result.structuredContent as Record<string, any>;
+    expect(document.apps[0].overLimit).toBeUndefined();
+    // The app side of the schema is loose so older snapshots keep parsing, which
+    // is also why a renamed listing field is not caught here.
+    expect(() => snapshotOutput.parse(document)).not.toThrow();
+  });
+
+  it("spreads the play report for the month the window ends in", async () => {
+    const months: Array<string | undefined> = [];
+    const readStats = async (input: { packageName: string; month?: string }) => {
+      months.push(input.month);
+      return toolResult({ packageName: input.packageName, month: input.month, activeDeviceInstalls: 12, lastDatePresent: "2026-09-02" });
+    };
+
+    const result = await snapshot(ctx, params({ packages: ["app.example"] }), { now: NOW, readStats });
+
+    const document = result.structuredContent as Record<string, any>;
+    expect(months).toEqual(["202609"]);
+    expect(document.packages[0]).toEqual({
+      package: "app.example",
+      packageName: "app.example",
+      month: "202609",
+      activeDeviceInstalls: 12,
+      lastDatePresent: "2026-09-02",
+    });
+    expect(document.packages[0].fellBackFromMonth).toBeUndefined();
+  });
+
+  it("falls back to the previous month across a year boundary and says which was read", async () => {
+    const months: Array<string | undefined> = [];
+    const readStats = async (input: { packageName: string; month?: string }) => {
+      months.push(input.month);
+      if (months.length === 1) throw new Error("no reports for 202601 yet");
+      return toolResult({ packageName: input.packageName, month: input.month, activeDeviceInstalls: 12, lastDatePresent: "2025-12-31", notes: ["installs are as of the last date present"] });
+    };
+
+    // Early January is when the fallback has to cross into the previous year.
+    const result = await snapshot(ctx, params({ packages: ["app.example"] }), { now: new Date("2026-01-05T11:30:45Z"), readStats });
+
+    const document = result.structuredContent as Record<string, any>;
+    expect(months).toEqual(["202601", "202512"]);
+    expect(document.packages[0].fellBackFromMonth).toBe("202601");
+    expect(document.packages[0].month).toBe("202512");
+    expect(document.packages[0].notes).toEqual([
+      "installs are as of the last date present",
+      expect.stringContaining("was read instead"),
+    ]);
+    // A month that has not been emitted yet is not a broken surface.
+    expect(document.surfacesWithErrors).toEqual([]);
+  });
+
+  it("records the package as unread when neither month can be read", async () => {
+    const readStats = async () => { throw new Error("bucket unreachable"); };
+
+    const result = await snapshot(ctx, params({ packages: ["app.example"] }), { now: NOW, readStats });
+
+    const document = result.structuredContent as Record<string, any>;
+    expect(document.surfacesWithErrors).toEqual(["package:app.example"]);
+    expect(document.packages[0]).toMatchObject({ package: "app.example", error: "bucket unreachable" });
+  });
+
+  it("keeps the plugin report as the slug surface", async () => {
+    const readPlugin = async (input: { slug: string }) => toolResult({ slug: input.slug, activeInstalls: 5 });
+
+    const result = await snapshot(ctx, params({ slugs: ["akismet"] }), { now: NOW, readPlugin });
+
+    expect((result.structuredContent as Record<string, any>).slugs[0]).toEqual({ slug: "akismet", activeInstalls: 5 });
   });
 });

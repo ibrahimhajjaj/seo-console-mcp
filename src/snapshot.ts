@@ -23,6 +23,11 @@ export interface SnapshotDeps {
   readApp?: (app: string) => Promise<Record<string, unknown>>;
   readPackage?: (packageName: string) => Promise<Record<string, unknown>>;
   readSlug?: (slug: string) => Promise<Record<string, unknown>>;
+  // The tool functions behind each surface. Injectable so the field mapping and
+  // the month fallback run in tests without credentials or network.
+  listApp?: typeof appStoreListing;
+  readStats?: typeof playStoreStats;
+  readPlugin?: typeof wporgPlugin;
   writeFile?: (path: string, data: string) => void;
   fileExists?: (path: string) => boolean;
   makeDir?: (path: string) => void;
@@ -46,10 +51,13 @@ export async function snapshot(ctx: ToolContext, params: SnapshotParams, deps: S
   const window = analysisWindow(now, params.windowDays);
   const surfacesWithErrors: string[] = [];
 
+  const listApp = deps.listApp ?? appStoreListing;
+  const readStats = deps.readStats ?? playStoreStats;
+  const readPlugin = deps.readPlugin ?? wporgPlugin;
   const readProperty = deps.readProperty ?? ((siteUrl, w) => captureProperty(ctx, siteUrl, w));
-  const readApp = deps.readApp ?? ((app) => captureApp(app, { platform: params.platform, storefronts: params.storefronts }));
-  const readPackage = deps.readPackage ?? ((packageName) => capturePackage(packageName, window));
-  const readSlug = deps.readSlug ?? ((slug) => captureSlug(slug));
+  const readApp = deps.readApp ?? ((app) => captureApp(app, { platform: params.platform, storefronts: params.storefronts }, listApp));
+  const readPackage = deps.readPackage ?? ((packageName) => capturePackage(packageName, window, readStats));
+  const readSlug = deps.readSlug ?? ((slug) => captureSlug(slug, readPlugin));
 
   const timeout = deps.surfaceTimeoutMs ?? DEFAULT_SURFACE_TIMEOUT_MS;
   const jobs = [
@@ -137,9 +145,13 @@ async function captureProperty(ctx: ToolContext, siteUrl: string, window: Window
 // Only the fields a later comparison can use, plus per-locale lengths. Storing
 // every locale's description body would make the document tens of kilobytes of
 // prose that nothing reads.
-async function captureApp(app: string, options: { platform: string; storefronts: string[] }): Promise<Record<string, unknown>> {
+async function captureApp(
+  app: string,
+  options: { platform: string; storefronts: string[] },
+  listApp: typeof appStoreListing,
+): Promise<Record<string, unknown>> {
   const identity = /^\d+$/.test(app) ? { appId: app } : { bundleId: app };
-  const result = await appStoreListing(appStoreListingInput.parse({ ...identity, platform: options.platform, storefronts: options.storefronts }));
+  const result = await listApp(appStoreListingInput.parse({ ...identity, platform: options.platform, storefronts: options.storefronts }));
   const listing = result.structuredContent as Record<string, any>;
   return {
     app,
@@ -170,14 +182,14 @@ async function captureApp(app: string, options: { platform: string; storefronts:
 // The bulk reports for a month do not exist until Google emits them, so on the
 // first days of a month the current month is simply absent. Fall back to the
 // previous one and say which was read, rather than losing the surface monthly.
-async function capturePackage(packageName: string, window: Window): Promise<Record<string, unknown>> {
+async function capturePackage(packageName: string, window: Window, readStats: typeof playStoreStats): Promise<Record<string, unknown>> {
   const current = window.endDate.slice(0, 7).replace("-", "");
   try {
-    const result = await playStoreStats(playStoreStatsInput.parse({ packageName, month: current }));
+    const result = await readStats(playStoreStatsInput.parse({ packageName, month: current }));
     return { package: packageName, ...(result.structuredContent as Record<string, unknown>) };
   } catch (error) {
     const previous = previousMonth(current);
-    const result = await playStoreStats(playStoreStatsInput.parse({ packageName, month: previous }));
+    const result = await readStats(playStoreStatsInput.parse({ packageName, month: previous }));
     return {
       package: packageName,
       ...(result.structuredContent as Record<string, unknown>),
@@ -197,8 +209,8 @@ function previousMonth(month: string): string {
   return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-async function captureSlug(slug: string): Promise<Record<string, unknown>> {
-  const result = await wporgPlugin(wporgPluginInput.parse({ slug }));
+async function captureSlug(slug: string, readPlugin: typeof wporgPlugin): Promise<Record<string, unknown>> {
+  const result = await readPlugin(wporgPluginInput.parse({ slug }));
   return result.structuredContent as Record<string, unknown>;
 }
 
