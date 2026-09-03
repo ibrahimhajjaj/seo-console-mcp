@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.5.0
+
+Every tool now runs from the command line, and the server covers the other three
+places a product gets discovered: the App Store, Google Play and WordPress.org.
+
+### Added
+
+- `query`: runs any tool from the shell and writes JSON to a file or stdout,
+  exiting non-zero with the message on stderr. It runs the same implementation
+  the MCP surface exposes, so the two cannot drift. A result that has to be
+  compared six weeks later needs to be a file, and an MCP connection that drops
+  mid-session must not silently stop recording history.
+- `wporg_plugin`: WordPress.org install base, downloads, ratings and support
+  stats by slug. Public API, no credentials. Flags a freshly published plugin,
+  because the wp.org API under-reports one for a few days and a missing field
+  there is not an absent field.
+- `play_store_stats`: Google Play bulk reports: active device installs, and
+  store-listing visitors, acquisitions and conversion rate by traffic source,
+  search term and UTM campaign. Says outright whether any Play search traffic
+  appears, since its absence is a finding rather than an error. Reports the last
+  date actually present, because the reports lag by days.
+- `app_store_listing`: App Store Connect listing per locale measured against
+  Apple's limits (name 30, subtitle 30, keywords 100, promotional text 170).
+  Apple indexes the name, subtitle and keyword field only, and drops a field one
+  character over its limit silently rather than rejecting it. An app holds a live
+  record and an editable one at once, so `state` selects which is read and the
+  result says which it used.
+- `snapshot`: every surface captured into one timestamped document, and
+  `compare_snapshots`: the differences between two of them. Search Console
+  totals come from the date dimension, never by summing queries, which
+  undercounts because Google withholds low-volume rows. A surface that cannot be
+  read is recorded in place rather than omitted, and a surface missing on either
+  side is marked not comparable, so a collection failure is never read as a
+  change. The comparison reports arithmetic and never whether a change was good
+  or what caused it.
+- The content and triage playbooks now reach the store surfaces and record a
+  snapshot, so a later run can diff against today.
+
+### Changed
+
+- `search_analytics` now reports `truncated`. It asks Search Console for one row
+  past the requested limit and never returns it, so a result that was cut off is
+  distinguishable from one that happens to hold exactly `rowLimit` rows. A
+  truncated list read as complete is how an absent query gets mistaken for
+  absent demand.
+- Write tools (`submit_sitemap`, `delete_sitemap`, `request_recrawl`,
+  `indexnow_submit`) are marked `(write)` and refuse to run from the command
+  line without `--allow-write`. Over MCP a person is watching the call; from a
+  shell they are one line in a cron job.
+- An unkeyed PageSpeed quota error now names `setup --pagespeed-key`.
+
 ## 0.4.0
 
 Net-new keyword discovery from Google Autocomplete, with optional Search Console cross-reference.
