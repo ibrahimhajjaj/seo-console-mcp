@@ -613,7 +613,7 @@ Reads App Store Sales and Trends: units downloaded per day, per territory, per a
 { "reportDate": "2026-08-30", "frequency": "DAILY", "reportType": "SALES", "reportSubType": "SUMMARY" }
 ```
 
-Set `SEO_MCP_ASC_VENDOR_NUMBER`; App Store Connect shows the vendor number under Payments and Financial Reports, beside the legal entity name. Sales and Trends needs a team key with the Admin, Finance, or Sales and Reports role. Daily reports land the next day, so the default report date is two days back rather than today.
+Set `SEO_MCP_ASC_VENDOR_NUMBER`; App Store Connect shows the vendor number under Payments and Financial Reports, beside the legal entity name. Sales and Trends needs a team key with the Admin, Finance, or Sales and Reports role. Daily reports land the next day, so the default report date is two days back rather than today. `reportDate` takes the shape its frequency needs: `YYYY-MM-DD` for `DAILY` and for `WEEKLY`, where it means the week's ending Sunday, `YYYY-MM` for `MONTHLY`, and `YYYY` for `YEARLY`; leave it out and each frequency defaults to its most recent complete period.
 
 A period with no sales returns `hasData: false` with a note, not an error, because a quiet day should not look like a broken integration. Units come from the Sales and Trends pipeline, which is separate from App Analytics and can disagree with it.
 

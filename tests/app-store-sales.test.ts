@@ -52,6 +52,20 @@ describe("appStoreSales", () => {
     expect((result.structuredContent as any).notes.join(" ")).toMatch(/absence of sales.*not a failed request/);
   });
 
+  it("reports a 404 that is not about sales as a failed request", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ errors: [{ detail: "Report not available for the specified parameters." }] }), { status: 404 }));
+
+    const outcome = await appStoreSales(
+      appStoreSalesInput.parse({ reportDate: "2026-08-31" }),
+      { fetchImpl, credentials: credentials(), vendorNumber: "123" },
+    ).catch((error: unknown) => error);
+
+    expect(outcome).toBeInstanceOf(Error);
+    expect((outcome as Error).message).toMatch(/has no DAILY SALES SUMMARY report/);
+    // A refused request must never come back wearing the quiet-day result.
+    expect((outcome as { structuredContent?: unknown }).structuredContent).toBeUndefined();
+  });
+
   it("names the role requirement when the key is rejected", async () => {
     const fetchImpl = vi.fn(async () => new Response("{}", { status: 403 }));
 
@@ -82,5 +96,40 @@ describe("appStoreSales", () => {
 
     // Daily reports land the next day, so today is never available.
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("2026-09-01");
+  });
+
+  it("rejects a day-shaped reportDate for a MONTHLY report", async () => {
+    const fetchImpl = gzipResponding(TSV);
+
+    await expect(appStoreSales(
+      appStoreSalesInput.parse({ frequency: "MONTHLY", reportDate: "2026-08-30" }),
+      { fetchImpl, credentials: credentials(), vendorNumber: "123" },
+    )).rejects.toThrow(/MONTHLY report takes a reportDate like 2026-08/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("sends YYYY-MM for a MONTHLY report and YYYY for YEARLY", async () => {
+    const fetchImpl = gzipResponding(TSV);
+    const deps = { fetchImpl, credentials: credentials(), vendorNumber: "123" };
+
+    const monthly = await appStoreSales(appStoreSalesInput.parse({ frequency: "MONTHLY", reportDate: "2026-08" }), deps);
+    await appStoreSales(appStoreSalesInput.parse({ frequency: "YEARLY", reportDate: "2025" }), deps);
+
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("filter%5BreportDate%5D=2026-08");
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toContain("filter%5BreportDate%5D=2025");
+    expect(() => appStoreSalesOutput.parse(monthly.structuredContent)).not.toThrow();
+  });
+
+  it("defaults each frequency to its most recent complete period", async () => {
+    const fetchImpl = gzipResponding(TSV);
+    const deps = { fetchImpl, credentials: credentials(), vendorNumber: "123", now: new Date("2026-09-04T12:00:00Z") };
+
+    for (const frequency of ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]) {
+      await appStoreSales(appStoreSalesInput.parse({ frequency }), deps);
+    }
+
+    const dates = fetchImpl.mock.calls.map((call) => new URL(String(call[0])).searchParams.get("filter[reportDate]"));
+    // WEEKLY is the week ending Sunday 2026-08-30, the last one settled two days before now.
+    expect(dates).toEqual(["2026-09-02", "2026-08-30", "2026-08", "2025"]);
   });
 });

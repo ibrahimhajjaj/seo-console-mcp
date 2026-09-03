@@ -794,7 +794,7 @@ export const playVitalsOutput = z.object({
 });
 
 export const appStoreSalesShape = {
-  reportDate: isoDate.optional().describe('Report date in YYYY-MM-DD; defaults to two days back for DAILY, since daily reports land the next day'),
+  reportDate: z.string().trim().regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, "reportDate must be YYYY-MM-DD, YYYY-MM, or YYYY").optional().describe("Report date. DAILY and WEEKLY take YYYY-MM-DD (WEEKLY means the week's ending date), MONTHLY takes YYYY-MM, YEARLY takes YYYY. Defaults to the most recent complete period for the frequency"),
   frequency: z.enum(['DAILY','WEEKLY','MONTHLY','YEARLY']).default('DAILY').describe('Report period'),
   reportType: z.enum(['SALES','PRE_ORDER','SUBSCRIPTION','SUBSCRIPTION_EVENT','SUBSCRIBER','INSTALLS','FIRST_ANNUAL']).default('SALES').describe('Sales and Trends report type'),
   reportSubType: z.enum(['SUMMARY','DETAILED','SUMMARY_INSTALL_TYPE','SUMMARY_TERRITORY','SUMMARY_CHANNEL']).default('SUMMARY').describe('Report sub type'),

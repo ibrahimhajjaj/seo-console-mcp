@@ -17,6 +17,15 @@ interface SalesDeps {
 const API = "https://api.appstoreconnect.apple.com/v1/salesReports";
 const REQUEST_TIMEOUT_MS = 30_000;
 
+// Apple keys each frequency to its own date shape; sending a day to a monthly
+// report is refused, and the refusal used to be read as "no sales".
+const DATE_SHAPES: Record<string, { pattern: RegExp; example: string }> = {
+  DAILY: { pattern: /^\d{4}-\d{2}-\d{2}$/, example: "2026-08-30" },
+  WEEKLY: { pattern: /^\d{4}-\d{2}-\d{2}$/, example: "2026-08-30" },
+  MONTHLY: { pattern: /^\d{4}-\d{2}$/, example: "2026-08" },
+  YEARLY: { pattern: /^\d{4}$/, example: "2025" },
+};
+
 export async function appStoreSales(params: SalesParams, deps: SalesDeps = {}): Promise<ToolResult> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const credentials = deps.credentials ?? readCredentialsFromEnv();
@@ -24,8 +33,12 @@ export async function appStoreSales(params: SalesParams, deps: SalesDeps = {}): 
   if (!vendorNumber) {
     throw new Error("A vendor number is required. Set SEO_MCP_ASC_VENDOR_NUMBER; it is shown in App Store Connect under Payments and Financial Reports, beside the legal entity name.");
   }
-  const token = createAscToken(credentials, deps.now ?? new Date());
   const reportDate = params.reportDate ?? defaultReportDate(deps.now ?? new Date(), params.frequency);
+  const shape = DATE_SHAPES[params.frequency];
+  if (shape && !shape.pattern.test(reportDate)) {
+    throw new Error(`A ${params.frequency} report takes a reportDate like ${shape.example}; got "${reportDate}".`);
+  }
+  const token = createAscToken(credentials, deps.now ?? new Date());
 
   const query = new URLSearchParams({
     "filter[frequency]": params.frequency,
@@ -41,12 +54,13 @@ export async function appStoreSales(params: SalesParams, deps: SalesDeps = {}): 
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
-  // Apple answers a period with no sales with a 404 whose message says exactly
-  // that. It is an absence, not a failure, and reporting it as an error would
-  // make a quiet day look like a broken integration.
   if (response.status === 404) {
     const detail = await readDetail(response);
-    return empty(reportDate, params, vendorNumber, detail || "There were no sales for the date specified.");
+    // Apple uses 404 both for "no sales in that period" and for a report that
+    // does not exist for these parameters. Only the first is an absence of
+    // sales; the second must surface as the request failure it is.
+    if (/no sales/i.test(detail)) return empty(reportDate, params, vendorNumber, detail);
+    throw new Error(`App Store Connect has no ${params.frequency} ${params.reportType} ${params.reportSubType} report for ${reportDate}${detail ? `: ${detail}` : "."} Check the frequency, report type and date shape.`);
   }
   if (response.status === 401 || response.status === 403) {
     throw new Error(`App Store Connect rejected the credentials for sales reports (HTTP ${response.status}). Sales and Trends needs a team key with the Admin, Finance, or Sales and Reports role.`);
@@ -136,8 +150,18 @@ function parseTsv(tsv: string): Array<Record<string, string>> {
 }
 
 // Daily reports land the next day, so today is never available and yesterday
-// often is not either.
+// often is not either. The wider periods point at the last complete one, since
+// a period that is still running has nothing final to report.
 function defaultReportDate(now: Date, frequency: string): string {
-  const back = frequency === "DAILY" ? 2 : 8;
-  return new Date(now.getTime() - back * 86_400_000).toISOString().slice(0, 10);
+  const settled = new Date(now.getTime() - 2 * 86_400_000);
+  if (frequency === "WEEKLY") {
+    return new Date(settled.getTime() - settled.getUTCDay() * 86_400_000).toISOString().slice(0, 10);
+  }
+  if (frequency === "MONTHLY") {
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+  }
+  if (frequency === "YEARLY") {
+    return String(now.getUTCFullYear() - 1);
+  }
+  return settled.toISOString().slice(0, 10);
 }
