@@ -5,6 +5,7 @@ import type { ToolContext } from "../src/registry.js";
 import type { GoogleClients } from "../src/google-tools.js";
 
 const NOW = new Date("2026-09-03T11:30:45Z");
+const SNAPSHOT_DIR = "/snapshots";
 
 const ctx: ToolContext = {
   getClients: () => { throw new Error("no clients in test"); },
@@ -18,6 +19,11 @@ function params(overrides: Record<string, unknown> = {}) {
 function readers(overrides: Record<string, unknown> = {}) {
   return {
     now: NOW,
+    // The snapshot directory is pinned and every filesystem call is injected, so
+    // a test run never reaches a real path.
+    env: { SEO_MCP_SNAPSHOT_DIR: SNAPSHOT_DIR },
+    fileExists: () => false,
+    makeDir: () => {},
     readProperty: vi.fn(async (siteUrl: string) => ({
       siteUrl,
       totals: { clicks: 10, impressions: 100, ctr: 0.1, position: 5, daysWithData: 28, firstIncompleteDate: null },
@@ -136,12 +142,45 @@ describe("snapshot", () => {
     const written: Array<{ path: string; data: string }> = [];
     const deps = readers({ writeFile: (path: string, data: string) => void written.push({ path, data }) });
 
-    const result = await snapshot(ctx, params({ slugs: ["akismet"], outPath: "/tmp/snap.json" }), deps);
+    const result = await snapshot(ctx, params({ slugs: ["akismet"], outPath: "snap.json" }), deps);
 
     expect(written).toHaveLength(1);
-    expect(written[0]?.path).toBe("/tmp/snap.json");
+    expect(written[0]?.path).toBe("/snapshots/snap.json");
     expect(() => snapshotOutput.parse(JSON.parse(written[0]?.data ?? ""))).not.toThrow();
-    expect((result.structuredContent as any).writtenTo).toBe("/tmp/snap.json");
+    expect((result.structuredContent as any).writtenTo).toBe("/snapshots/snap.json");
+  });
+
+  it("refuses an outPath that points outside the snapshot directory", async () => {
+    const written: Array<{ path: string; data: string }> = [];
+    const deps = readers({ writeFile: (path: string, data: string) => void written.push({ path, data }) });
+
+    await expect(snapshot(ctx, params({ slugs: ["akismet"], outPath: "../escape.json" }), deps)).rejects.toThrow(/\/snapshots/);
+    expect(written).toHaveLength(0);
+  });
+
+  it("leaves an existing snapshot alone rather than truncating it", async () => {
+    const written: Array<{ path: string; data: string }> = [];
+    const deps = readers({
+      writeFile: (path: string, data: string) => void written.push({ path, data }),
+      fileExists: () => true,
+    });
+
+    await expect(snapshot(ctx, params({ slugs: ["akismet"], outPath: "snap.json" }), deps)).rejects.toThrow(/already exists/);
+    expect(written).toHaveLength(0);
+  });
+
+  it("replaces an existing snapshot when overwrite is asked for", async () => {
+    const written: Array<{ path: string; data: string }> = [];
+    const deps = readers({
+      writeFile: (path: string, data: string) => void written.push({ path, data }),
+      fileExists: () => true,
+    });
+
+    const result = await snapshot(ctx, params({ slugs: ["akismet"], outPath: "snap.json", overwrite: true }), deps);
+
+    expect(written).toHaveLength(1);
+    expect(written[0]?.path).toBe("/snapshots/snap.json");
+    expect((result.structuredContent as any).writtenTo).toBe("/snapshots/snap.json");
   });
 
   it("respects the window length", async () => {

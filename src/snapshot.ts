@@ -1,4 +1,5 @@
-import { writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
 import { searchAnalytics } from "./google-tools.js";
@@ -8,6 +9,7 @@ import { appStoreListing } from "./app-store-listing.js";
 import { playStoreStats } from "./play-store-stats.js";
 import { wporgPlugin } from "./wporg.js";
 import { formatToolError } from "./errors.js";
+import { resolveSnapshotPath } from "./snapshot-paths.js";
 
 type SnapshotParams = z.output<typeof snapshotInput>;
 
@@ -22,6 +24,9 @@ export interface SnapshotDeps {
   readPackage?: (packageName: string) => Promise<Record<string, unknown>>;
   readSlug?: (slug: string) => Promise<Record<string, unknown>>;
   writeFile?: (path: string, data: string) => void;
+  fileExists?: (path: string) => boolean;
+  makeDir?: (path: string) => void;
+  env?: NodeJS.ProcessEnv;
 }
 
 interface Window {
@@ -73,9 +78,19 @@ export async function snapshot(ctx: ToolContext, params: SnapshotParams, deps: S
   const lines = [formatSnapshot(structuredContent as Parameters<typeof formatSnapshot>[0])];
   if (params.outPath) {
     const write = deps.writeFile ?? ((path: string, data: string) => writeFileSync(path, data));
-    write(params.outPath, `${JSON.stringify(structuredContent, null, 2)}\n`);
-    structuredContent.writtenTo = params.outPath;
-    lines.push(`Written to ${params.outPath}.`);
+    const exists = deps.fileExists ?? existsSync;
+    const makeDir = deps.makeDir ?? ((path: string) => void mkdirSync(path, { recursive: true }));
+    const resolved = resolveSnapshotPath(params.outPath, deps.env ? { env: deps.env } : {});
+    // A series is only worth having if its earlier points survive. Replacing one
+    // has to be asked for, because the caller choosing the name cannot see what
+    // is already there.
+    if (exists(resolved) && !params.overwrite) {
+      throw new Error(`A snapshot already exists at ${resolved}; pass overwrite: true to replace it, or choose another name.`);
+    }
+    makeDir(dirname(resolved));
+    write(resolved, `${JSON.stringify(structuredContent, null, 2)}\n`);
+    structuredContent.writtenTo = resolved;
+    lines.push(`Written to ${resolved}.`);
   }
 
   return { content: [{ type: "text", text: lines.join("\n") }], structuredContent };

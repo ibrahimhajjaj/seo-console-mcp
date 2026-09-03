@@ -653,14 +653,15 @@ export const snapshotShape = {
   windowDays: z.number().int().min(1).max(480).default(28).describe("Search Console window in days, ending today"),
   platform: z.enum(["IOS", "MAC_OS", "TV_OS", "VISION_OS"]).default("IOS").describe("App Store platform for the app surfaces"),
   storefronts: z.array(z.string().regex(/^[a-z]{2}$/, "storefronts must be 2-letter lowercase country codes")).min(1).max(10).default(["us"]).describe("Storefront country codes for App Store ratings"),
-  outPath: z.string().trim().min(1).optional().describe("Write the document to this path so compare_snapshots can read it later"),
+  outPath: z.string().trim().min(1).optional().describe("File name or path inside the snapshot directory (SEO_MCP_SNAPSHOT_DIR, default ~/.config/seo-mcp/snapshots); must end in .json. An existing file is not overwritten unless overwrite is true"),
+  overwrite: z.boolean().default(false).describe("Replace an existing file at outPath; without it an existing file is left alone and reported"),
 };
 export const snapshotInput = z.object(snapshotShape);
 export const snapshotOutput = snapshotDocument;
 
 export const compareSnapshotsShape = {
-  from: z.string().trim().min(1).describe("Path to the earlier snapshot document"),
-  to: z.string().trim().min(1).describe("Path to the later snapshot document"),
+  from: z.string().trim().min(1).describe("Snapshot file name or path inside the snapshot directory"),
+  to: z.string().trim().min(1).describe("Snapshot file name or path inside the snapshot directory"),
   minImpressions: z.number().int().min(0).default(100).describe("Ignore page position moves below this many impressions on both sides"),
 };
 export const compareSnapshotsInput = z.object(compareSnapshotsShape);

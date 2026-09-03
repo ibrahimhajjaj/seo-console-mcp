@@ -2,12 +2,14 @@ import { readFileSync, statSync } from "node:fs";
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
 import { compareSnapshotsInput, snapshotDocument } from "./schemas.js";
+import { resolveSnapshotPath } from "./snapshot-paths.js";
 
 type CompareParams = z.output<typeof compareSnapshotsInput>;
 type SnapshotDocument = z.output<typeof snapshotDocument>;
 
 export interface CompareDeps {
   readDocument?: (path: string) => string;
+  env?: NodeJS.ProcessEnv;
 }
 
 // This tool does arithmetic, never judgement. It reports what moved between two
@@ -15,8 +17,11 @@ export interface CompareDeps {
 // the world that a diff cannot support.
 export async function compareSnapshots(params: CompareParams, deps: CompareDeps = {}): Promise<ToolResult> {
   const read = deps.readDocument ?? readCappedFile;
-  const from = loadDocument(read, params.from, "from");
-  const to = loadDocument(read, params.to, "to");
+  // Both sides go through the snapshot directory, so a caller cannot use this
+  // tool to find out what else is on the machine.
+  const options = deps.env ? { env: deps.env } : {};
+  const from = loadDocument(read, resolveSnapshotPath(params.from, options), "from");
+  const to = loadDocument(read, resolveSnapshotPath(params.to, options), "to");
 
   const elapsedHours = hoursBetween(from.takenAt, to.takenAt);
   // A surface that failed on either side has no comparable number. Saying so is
@@ -113,15 +118,18 @@ function loadDocument(read: (path: string) => string, path: string, side: string
   } catch {
     throw new Error(`Could not read the ${side} snapshot at ${path}.`);
   }
+  // Unparseable and parseable-but-wrong get the same answer on purpose. Telling
+  // them apart reports the shape of a file the caller was not allowed to read.
+  const notASnapshot = `The ${side} file at ${path} is not a snapshot document produced by the snapshot tool.`;
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error(`The ${side} snapshot at ${path} is not valid JSON.`);
+    throw new Error(notASnapshot);
   }
   const result = snapshotDocument.safeParse(parsed);
   if (!result.success) {
-    throw new Error(`The ${side} file at ${path} is not a snapshot document produced by the snapshot tool.`);
+    throw new Error(notASnapshot);
   }
   return result.data;
 }

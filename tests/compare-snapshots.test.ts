@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { compareSnapshots } from "../src/compare-snapshots.js";
 import { compareSnapshotsInput, compareSnapshotsOutput } from "../src/schemas.js";
 
@@ -25,11 +25,15 @@ function document(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// Paths resolve inside the snapshot directory, so the directory is pinned here
+// and the map is keyed by what the resolver produces.
+const env = { SEO_MCP_SNAPSHOT_DIR: "/snapshots" };
+
 function compare(from: unknown, to: unknown, overrides: Record<string, unknown> = {}) {
-  const files: Record<string, string> = { "/from.json": JSON.stringify(from), "/to.json": JSON.stringify(to) };
+  const files: Record<string, string> = { "/snapshots/from.json": JSON.stringify(from), "/snapshots/to.json": JSON.stringify(to) };
   return compareSnapshots(
-    compareSnapshotsInput.parse({ from: "/from.json", to: "/to.json", ...overrides }),
-    { readDocument: (path) => files[path] ?? (() => { throw new Error("missing"); })() },
+    compareSnapshotsInput.parse({ from: "from.json", to: "to.json", ...overrides }),
+    { env, readDocument: (path) => files[path] ?? (() => { throw new Error("missing"); })() },
   );
 }
 
@@ -158,18 +162,30 @@ describe("compareSnapshots", () => {
     await expect(compare({ hello: "world" }, document())).rejects.toThrow(/not a snapshot document/);
   });
 
-  it("refuses a file that is not valid JSON", async () => {
-    const files: Record<string, string> = { "/from.json": "not json", "/to.json": "{}" };
+  it("refuses a file that is not valid JSON without saying how it is wrong", async () => {
+    // Unparseable and parseable-but-wrong share one message, so a caller cannot
+    // learn the shape of a file from the refusal.
+    const files: Record<string, string> = { "/snapshots/from.json": "not json", "/snapshots/to.json": "{}" };
     await expect(compareSnapshots(
-      compareSnapshotsInput.parse({ from: "/from.json", to: "/to.json" }),
-      { readDocument: (path) => files[path] as string },
-    )).rejects.toThrow(/not valid JSON/);
+      compareSnapshotsInput.parse({ from: "from.json", to: "to.json" }),
+      { env, readDocument: (path) => files[path] as string },
+    )).rejects.toThrow(/not a snapshot document/);
   });
 
   it("reports an unreadable path without guessing at its contents", async () => {
     await expect(compareSnapshots(
-      compareSnapshotsInput.parse({ from: "/missing.json", to: "/to.json" }),
-      { readDocument: () => { throw new Error("ENOENT"); } },
+      compareSnapshotsInput.parse({ from: "missing.json", to: "to.json" }),
+      { env, readDocument: () => { throw new Error("ENOENT"); } },
     )).rejects.toThrow(/Could not read the from snapshot/);
+  });
+
+  it("refuses a path outside the snapshot directory before reading anything", async () => {
+    const readDocument = vi.fn(() => "{}");
+
+    await expect(compareSnapshots(
+      compareSnapshotsInput.parse({ from: "../evil.json", to: "to.json" }),
+      { env, readDocument },
+    )).rejects.toThrow(/\/snapshots/);
+    expect(readDocument).not.toHaveBeenCalled();
   });
 });

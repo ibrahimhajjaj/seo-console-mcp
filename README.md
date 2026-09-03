@@ -150,7 +150,7 @@ For example:
 node dist/index.js --credentials /absolute/path/seo-mcp.key.json
 ```
 
-`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`. `keyword_ideas` only needs them when `siteUrl` is passed for the Search Console cross-reference. App Store Sales and Trends reads `SEO_MCP_ASC_VENDOR_NUMBER`. The Chrome UX Report tools read `SEO_MCP_CRUX_KEY`, falling back to `SEO_MCP_PAGESPEED_KEY` when the same key is allowed to call `chromeuxreport.googleapis.com`.
+`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`. `keyword_ideas` only needs them when `siteUrl` is passed for the Search Console cross-reference. App Store Sales and Trends reads `SEO_MCP_ASC_VENDOR_NUMBER`. The Chrome UX Report tools read `SEO_MCP_CRUX_KEY`, falling back to `SEO_MCP_PAGESPEED_KEY` when the same key is allowed to call `chromeuxreport.googleapis.com`. `snapshot` and `compare_snapshots` keep their documents in `SEO_MCP_SNAPSHOT_DIR`, defaulting to `~/.config/seo-mcp/snapshots`, and cannot read or write outside it.
 
 ## Security model
 
@@ -549,19 +549,21 @@ A surface that cannot be read is recorded in place with its error and named in `
   "packages": ["com.example.app"],
   "slugs": ["akismet"],
   "windowDays": 28,
-  "outPath": "/path/to/2026-09-03.json"
+  "outPath": "2026-09-03.json"
 }
 ```
 
-Pass `outPath` to write the document where `compare_snapshots` can read it later. Position and CTR are `null` rather than `0` when a window has no impressions, so an empty window never compares against real data as a collapse.
+Pass `outPath` to write the document where `compare_snapshots` can read it later. It is a file name inside the snapshot directory, `SEO_MCP_SNAPSHOT_DIR` or `~/.config/seo-mcp/snapshots` by default; a path that resolves outside that directory or does not end in `.json` is refused, and an existing file is left in place and reported unless you pass `overwrite: true`. A model chooses this string, so the directory is the boundary that keeps a tool call from truncating anything else on the machine. Position and CTR are `null` rather than `0` when a window has no impressions, so an empty window never compares against real data as a collapse.
 
 ### `compare_snapshots`
 
 Reads two snapshot documents and reports what changed between them: clicks, impressions and position per property, page-level movers above an impressions floor, install and rating deltas, App Store version and locale-count changes.
 
 ```json
-{ "from": "/path/to/2026-08-06.json", "to": "/path/to/2026-09-03.json", "minImpressions": 100 }
+{ "from": "2026-08-06.json", "to": "2026-09-03.json", "minImpressions": 100 }
 ```
+
+`from` and `to` resolve inside the same snapshot directory as `snapshot`'s `outPath`, so this tool reads snapshots and nothing else.
 
 It does arithmetic, never judgement. It will not tell you whether a change was good or what caused it, because a diff cannot support that claim. A surface that failed or is missing on either side is marked not comparable and named, so a collection failure is never read as a change, and a file that is not a snapshot document is refused rather than half-parsed.
 
