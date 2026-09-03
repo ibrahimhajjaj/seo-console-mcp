@@ -2,6 +2,10 @@ import { z } from "zod";
 import {
   appStoreListingOutput,
   appStoreListingShape,
+  compareSnapshotsOutput,
+  compareSnapshotsShape,
+  snapshotOutput,
+  snapshotShape,
   auditSiteOutput,
   auditSiteShape,
   compareSearchPeriodsOutput,
@@ -61,6 +65,8 @@ import {
 } from "./google-tools.js";
 import { validateCredentials } from "./credentials.js";
 import { appStoreListing } from "./app-store-listing.js";
+import { compareSnapshots } from "./compare-snapshots.js";
+import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
 import { fetchHtml } from "./fetch-page.js";
 import { submitIndexNow } from "./indexnow.js";
@@ -293,6 +299,20 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: appStoreListingShape,
     outputSchema: appStoreListingOutput,
     run: (_ctx, params) => appStoreListing(params),
+  }),
+  defineTool({
+    name: "snapshot",
+    description: "Capture every surface in one timestamped document: Search Console totals and top rows per property, App Store listings, Google Play installs and traffic, and WordPress.org stats. A surface that cannot be read is recorded as an error in place rather than omitted; read-only",
+    inputShape: snapshotShape,
+    outputSchema: snapshotOutput,
+    run: (ctx, params) => snapshot(ctx, params),
+  }),
+  defineTool({
+    name: "compare_snapshots",
+    description: "Compare two snapshot documents and return the differences between them: clicks, impressions, positions, installs, ratings and locale counts. Reports arithmetic only, never whether a change was good or what caused it; read-only",
+    inputShape: compareSnapshotsShape,
+    outputSchema: compareSnapshotsOutput,
+    run: (_ctx, params) => compareSnapshots(params),
   }),
 ];
 
