@@ -34,6 +34,8 @@ import {
   listPropertiesShape,
   playStoreStatsOutput,
   playStoreStatsShape,
+  playVitalsOutput,
+  playVitalsShape,
   listSitemapsOutput,
   listSitemapsShape,
   pageSpeedOutput,
@@ -84,6 +86,7 @@ import { submitIndexNow } from "./indexnow.js";
 import { keywordIdeas } from "./keyword-ideas.js";
 import { parseSeoHtml } from "./seo-audit.js";
 import { playStoreStats } from "./play-store-stats.js";
+import { playVitals } from "./play-vitals.js";
 import { wporgPlugin } from "./wporg.js";
 
 // A tool's logic lives in one place and is reached identically by the MCP server
@@ -310,6 +313,13 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: appStoreListingShape,
     outputSchema: appStoreListingOutput,
     run: (_ctx, params) => appStoreListing(params),
+  }),
+  defineTool({
+    name: "play_vitals",
+    description: "Read Android vitals from the Play Developer Reporting API: crash rate, ANR rate, error counts and startup metrics, daily or hourly, with optional breakdowns. Reports how fresh the data actually is. Carries no acquisition or conversion data; use play_store_stats for that. Read-only",
+    inputShape: playVitalsShape,
+    outputSchema: playVitalsOutput,
+    run: (_ctx, params) => playVitals(params),
   }),
   defineTool({
     name: "app_store_discovery",

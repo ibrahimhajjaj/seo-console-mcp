@@ -766,3 +766,26 @@ export const appStoreDiscoveryOutput = z.object({
   })),
   notes: z.array(z.string()),
 });
+
+export const playVitalsShape = {
+  packageName: z.string().trim().min(1).max(200).describe('Android package name'),
+  metricSets: z.array(z.enum(['crashRate','anrRate','errorCount','slowStartRate','excessiveWakeupRate'])).min(1).max(5).default(['crashRate','anrRate']).describe('Which Android vitals metric sets to query'),
+  aggregationPeriod: z.enum(['DAILY','HOURLY']).default('DAILY').describe('DAILY is reported in America/Los_Angeles, HOURLY in UTC'),
+  days: z.number().int().min(1).max(90).default(28).describe('How many days back to query'),
+  dimensions: z.array(z.string().trim().min(1)).max(5).default([]).describe('Breakdown dimensions such as versionCode or countryCode'),
+  pageSize: z.number().int().min(1).max(100000).default(1000).describe('Rows per metric set'),
+};
+export const playVitalsInput = z.object(playVitalsShape);
+export const playVitalsOutput = z.object({
+  packageName: z.string(),
+  aggregationPeriod: z.string(),
+  days: z.number(),
+  metricSets: z.record(z.string(), z.object({
+    available: z.boolean(),
+    rowCount: z.number().nullable(),
+    latestDataAt: z.string().nullable(),
+    rows: z.array(z.record(z.string(), z.unknown())),
+    error: z.string().optional(),
+  })),
+  notes: z.array(z.string()),
+});
