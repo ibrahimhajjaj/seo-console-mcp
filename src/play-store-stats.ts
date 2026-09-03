@@ -21,6 +21,12 @@ export async function playStoreStats(
   deps: { readReport?: (objectPath: string) => Promise<Buffer | null>; now?: Date } = {},
 ): Promise<ToolResult> {
   const readReport = deps.readReport ?? liveReader();
+  // Defaulted here rather than relying on the schema: a caller that builds params
+  // directly must not produce undefined lookups.
+  const include = params.include ?? [];
+  const installsDimension = params.installsDimension ?? "overview";
+  const ratingsDimension = params.ratingsDimension ?? "country";
+  const crashesDimension = params.crashesDimension ?? "app_version";
   const window = params.startDate && params.endDate ? { startDate: params.startDate, endDate: params.endDate } : null;
   // Reports are monthly files but their rows are daily, so a window is served by
   // reading every month it touches and filtering the rows locally. A seven-day
@@ -30,10 +36,20 @@ export async function playStoreStats(
 
   const installsBuffers: Buffer[] = [];
   const trafficBuffers: Buffer[] = [];
+  const ratingsBuffers: Buffer[] = [];
+  const crashesBuffers: Buffer[] = [];
   const monthsRead: string[] = [];
   const monthsMissing: string[] = [];
   for (const current of months) {
-    const installs = await readReport(`stats/installs/installs_${params.packageName}_${current}_overview.csv`);
+    const installs = await readReport(`stats/installs/installs_${params.packageName}_${current}_${installsDimension}.csv`);
+    if (include.includes("ratings")) {
+      const ratings = await readReport(`stats/ratings/ratings_${params.packageName}_${current}_${ratingsDimension}.csv`);
+      if (ratings) ratingsBuffers.push(ratings);
+    }
+    if (include.includes("crashes")) {
+      const crashes = await readReport(`stats/crashes/crashes_${params.packageName}_${current}_${crashesDimension}.csv`);
+      if (crashes) crashesBuffers.push(crashes);
+    }
     const traffic = await readReport(`stats/store_performance/store_performance_${params.packageName}_${current}_traffic_source.csv`);
     if (installs) installsBuffers.push(installs);
     if (traffic) trafficBuffers.push(traffic);
@@ -41,7 +57,9 @@ export async function playStoreStats(
   }
   const installsBuffer = installsBuffers.length ? installsBuffers : null;
   const trafficBuffer = trafficBuffers.length ? trafficBuffers : null;
-  if (!installsBuffer && !trafficBuffer) {
+  // Only fail when nothing at all was found: a caller asking for ratings alone
+  // has a complete answer without installs or store performance.
+  if (!installsBuffer && !trafficBuffer && !ratingsBuffers.length && !crashesBuffers.length) {
     throw new Error(`Neither installs nor store performance report found for ${params.packageName} in ${month}. Check the package name, the month, and that SEO_MCP_PLAY_BUCKET names the right reporting bucket; the reports also lag by days, so a very recent month may not exist yet.`);
   }
 
@@ -55,6 +73,15 @@ export async function playStoreStats(
   if (!trafficBuffer) notes.push("Traffic source report is missing.");
   if (window && installs && installs.datesPresent.length < daysBetween(window)) {
     notes.push(`The window covers ${daysBetween(window)} days but only ${installs.datesPresent.length} have install rows; the reports lag by days.`);
+  }
+
+  const ratingsReading = ratingsBuffers.length ? readDimensionReport(ratingsBuffers, window) : null;
+  const crashesReading = crashesBuffers.length ? readDimensionReport(crashesBuffers, window) : null;
+  if (include.includes("ratings") && !ratingsReading) {
+    notes.push("No ratings report exists for this package and period. Google emits a report only when there is something to report, so this is an absence rather than a fetch failure.");
+  }
+  if (include.includes("crashes") && !crashesReading) {
+    notes.push("No crashes report exists for this package and period, which is an absence rather than a fetch failure.");
   }
 
   // The last date present in either report is the honest "as of" date, since a
@@ -87,6 +114,9 @@ export async function playStoreStats(
       datesPresent: installs?.datesPresent ?? [],
       installsLatest: installs?.latest ?? null,
       installsWindowTotals: installs?.windowTotals ?? {},
+      installsDimension,
+      ratings: ratingsReading,
+      crashes: crashesReading,
       notes,
     },
   };
@@ -142,6 +172,51 @@ function readInstalls(buffers: Buffer[], window: DateWindow | null): InstallsRea
     datesPresent: [...new Set(dated.map((entry) => entry.date))],
     latest,
     windowTotals,
+  };
+}
+
+interface DimensionReading {
+  dimension: string;
+  lastDate: string | null;
+  rows: Array<{ value: string; latest: Record<string, number | string>; totals: Record<string, number> }>;
+}
+
+function readDimensionReport(buffers: Buffer[], window: DateWindow | null): DimensionReading {
+  let dimensionColumn = "Unknown";
+  const byValue = new Map<string, { latestDate: string; latest: Record<string, number | string>; totals: Record<string, number> }>();
+  let lastDate: string | null = null;
+  for (const buffer of buffers) {
+    const rows = parseCsv(buffer);
+    const header = rows[0]?.map((cell) => cell.trim()) ?? [];
+    const dateIndex = header.indexOf('Date');
+    if (header[2]) dimensionColumn = header[2];
+    const valueIndex = 2;
+    for (const row of rows.slice(1)) {
+      const date = dateIndex >= 0 ? row[dateIndex] : undefined;
+      if (!date || !withinWindow(date, window)) continue;
+      if (!lastDate || date >= lastDate) lastDate = date;
+      const value = (valueIndex >= 0 ? row[valueIndex]?.trim() : '') || 'Unknown';
+      const entry = byValue.get(value) ?? { latestDate: '', latest: {}, totals: {} };
+      header.forEach((name, index) => {
+        const parsed = toNumber(row[index]);
+        // Only daily columns are flows that can be summed across the window.
+        if (name.startsWith('Daily') && parsed !== null) {
+          entry.totals[name] = (entry.totals[name] ?? 0) + parsed;
+        }
+      });
+      if (date >= entry.latestDate) {
+        entry.latestDate = date;
+        entry.latest = Object.fromEntries(header.map((name, index) => [name, toNumber(row[index]) ?? row[index] ?? '']));
+      }
+      byValue.set(value, entry);
+    }
+  }
+  return {
+    dimension: dimensionColumn,
+    lastDate,
+    rows: [...byValue.entries()]
+      .map(([value, entry]) => ({ value, latest: entry.latest, totals: entry.totals }))
+      .sort((left, right) => left.value.localeCompare(right.value)),
   };
 }
 

@@ -212,3 +212,55 @@ describe("playStoreStats", () => {
     expect(calls.some((path) => path.includes("app.getpsst_202607_"))).toBe(true);
   });
 });
+
+describe("playStoreStats report families", () => {
+  it("reads a ratings report and groups it by its dimension column", async () => {
+    const ratings =
+      "Date,Package Name,Country,Daily Average Rating,Total Average Rating\r\n" +
+      "2023-10-01,app.azkarly,US,4.5,4.2\r\n" +
+      "2023-10-02,app.azkarly,US,5.0,4.3\r\n" +
+      "2023-10-02,app.azkarly,GB,3.0,3.1\r\n";
+    const { readReport } = reader({ "ratings_app.azkarly_202310": ratings });
+
+    const result = await playStoreStats(
+      { packageName: "app.azkarly", month: "202310", include: ["ratings"], ratingsDimension: "country" } as any,
+      { readReport },
+    );
+
+    const report = (result.structuredContent as any).ratings;
+    expect(report.dimension).toBe("Country");
+    expect(report.rows.map((row: any) => row.value)).toEqual(["GB", "US"]);
+    // Latest reading per dimension value, not a sum: a rating is not a flow.
+    expect(report.rows.find((row: any) => row.value === "US").latest["Total Average Rating"]).toBe(4.3);
+  });
+
+  it("treats a missing ratings report as an absence, not a failure", async () => {
+    const installs = "Date,Package Name,Active Device Installs\r\n2023-10-01,app.getpsst,100\r\n";
+    const { readReport } = reader({ "installs_app.getpsst_202310": installs });
+
+    const result = await playStoreStats(
+      { packageName: "app.getpsst", month: "202310", include: ["ratings"] } as any,
+      { readReport },
+    );
+
+    expect((result.structuredContent as any).ratings).toBeNull();
+    expect((result.structuredContent as any).notes.join(" ")).toMatch(/absence rather than a fetch failure/);
+    expect((result.structuredContent as any).activeDeviceInstalls).toBe(100);
+  });
+
+  it("reads a breakdown dimension instead of the overview file when asked", async () => {
+    const byCountry =
+      "Date,Package Name,Country,Active Device Installs,Daily Device Installs\r\n" +
+      "2023-10-01,app.getpsst,US,80,3\r\n" +
+      "2023-10-01,app.getpsst,GB,20,1\r\n";
+    const { readReport, calls } = reader({ "installs_app.getpsst_202310_country": byCountry });
+
+    await playStoreStats(
+      { packageName: "app.getpsst", month: "202310", installsDimension: "country" } as any,
+      { readReport },
+    );
+
+    expect(calls.some((path) => path.includes("_202310_country.csv"))).toBe(true);
+    expect(calls.some((path) => path.includes("_overview.csv"))).toBe(false);
+  });
+});
