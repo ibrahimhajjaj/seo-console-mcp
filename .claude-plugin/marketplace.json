@@ -8,8 +8,19 @@
     {
       "name": "seo-console",
       "source": "./",
-      "description": "Senior product-marketing manager over Google Search Console: search analytics, striking-distance keywords, CTR gaps, cannibalization, on-page and whole-site audits, indexing coverage, and PageSpeed.",
-      "keywords": ["seo", "google-search-console", "pagespeed", "marketing"]
+      "description": "Senior product-marketing manager across every place a product gets discovered: Google Search Console, the App Store, Google Play, WordPress.org and real-user Core Web Vitals. Search analytics, striking-distance keywords, CTR gaps, cannibalization, store listings and conversion, App Store keywords and sales, Android vitals, on-page and whole-site audits, indexing coverage, PageSpeed, and timestamped snapshots you can diff.",
+      "keywords": [
+        "seo",
+        "aso",
+        "google-search-console",
+        "app-store-connect",
+        "google-play",
+        "wordpress",
+        "core-web-vitals",
+        "pagespeed",
+        "marketing",
+        "mcp"
+      ]
     }
   ]
 }

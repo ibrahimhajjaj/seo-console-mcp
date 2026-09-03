@@ -1,7 +1,7 @@
 {
   "name": "seo-console-mcp",
   "version": "0.7.0",
-  "description": "MCP server for Google Search Console, PageSpeed Insights, and on-page SEO audits",
+  "description": "MCP server for Google Search Console, the App Store, Google Play, WordPress.org and Core Web Vitals: search analytics, ASO, store conversion, on-page audits, and diffable snapshots",
   "type": "module",
   "bin": {
     "seo-console-mcp": "dist/index.js",
@@ -30,7 +30,13 @@
   "keywords": [
     "mcp",
     "seo",
+    "aso",
     "google-search-console",
+    "app-store-connect",
+    "google-play",
+    "wordpress",
+    "core-web-vitals",
+    "crux",
     "pagespeed"
   ],
   "license": "MIT",
