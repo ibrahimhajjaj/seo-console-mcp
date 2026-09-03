@@ -6,6 +6,8 @@ import {
   appStoreDiscoveryShape,
   appStoreReviewsOutput,
   appStoreReviewsShape,
+  appStoreSalesOutput,
+  appStoreSalesShape,
   compareSnapshotsOutput,
   compareSnapshotsShape,
   cruxFieldDataOutput,
@@ -77,6 +79,7 @@ import { validateCredentials } from "./credentials.js";
 import { appStoreListing } from "./app-store-listing.js";
 import { appStoreReviews } from "./app-store-reviews.js";
 import { appStoreDiscovery } from "./app-store-discovery.js";
+import { appStoreSales } from "./app-store-sales.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
 import { snapshot } from "./snapshot.js";
@@ -313,6 +316,13 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: appStoreListingShape,
     outputSchema: appStoreListingOutput,
     run: (_ctx, params) => appStoreListing(params),
+  }),
+  defineTool({
+    name: "app_store_sales",
+    description: "Read App Store Sales and Trends: units downloaded per day per territory per app, summarized by SKU. Needs SEO_MCP_ASC_VENDOR_NUMBER and a team key with Admin, Finance or Sales and Reports. A period with no sales is reported as an absence rather than an error. Read-only",
+    inputShape: appStoreSalesShape,
+    outputSchema: appStoreSalesOutput,
+    run: (_ctx, params) => appStoreSales(params),
   }),
   defineTool({
     name: "play_vitals",

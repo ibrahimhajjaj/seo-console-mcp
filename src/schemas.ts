@@ -789,3 +789,26 @@ export const playVitalsOutput = z.object({
   })),
   notes: z.array(z.string()),
 });
+
+export const appStoreSalesShape = {
+  reportDate: isoDate.optional().describe('Report date in YYYY-MM-DD; defaults to two days back for DAILY, since daily reports land the next day'),
+  frequency: z.enum(['DAILY','WEEKLY','MONTHLY','YEARLY']).default('DAILY').describe('Report period'),
+  reportType: z.enum(['SALES','PRE_ORDER','SUBSCRIPTION','SUBSCRIPTION_EVENT','SUBSCRIBER','INSTALLS','FIRST_ANNUAL']).default('SALES').describe('Sales and Trends report type'),
+  reportSubType: z.enum(['SUMMARY','DETAILED','SUMMARY_INSTALL_TYPE','SUMMARY_TERRITORY','SUMMARY_CHANNEL']).default('SUMMARY').describe('Report sub type'),
+  version: z.string().trim().min(1).max(10).optional().describe('Report version, such as 1_0 or 1_3, when the default is not accepted'),
+  includeRows: z.boolean().default(false).describe('Include every raw report row as well as the per-SKU summary'),
+};
+export const appStoreSalesInput = z.object(appStoreSalesShape);
+export const appStoreSalesOutput = z.object({
+  reportDate: z.string(),
+  frequency: z.string(),
+  reportType: z.string(),
+  reportSubType: z.string(),
+  vendorNumber: z.string(),
+  hasData: z.boolean(),
+  rowCount: z.number(),
+  totalUnits: z.number(),
+  apps: z.array(z.object({ sku: z.string(), title: z.string(), units: z.number(), territories: z.record(z.string(), z.number()) })),
+  rows: z.array(z.record(z.string(), z.string())),
+  notes: z.array(z.string()),
+});
