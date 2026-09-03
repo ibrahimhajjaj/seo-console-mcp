@@ -195,6 +195,9 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
   }
 
   const ratings = await lookupRatings(appId, params.storefronts, fetchImpl, notes);
+  if (ratings.length) {
+    notes.push("Ratings come from the public App Store storefront lookup, not from App Store Connect, whose API exposes no aggregate rating at all. Every other field here is read from App Store Connect, so the two sit side by side from different sources.");
+  }
   const overLimit = locales.flatMap((entry) => [
     ...(entry.indexed.name.overLimit ? [`${entry.locale} name`] : []),
     ...(entry.indexed.subtitle.overLimit ? [`${entry.locale} subtitle`] : []),
@@ -360,14 +363,21 @@ export async function ascGet(path: string, token: string, fetchImpl: typeof fetc
   return (await response.json()) as JsonApiResponse;
 }
 
+const RATINGS_SOURCE = "itunes-lookup";
+
 async function lookupRatings(
   appId: string,
   storefronts: string[],
   fetchImpl: typeof fetch,
   notes: string[],
-): Promise<Array<{ storefront: string; averageUserRating: number | null; userRatingCount: number | null }>> {
+): Promise<Array<{ storefront: string; source: string; averageUserRating: number | null; userRatingCount: number | null }>> {
+  // Every entry carries its source. App Store Connect has no aggregate rating
+  // resource at all, only age ratings, so the star rating has to come from the
+  // public storefront lookup instead. That is a different pipeline reporting a
+  // number that looks identical, and a caller holding both a listing and a
+  // rating would otherwise have no way to tell they were read from two places.
   return Promise.all(storefronts.map(async (storefront) => {
-    const empty = { storefront, averageUserRating: null, userRatingCount: null };
+    const empty = { storefront, source: RATINGS_SOURCE, averageUserRating: null, userRatingCount: null };
     try {
       const response = await fetchImpl(`https://itunes.apple.com/lookup?id=${encodeURIComponent(appId)}&country=${encodeURIComponent(storefront)}`, {
         headers: { "user-agent": USER_AGENT },
@@ -382,6 +392,7 @@ async function lookupRatings(
       if (!entry) return empty;
       return {
         storefront,
+        source: RATINGS_SOURCE,
         averageUserRating: typeof entry.averageUserRating === "number" ? entry.averageUserRating : null,
         userRatingCount: typeof entry.userRatingCount === "number" ? entry.userRatingCount : null,
       };
@@ -418,7 +429,7 @@ function formatListing(listing: {
   versionString: string | null;
   localeCount: number;
   locales: Array<{ locale: string; indexed: { name: Measured; subtitle: Measured; keywords: Measured }; promotionalText: Measured; partial: boolean }>;
-  ratings: Array<{ storefront: string; averageUserRating: number | null; userRatingCount: number | null }>;
+  ratings: Array<{ storefront: string; source: string; averageUserRating: number | null; userRatingCount: number | null }>;
   overLimit: string[];
   notes: string[];
 }): string {
@@ -438,7 +449,7 @@ function formatListing(listing: {
     : "No field is over its character limit.");
   lines.push("promotionalText is the only field above that can be changed on a live version without a review.");
   for (const rating of listing.ratings) {
-    lines.push(`Ratings (${rating.storefront}): ${rating.averageUserRating ?? "none"} from ${rating.userRatingCount ?? 0} rating(s)`);
+    lines.push(`Ratings (${rating.storefront}, via ${rating.source}): ${rating.averageUserRating ?? "none"} from ${rating.userRatingCount ?? 0} rating(s)`);
   }
   lines.push(...listing.notes.map((note) => `Note: ${note}`));
   return lines.join("\n");

@@ -523,8 +523,16 @@ A team key reaches every app on the team, so one key can serve them all. What li
 `ratings` is a list, one entry per requested storefront, not an object keyed by storefront:
 
 ```json
-{ "ratings": [{ "storefront": "us", "averageUserRating": 4.5, "userRatingCount": 12 }] }
+{ "ratings": [{ "storefront": "us", "source": "itunes-lookup", "averageUserRating": 4.5, "userRatingCount": 12 }] }
 ```
+
+The star rating does not come from App Store Connect. Its API has no aggregate
+rating resource at all, only age ratings, so the rating is read from the public
+App Store storefront lookup while every other field on this tool comes from App
+Store Connect. Two sources reporting one number that looks the same either way,
+which is why each entry carries `source`. A rating from a store page and a
+rating from a private API are not interchangeable and should not be compared as
+if they were the same measurement.
 
 ### `snapshot`
 

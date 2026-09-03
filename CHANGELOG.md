@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Every rating `app_store_listing` returns now names its `source`, and the tool
+  says outright that the number came from the public App Store storefront
+  lookup rather than from App Store Connect, whose API has no aggregate rating
+  resource at all, only age ratings. Every other field on that tool is read from
+  App Store Connect, so a caller was holding two measurements from two pipelines
+  that render as the same number. Snapshots taken before the label still parse,
+  since refusing them would make recorded history uncomparable.
 - The docs no longer claim an App Store Connect key is per app. A team key
   reaches every app on the team; what limits it is the role it was created with,
   and Apple does not allow that role to be changed afterwards, so reading Sales

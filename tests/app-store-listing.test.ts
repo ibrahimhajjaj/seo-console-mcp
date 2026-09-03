@@ -234,6 +234,15 @@ describe("appStoreListing", () => {
     await expect(appStoreListing(params(), { fetchImpl, credentials: credentials() })).rejects.toThrow(/rejected the credentials/);
   });
 
+  it("names where a rating came from, since App Store Connect has no aggregate rating", async () => {
+    const result = await appStoreListing(params(), { fetchImpl: fakeFetch(), credentials: credentials() });
+    const structured = result.structuredContent as { ratings: Array<Record<string, unknown>>; notes: string[] };
+
+    expect(structured.ratings).toEqual([{ storefront: "us", source: "itunes-lookup", averageUserRating: 4.5, userRatingCount: 12 }]);
+    expect(structured.notes.join(" ")).toMatch(/not from App Store Connect/);
+    expect(result.content[0]?.text).toContain("via itunes-lookup");
+  });
+
   it("reports a failed ratings lookup as unknown rather than as no ratings", async () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
@@ -244,7 +253,7 @@ describe("appStoreListing", () => {
     const result = await appStoreListing(params(), { fetchImpl, credentials: credentials() });
 
     expect((result.structuredContent as { notes: string[] }).notes.join(" ")).toMatch(/ratings lookup for us failed/);
-    expect((result.structuredContent as { ratings: unknown[] }).ratings).toEqual([{ storefront: "us", averageUserRating: null, userRatingCount: null }]);
+    expect((result.structuredContent as { ratings: unknown[] }).ratings).toEqual([{ storefront: "us", source: "itunes-lookup", averageUserRating: null, userRatingCount: null }]);
   });
 
   it("matches its declared output schema", async () => {

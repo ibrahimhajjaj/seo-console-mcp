@@ -312,7 +312,7 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "app_store_listing",
-    description: "Read an App Store listing's indexed fields per locale (name, subtitle, keywords) against Apple's character limits, plus promotional text, version state and public ratings. Needs SEO_MCP_ASC_KEY_PATH, SEO_MCP_ASC_KEY_ID and SEO_MCP_ASC_ISSUER_ID; read-only",
+    description: "Read an App Store listing's indexed fields per locale (name, subtitle, keywords) against Apple's character limits, plus promotional text, version state and star ratings. The ratings come from the public storefront lookup because App Store Connect exposes no aggregate rating; each entry names its source. Needs SEO_MCP_ASC_KEY_PATH, SEO_MCP_ASC_KEY_ID and SEO_MCP_ASC_ISSUER_ID; read-only",
     inputShape: appStoreListingShape,
     outputSchema: appStoreListingOutput,
     run: (_ctx, params) => appStoreListing(params),

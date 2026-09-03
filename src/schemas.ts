@@ -567,6 +567,7 @@ export const appStoreListingOutput = z.object({
   })),
   ratings: z.array(z.object({
     storefront: z.string(),
+    source: z.string(),
     averageUserRating: z.number().nullable(),
     userRatingCount: z.number().nullable(),
   })),
@@ -586,6 +587,8 @@ const snapshotRows = z.object({ rows: z.array(snapshotRow), truncated: z.boolean
 const snapshotWindow = z.object({ startDate: z.string(), endDate: z.string() });
 const snapshotRatings = z.array(z.object({
   storefront: z.string(),
+  // Optional so a snapshot taken before the source was recorded still parses.
+  source: z.string().optional(),
   averageUserRating: z.number().nullable(),
   userRatingCount: z.number().nullable(),
 }));
