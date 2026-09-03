@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 import { createPublicOnlyLookup, fetchHtml } from "../src/fetch-page.js";
@@ -32,6 +33,38 @@ describe("createPublicOnlyLookup", () => {
 
     expect(err).toBeInstanceOf(Error);
     expect(err?.message).toContain("non-public address");
+  });
+
+  it.each([
+    "192.0.0.8",
+    "198.18.0.1",
+    "224.0.0.1",
+    "240.0.0.1",
+    "ff02::1",
+    "::ffff:10.0.0.5",
+    "::ffff:a00:5",
+    // NAT64, 6to4 and the v4-compatible form all wrap 10.0.0.5.
+    "64:ff9b::10.0.0.5",
+    "64:ff9b::a00:5",
+    "::10.0.0.5",
+    "2002:a00:5::",
+  ])("rejects %s", async (address) => {
+    const { err } = await runLookup([{ address, family: isIP(address) }]);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain("non-public address");
+  });
+
+  it.each([
+    "93.184.216.34",
+    // The same transition prefixes wrapping the public 93.184.216.34.
+    "64:ff9b::5db8:d822",
+    "2002:5db8:d822::",
+    "2606:2800:220:1:248:1893:25c8:1946",
+  ])("allows %s", async (address) => {
+    const addresses = [{ address, family: isIP(address) }];
+
+    await expect(runLookup(addresses)).resolves.toEqual({ err: null, result: addresses });
   });
 });
 
@@ -74,6 +107,16 @@ describe("fetchHtml", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
       lookupHost: async () => [{ address: "192.168.1.7", family: 4 }],
     })).rejects.toThrow("Refusing to fetch internal.example: resolves to a non-public address");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses a hostname that resolves to a NAT64 address wrapping a private one", async () => {
+    const fetchImpl = vi.fn();
+
+    await expect(fetchHtml("http://host.example/", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      lookupHost: async () => [{ address: "64:ff9b::10.0.0.5", family: 6 }],
+    })).rejects.toThrow(/non-public address/);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 

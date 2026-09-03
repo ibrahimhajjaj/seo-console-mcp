@@ -10,7 +10,8 @@ const FETCH_TIMEOUT_MS = 15_000;
 const MAX_REDIRECTS = 5;
 
 // Non-public ranges a model-driven fetch must not reach: loopback, RFC1918,
-// CGNAT, link-local (incl. cloud metadata), ULA, unspecified, broadcast.
+// CGNAT, link-local (incl. cloud metadata), ULA, unspecified, broadcast,
+// IETF protocol assignments, benchmarking, multicast, and reserved space.
 const nonPublic = new BlockList();
 nonPublic.addSubnet("0.0.0.0", 8);
 nonPublic.addSubnet("10.0.0.0", 8);
@@ -19,26 +20,53 @@ nonPublic.addSubnet("127.0.0.0", 8);
 nonPublic.addSubnet("169.254.0.0", 16);
 nonPublic.addSubnet("172.16.0.0", 12);
 nonPublic.addSubnet("192.168.0.0", 16);
+nonPublic.addSubnet("192.0.0.0", 24);
+nonPublic.addSubnet("198.18.0.0", 15);
+nonPublic.addSubnet("224.0.0.0", 4);
+nonPublic.addSubnet("240.0.0.0", 4);
 nonPublic.addAddress("255.255.255.255");
 nonPublic.addAddress("::1", "ipv6");
 nonPublic.addAddress("::", "ipv6");
 nonPublic.addSubnet("fc00::", 7, "ipv6");
 nonPublic.addSubnet("fe80::", 10, "ipv6");
+nonPublic.addSubnet("ff00::", 8, "ipv6");
 
 type LookupHost = NonNullable<FetchHtmlOptions["lookupHost"]>;
 
+// Several IPv6 forms carry an IPv4 address inside them. A block list keyed on
+// the outer prefix would let 64:ff9b::10.0.0.5 through as "a public v6 range";
+// what matters is the v4 address it delivers to.
+function embeddedIpv4(host: string): string | null {
+  const normalized = host.toLowerCase();
+
+  // 6to4 holds the address in the two groups right after its prefix; the
+  // v4-mapped, NAT64 and deprecated v4-compatible forms hold it in the low 32
+  // bits, written either as two hex groups or dotted.
+  const [, first, second] = /^2002:([\da-f]{1,4}):([\da-f]{1,4})(?::|$)/.exec(normalized)
+    ?? /^(?:::ffff:|64:ff9b::|::)([\da-f]{1,4}):([\da-f]{1,4})$/.exec(normalized)
+    ?? [];
+  if (first !== undefined && second !== undefined) {
+    const high = parseInt(first, 16);
+    const low = parseInt(second, 16);
+    return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+  }
+
+  const dotted = /^(?:::ffff:|64:ff9b::|::)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(normalized)?.[1];
+  return dotted !== undefined && isIP(dotted) === 4 ? dotted : null;
+}
+
 function normalizeAddress(address: string): string {
-  const host = address.startsWith("[") && address.endsWith("]") ? address.slice(1, -1) : address;
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(host);
-  return mapped?.[1] ?? host;
+  return address.startsWith("[") && address.endsWith("]") ? address.slice(1, -1) : address;
 }
 
 function isNonPublicAddress(address: string): boolean {
-  const normalized = normalizeAddress(address);
-  const family = isIP(normalized);
-  if (family === 4) return nonPublic.check(normalized, "ipv4");
-  if (family === 6) return nonPublic.check(normalized, "ipv6");
-  return false;
+  const host = normalizeAddress(address);
+  const family = isIP(host);
+  if (family === 4) return nonPublic.check(host, "ipv4");
+  if (family !== 6) return false;
+  if (nonPublic.check(host, "ipv6")) return true;
+  const inner = embeddedIpv4(host);
+  return inner !== null && nonPublic.check(inner, "ipv4");
 }
 
 type DnsResolver = (
