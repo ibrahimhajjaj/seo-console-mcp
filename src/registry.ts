@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   appStoreListingOutput,
   appStoreListingShape,
+  appStoreReviewsOutput,
+  appStoreReviewsShape,
   compareSnapshotsOutput,
   compareSnapshotsShape,
   cruxFieldDataOutput,
@@ -69,6 +71,7 @@ import {
 } from "./google-tools.js";
 import { validateCredentials } from "./credentials.js";
 import { appStoreListing } from "./app-store-listing.js";
+import { appStoreReviews } from "./app-store-reviews.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
 import { snapshot } from "./snapshot.js";
@@ -304,6 +307,13 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: appStoreListingShape,
     outputSchema: appStoreListingOutput,
     run: (_ctx, params) => appStoreListing(params),
+  }),
+  defineTool({
+    name: "app_store_reviews",
+    description: "Read App Store customer reviews and your responses, filtered by rating or storefront. Reports the mean and star split of the reviews actually fetched, which is not the app's lifetime rating; App Store Connect exposes no aggregate rating resource. Read-only",
+    inputShape: appStoreReviewsShape,
+    outputSchema: appStoreReviewsOutput,
+    run: (_ctx, params) => appStoreReviews(params),
   }),
   defineTool({
     name: "crux_field_data",

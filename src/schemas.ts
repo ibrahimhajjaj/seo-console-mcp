@@ -535,6 +535,7 @@ export const appStoreListingOutput = z.object({
     indexed: z.object({ name: listingField, subtitle: listingField, keywords: listingField }),
     promotionalText: listingField,
     description: listingField,
+    whatsNew: listingField,
     partial: z.boolean(),
   })),
   ratings: z.array(z.object({
@@ -681,5 +682,38 @@ export const cruxHistoryOutput = z.object({
   collectionPeriods: z.array(z.object({ firstDate: z.string().nullable(), lastDate: z.string().nullable() })).optional(),
   normalizedUrl: z.string().nullable().optional(),
   metrics: z.record(z.string(), z.object({ p75s: z.array(z.number().nullable()) })).or(z.record(z.string(), z.never())),
+  notes: z.array(z.string()),
+});
+
+export const appStoreReviewsShape = {
+  appId: z.string().regex(/^\d+$/, "appId must be the numeric App Store app id").optional().describe("App Store Connect numeric app id; provide this or bundleId"),
+  bundleId: z.string().trim().min(1).max(200).optional().describe("Bundle id; provide this or appId"),
+  rating: z.array(z.number().int().min(1).max(5)).max(5).optional().describe("Only these star ratings"),
+  territory: z.string().regex(/^[A-Z]{3}$/, "territory must be a 3-letter uppercase code such as USA").optional().describe("Only reviews from this storefront"),
+  sort: z.enum(["-createdDate", "createdDate", "rating", "-rating"]).default("-createdDate").describe("Sort order; newest first by default"),
+  limit: z.number().int().min(1).max(1000).default(100).describe("Maximum reviews to return across pages"),
+  maxPages: z.number().int().min(1).max(20).default(5).describe("Maximum pages to follow"),
+};
+export const appStoreReviewsInput = z.object(appStoreReviewsShape);
+export const appStoreReviewsOutput = z.object({
+  appId: z.string(),
+  bundleId: z.string().nullable(),
+  returned: z.number(),
+  pagesRead: z.number(),
+  meanOfFetched: z.number().nullable(),
+  histogramOfFetched: z.record(z.string(), z.number()),
+  withoutResponse: z.number(),
+  filters: z.object({ rating: z.array(z.number()).nullable(), territory: z.string().nullable(), sort: z.string() }),
+  reviews: z.array(z.object({
+    id: z.string(),
+    rating: z.number().nullable(),
+    title: z.string().nullable(),
+    body: z.string().nullable(),
+    reviewerNickname: z.string().nullable(),
+    createdDate: z.string().nullable(),
+    territory: z.string().nullable(),
+    respondedAt: z.string().nullable(),
+    responseBody: z.string().nullable(),
+  })),
   notes: z.array(z.string()),
 });

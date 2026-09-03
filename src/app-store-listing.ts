@@ -24,7 +24,7 @@ interface AscDeps {
 // character over its limit is dropped silently rather than rejected, which is why
 // every field is reported against its limit. Lengths are UTF-16 code units, which
 // is what NSString and the App Store Connect UI count.
-const LIMITS = { name: 30, subtitle: 30, keywords: 100, promotionalText: 170, description: 4000 } as const;
+const LIMITS = { name: 30, subtitle: 30, keywords: 100, promotionalText: 170, description: 4000, whatsNew: 4000 } as const;
 
 // An app can hold a live record and an editable one at the same time. Selecting
 // the wrong one reports draft copy as if it were live, so the choice is explicit.
@@ -71,9 +71,10 @@ interface JsonApiResource {
   attributes?: Record<string, unknown>;
 }
 
-interface JsonApiResponse {
+export interface JsonApiResponse {
   data?: JsonApiResource | JsonApiResource[];
   included?: JsonApiResource[];
+  links?: { next?: string };
 }
 
 export async function appStoreListing(params: AppStoreListingParams, deps: AscDeps = {}): Promise<ToolResult> {
@@ -113,6 +114,7 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
     keywords?: string | undefined;
     promotionalText?: string | undefined;
     description?: string | undefined;
+    whatsNew?: string | undefined;
     fromInfo?: boolean;
     fromVersion?: boolean;
   }
@@ -133,6 +135,7 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
     entry.keywords = resource.attributes?.keywords as string | undefined;
     entry.promotionalText = resource.attributes?.promotionalText as string | undefined;
     entry.description = resource.attributes?.description as string | undefined;
+    entry.whatsNew = resource.attributes?.whatsNew as string | undefined;
     entry.fromVersion = true;
     byLocale.set(locale, entry);
   }
@@ -148,6 +151,7 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
       },
       promotionalText: measure(entry.promotionalText, LIMITS.promotionalText),
       description: measure(entry.description, LIMITS.description),
+      whatsNew: measure(entry.whatsNew, LIMITS.whatsNew),
       partial: !(entry.fromInfo && entry.fromVersion),
     }));
 
@@ -214,7 +218,7 @@ export function createAscToken(credentials: AscCredentials, now: Date): string {
   return `${signingInput}.${base64url(signature)}`;
 }
 
-function readCredentialsFromEnv(): AscCredentials {
+export function readCredentialsFromEnv(): AscCredentials {
   const keyPath = process.env.SEO_MCP_ASC_KEY_PATH;
   const keyId = process.env.SEO_MCP_ASC_KEY_ID;
   const issuerId = process.env.SEO_MCP_ASC_ISSUER_ID;
@@ -265,14 +269,14 @@ function describeState(state: string | undefined): string {
   return state ?? "unknown-state";
 }
 
-async function resolveAppId(bundleId: string, token: string, fetchImpl: typeof fetch): Promise<string> {
+export async function resolveAppId(bundleId: string, token: string, fetchImpl: typeof fetch): Promise<string> {
   const response = await ascGet(`/v1/apps?filter%5BbundleId%5D=${encodeURIComponent(bundleId)}&limit=1`, token, fetchImpl);
   const app = asArray(response.data)[0];
   if (!app) throw new Error(`No App Store Connect app found for bundle id "${bundleId}".`);
   return app.id;
 }
 
-async function ascGet(path: string, token: string, fetchImpl: typeof fetch): Promise<JsonApiResponse> {
+export async function ascGet(path: string, token: string, fetchImpl: typeof fetch): Promise<JsonApiResponse> {
   const response = await fetchImpl(`${API}${path}`, {
     headers: { authorization: `Bearer ${token}`, "user-agent": USER_AGENT },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
