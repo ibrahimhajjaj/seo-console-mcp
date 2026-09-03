@@ -342,7 +342,8 @@ describe("MCP server tool registration", () => {
       siteUrl: "https://example.com/path/",
       requestBody: expect.objectContaining({
         dimensions: ["query"],
-        rowLimit: 25,
+        // One past the default 25, so a cut-off result is detectable.
+        rowLimit: 26,
       }),
     });
   });

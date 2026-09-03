@@ -38,6 +38,9 @@ export type ToolResult = Omit<CallToolResult, "content" | "structuredContent"> &
   structuredContent: Record<string, unknown>;
 };
 
+// Search Console will not return more rows than this in one query.
+const MAX_SEARCH_ROW_LIMIT = 25_000;
+
 type ApiResponse<T> = Promise<{ data: T }>;
 
 export interface GoogleClients {
@@ -78,11 +81,16 @@ export function createGoogleClients(credentialsPath?: string): GoogleClients {
 export async function searchAnalytics(clients: GoogleClients, params: SearchAnalyticsParams, now = new Date()): Promise<ToolResult> {
   const { startDate, endDate } = analysisWindow(params, now);
 
+  // Ask for one row past the caller's limit so a full page can be told apart
+  // from a page that happens to hold exactly rowLimit rows. Without it a
+  // truncated result is indistinguishable from a complete one, and a caller
+  // reads a cut-off list as the whole story. The extra row is never returned.
+  const atApiCeiling = params.rowLimit >= MAX_SEARCH_ROW_LIMIT;
   const requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest = {
     startDate,
     endDate,
     dimensions: params.dimensions,
-    rowLimit: params.rowLimit,
+    rowLimit: atApiCeiling ? MAX_SEARCH_ROW_LIMIT : params.rowLimit + 1,
     ...(params.dimensionFilterGroups ? { dimensionFilterGroups: params.dimensionFilterGroups } : {}),
     ...(params.type ? { type: params.type } : {}),
     ...(params.dataState ? { dataState: params.dataState } : {}),
@@ -91,7 +99,11 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
   const response = await clients.searchConsole.searchanalytics.query({ siteUrl: params.siteUrl, requestBody });
   const firstIncompleteDate = response.data.metadata?.firstIncompleteDate
     ?? response.data.metadata?.firstIncompleteHour;
-  const rows = (response.data.rows ?? []).map((row, index) => ({
+  const fetched = response.data.rows ?? [];
+  // At the API's own ceiling there is no spare row to ask for, so a full page
+  // means "there may be more" rather than a certainty.
+  const truncated = atApiCeiling ? fetched.length >= MAX_SEARCH_ROW_LIMIT : fetched.length > params.rowLimit;
+  const rows = fetched.slice(0, params.rowLimit).map((row, index) => ({
     rank: index + 1,
     keys: Object.fromEntries(params.dimensions.map((dimension, keyIndex) => [dimension, row.keys?.[keyIndex] ?? ""])),
     clicks: row.clicks ?? 0,
@@ -112,6 +124,9 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
   if (params.maxTableRows > 0 && rows.length > params.maxTableRows) {
     lines.push(`... ${rows.length - params.maxTableRows} more rows (see structured data).`);
   }
+  if (truncated) {
+    lines.push(`Note: more rows exist beyond rowLimit ${params.rowLimit}. This result is cut off, so treat a missing query as unknown rather than absent; raise rowLimit to see the rest.`);
+  }
   if (firstIncompleteDate) lines.push(`Note: data from ${firstIncompleteDate} onward is still being collected.`);
   return result(lines.join("\n"), {
     siteUrl: params.siteUrl,
@@ -119,6 +134,7 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     endDate,
     dimensions: params.dimensions,
     rowCount: rows.length,
+    truncated,
     rows,
     ...(firstIncompleteDate ? { firstIncompleteDate } : {}),
   });

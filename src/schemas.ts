@@ -58,6 +58,7 @@ export const searchAnalyticsOutput = z.object({
   endDate: z.string(),
   dimensions: z.array(z.string()),
   rowCount: z.number(),
+  truncated: z.boolean(),
   rows: z.array(z.object({
     rank: z.number(),
     keys: z.record(z.string(), z.string()),

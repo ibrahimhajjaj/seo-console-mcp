@@ -148,11 +148,58 @@ describe("Google-backed tool operations", () => {
         startDate: "2026-06-14",
         endDate: "2026-07-11",
         dimensions: ["query"],
-        rowLimit: 25,
+        // One past the caller's 25 so truncation can be detected, never returned.
+        rowLimit: 26,
       },
     });
     expect(result.content[0]?.text).toContain("seo mcp | 12 | 100 | 12.00% | 3.46");
-    expect(result.structuredContent).toMatchObject({ rowCount: 1, rows: [{ rank: 1, keys: { query: "seo mcp" } }] });
+    expect(result.structuredContent).toMatchObject({ rowCount: 1, truncated: false, rows: [{ rank: 1, keys: { query: "seo mcp" } }] });
+  });
+
+  it("flags a cut-off result and never returns the extra probe row", async () => {
+    const clients = fakeClients();
+    // Six rows come back for a rowLimit of 5: the sixth exists only to prove more remain.
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: Array.from({ length: 6 }, (_, index) => ({
+      keys: [`query ${index + 1}`], clicks: 1, impressions: 10, ctr: 0.1, position: index + 1,
+    })) } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "https://example.com/", dimensions: ["query"], rowLimit: 5, maxTableRows: 25,
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    expect(result.structuredContent).toMatchObject({ rowCount: 5, truncated: true });
+    expect((result.structuredContent as { rows: unknown[] }).rows).toHaveLength(5);
+    expect(result.content[0]?.text).toContain("more rows exist beyond rowLimit 5");
+    expect(result.content[0]?.text).toContain("unknown rather than absent");
+  });
+
+  it("does not flag truncation when the rows stop short of the limit", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: Array.from({ length: 4 }, (_, index) => ({
+      keys: [`query ${index + 1}`], clicks: 1, impressions: 10, ctr: 0.1, position: index + 1,
+    })) } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "https://example.com/", dimensions: ["query"], rowLimit: 5, maxTableRows: 25,
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    expect(result.structuredContent).toMatchObject({ rowCount: 4, truncated: false });
+    expect(result.content[0]?.text).not.toContain("more rows exist");
+  });
+
+  it("falls back to the row count at the API ceiling, where no probe row is available", async () => {
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: Array.from({ length: 25_000 }, () => ({
+      keys: ["q"], clicks: 1, impressions: 1, ctr: 0.1, position: 1,
+    })) } });
+
+    const result = await searchAnalytics(clients, {
+      siteUrl: "https://example.com/", dimensions: ["query"], rowLimit: 25_000, maxTableRows: 0,
+    }, new Date("2026-07-11T12:00:00Z"));
+
+    const request = vi.mocked(clients.searchConsole.searchanalytics.query).mock.calls[0]?.[0];
+    expect(request?.requestBody?.rowLimit).toBe(25_000);
+    expect(result.structuredContent).toMatchObject({ rowCount: 25_000, truncated: true });
   });
 
   it("caps search analytics text rows while preserving structured rows", async () => {
