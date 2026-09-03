@@ -94,6 +94,8 @@ describe("MCP server tool registration", () => {
       "wporg_plugin",
       "play_store_stats",
       "app_store_listing",
+      "crux_field_data",
+      "crux_history",
       "snapshot",
       "compare_snapshots",
     ]);

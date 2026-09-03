@@ -4,6 +4,10 @@ import {
   appStoreListingShape,
   compareSnapshotsOutput,
   compareSnapshotsShape,
+  cruxFieldDataOutput,
+  cruxFieldDataShape,
+  cruxHistoryOutput,
+  cruxHistoryShape,
   snapshotOutput,
   snapshotShape,
   auditSiteOutput,
@@ -66,6 +70,7 @@ import {
 import { validateCredentials } from "./credentials.js";
 import { appStoreListing } from "./app-store-listing.js";
 import { compareSnapshots } from "./compare-snapshots.js";
+import { cruxFieldData, cruxHistory } from "./crux.js";
 import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
 import { fetchHtml } from "./fetch-page.js";
@@ -299,6 +304,20 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: appStoreListingShape,
     outputSchema: appStoreListingOutput,
     run: (_ctx, params) => appStoreListing(params),
+  }),
+  defineTool({
+    name: "crux_field_data",
+    description: "Read real-user Core Web Vitals for an origin or URL from the Chrome UX Report: the current 28-day field record with p75s and histograms. Field data, not a lab test; PageSpeed's own field block is being discontinued. Needs SEO_MCP_CRUX_KEY or a PageSpeed key allowed to call the Chrome UX Report API; read-only",
+    inputShape: cruxFieldDataShape,
+    outputSchema: cruxFieldDataOutput,
+    run: (_ctx, params) => cruxFieldData(params),
+  }),
+  defineTool({
+    name: "crux_history",
+    description: "Read the Chrome UX Report weekly history for an origin or URL, roughly six months of 28-day rolling windows, so a field metric can be seen trending rather than as one point. Read-only",
+    inputShape: cruxHistoryShape,
+    outputSchema: cruxHistoryOutput,
+    run: (_ctx, params) => cruxHistory(params),
   }),
   defineTool({
     name: "snapshot",

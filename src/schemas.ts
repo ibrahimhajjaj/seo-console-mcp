@@ -640,3 +640,46 @@ export const compareSnapshotsOutput = z.object({
   surfacesWithErrors: z.array(z.string()),
   notes: z.array(z.string()),
 });
+
+const cruxFormFactor = z.enum(["PHONE", "TABLET", "DESKTOP"]);
+const cruxTargetShape = {
+  origin: z.string().trim().min(1).optional().describe("Origin such as https://example.com; aggregates every page under it. Give origin or url, not both"),
+  url: z.string().trim().min(1).optional().describe("A single page URL. Give origin or url, not both"),
+  formFactor: cruxFormFactor.optional().describe("Device class; omit for all form factors combined"),
+  metrics: z.array(z.string().trim().min(1)).max(20).optional().describe("Metric names to request; omit for all available"),
+};
+
+export const cruxFieldDataShape = { ...cruxTargetShape };
+export const cruxFieldDataInput = z.object(cruxFieldDataShape);
+export const cruxFieldDataOutput = z.object({
+  origin: z.string().nullable(),
+  url: z.string().nullable(),
+  formFactor: z.string().nullable(),
+  hasData: z.boolean(),
+  source: z.string(),
+  collectionPeriod: z.object({ firstDate: z.string().nullable(), lastDate: z.string().nullable() }).optional(),
+  normalizedUrl: z.string().nullable().optional(),
+  metrics: z.record(z.string(), z.object({
+    p75: z.number().nullable(),
+    histogram: z.array(z.object({ start: z.number().nullable(), end: z.number().nullable(), density: z.number().nullable() })),
+  })).or(z.record(z.string(), z.never())),
+  notes: z.array(z.string()),
+});
+
+export const cruxHistoryShape = {
+  ...cruxTargetShape,
+  collectionPeriodCount: z.number().int().min(1).max(40).optional().describe("Weekly periods to return, 1 to 40. Documented history is about six months; the API decides what it actually has"),
+};
+export const cruxHistoryInput = z.object(cruxHistoryShape);
+export const cruxHistoryOutput = z.object({
+  origin: z.string().nullable(),
+  url: z.string().nullable(),
+  formFactor: z.string().nullable(),
+  hasData: z.boolean(),
+  source: z.string(),
+  periodCount: z.number().optional(),
+  collectionPeriods: z.array(z.object({ firstDate: z.string().nullable(), lastDate: z.string().nullable() })).optional(),
+  normalizedUrl: z.string().nullable().optional(),
+  metrics: z.record(z.string(), z.object({ p75s: z.array(z.number().nullable()) })).or(z.record(z.string(), z.never())),
+  notes: z.array(z.string()),
+});
