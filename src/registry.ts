@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   appStoreListingOutput,
   appStoreListingShape,
+  appStoreDiscoveryOutput,
+  appStoreDiscoveryShape,
   appStoreReviewsOutput,
   appStoreReviewsShape,
   compareSnapshotsOutput,
@@ -72,6 +74,7 @@ import {
 import { validateCredentials } from "./credentials.js";
 import { appStoreListing } from "./app-store-listing.js";
 import { appStoreReviews } from "./app-store-reviews.js";
+import { appStoreDiscovery } from "./app-store-discovery.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
 import { snapshot } from "./snapshot.js";
@@ -307,6 +310,13 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: appStoreListingShape,
     outputSchema: appStoreListingOutput,
     run: (_ctx, params) => appStoreListing(params),
+  }),
+  defineTool({
+    name: "app_store_discovery",
+    description: "Read the App Store surfaces beyond the listing text: search keywords, app tags, product page optimization experiments, custom product pages, in-app events, territory availability and review summarizations. A resource this key cannot read is reported as unavailable rather than as empty. Read-only",
+    inputShape: appStoreDiscoveryShape,
+    outputSchema: appStoreDiscoveryOutput,
+    run: (_ctx, params) => appStoreDiscovery(params),
   }),
   defineTool({
     name: "app_store_reviews",

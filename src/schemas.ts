@@ -739,3 +739,25 @@ export const appStoreReviewsOutput = z.object({
   })),
   notes: z.array(z.string()),
 });
+
+export const appStoreDiscoveryShape = {
+  appId: z.string().regex(/^\d+$/, "appId must be the numeric App Store app id").optional().describe("App Store Connect numeric app id; provide this or bundleId"),
+  bundleId: z.string().trim().min(1).max(200).optional().describe("Bundle id; provide this or appId"),
+  include: z.array(z.enum(["searchKeywords", "appTags", "experiments", "customProductPages", "appEvents", "availability", "reviewSummarizations"])).default([]).describe("Which discovery surfaces to read; empty reads all of them"),
+  limit: z.number().int().min(1).max(200).default(50).describe("Rows per resource"),
+  locales: z.array(z.string().trim().min(2).max(10)).min(1).max(20).default(["en-US"]).describe("Locales for per-locale resources such as searchKeywords"),
+  platform: z.enum(["IOS","MAC_OS","TV_OS","VISION_OS"]).default("IOS").describe("Platform for resources that require one"),
+};
+export const appStoreDiscoveryInput = z.object(appStoreDiscoveryShape);
+export const appStoreDiscoveryOutput = z.object({
+  appId: z.string(),
+  bundleId: z.string().nullable(),
+  locales: z.array(z.string()),
+  resources: z.record(z.string(), z.object({
+    available: z.boolean(),
+    count: z.number().nullable(),
+    rows: z.array(z.record(z.string(), z.unknown())),
+    error: z.string().optional(),
+  })),
+  notes: z.array(z.string()),
+});
