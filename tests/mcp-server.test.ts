@@ -100,6 +100,7 @@ describe("MCP server tool registration", () => {
       "app_store_reviews",
       "crux_field_data",
       "crux_history",
+      "list_snapshots",
       "snapshot",
       "compare_snapshots",
     ]);

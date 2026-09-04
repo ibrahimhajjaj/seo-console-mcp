@@ -4,6 +4,16 @@
 
 ### Added
 
+- Snapshots are a history now rather than two tools and a naming convention the
+  caller had to invent. `list_snapshots` says what is on disk, newest first, and
+  lists a file that will not parse with its error instead of hiding it;
+  `compare_snapshots` takes `latest` and `previous` in `from` and `to`, so the
+  comparison everyone actually wants no longer requires knowing two file names;
+  and `snapshot` accepts `outPath: "auto"` to name the file after the moment it
+  was taken, which is what lets a cron line build a series instead of
+  overwriting one file forever. Scheduling stays out: an MCP server should not
+  own a daemon, and the README carries the cron line instead.
+
 - `compare_snapshots` now diffs four things the snapshot documents already held
   and the comparison threw away: top queries alongside top pages, the per-locale
   name, subtitle, keyword, promotional-text and description lengths together

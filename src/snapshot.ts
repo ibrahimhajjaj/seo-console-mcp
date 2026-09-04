@@ -68,9 +68,10 @@ export async function snapshot(ctx: ToolContext, params: SnapshotParams, deps: S
   ];
   const captured = await runPool(jobs, Math.max(1, deps.concurrency ?? DEFAULT_CONCURRENCY), timeout, surfacesWithErrors);
 
+  // Minute precision: a snapshot is a point in a series, not a stopwatch.
+  const takenAt = `${now.toISOString().slice(0, 16)}Z`;
   const structuredContent: Record<string, unknown> = {
-    // Minute precision: a snapshot is a point in a series, not a stopwatch.
-    takenAt: `${now.toISOString().slice(0, 16)}Z`,
+    takenAt,
     windowDays: params.windowDays,
     window,
     properties: captured.filter((entry) => entry.kind === "property").map((entry) => entry.value),
@@ -88,7 +89,11 @@ export async function snapshot(ctx: ToolContext, params: SnapshotParams, deps: S
     const write = deps.writeFile ?? ((path: string, data: string) => writeFileSync(path, data));
     const exists = deps.fileExists ?? existsSync;
     const makeDir = deps.makeDir ?? ((path: string) => void mkdirSync(path, { recursive: true }));
-    const resolved = resolveSnapshotPath(params.outPath, deps.env ? { env: deps.env } : {});
+    // A caller left to invent a name invents a different one every run, and a
+    // series only reads as one if the names sort the way the timestamps do. The
+    // colons go because Windows and several archive formats refuse them.
+    const requested = params.outPath === "auto" ? `${takenAt.replace(/:/g, "-")}.json` : params.outPath;
+    const resolved = resolveSnapshotPath(requested, deps.env ? { env: deps.env } : {});
     // A series is only worth having if its earlier points survive. Replacing one
     // has to be asked for, because the caller choosing the name cannot see what
     // is already there.

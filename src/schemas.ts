@@ -649,6 +649,26 @@ export const snapshotDocument = z.object({
   writtenTo: z.string().optional(),
 });
 
+export const listSnapshotsShape = {
+  limit: z.number().int().min(1).max(200).default(50).describe("Maximum snapshots to return, newest first"),
+};
+export const listSnapshotsInput = z.object(listSnapshotsShape);
+export const listSnapshotsOutput = z.object({
+  directory: z.string(),
+  total: z.number(),
+  truncated: z.boolean(),
+  snapshots: z.array(z.object({
+    name: z.string(),
+    path: z.string(),
+    // Null on a file that could not be parsed, which is listed with its error
+    // rather than hidden.
+    takenAt: z.string().nullable(),
+    windowDays: z.number().nullable(),
+    surfaces: z.object({ properties: z.number(), apps: z.number(), packages: z.number(), slugs: z.number() }),
+    error: z.string().optional(),
+  })),
+});
+
 export const snapshotShape = {
   properties: z.array(siteUrl).default([]).describe("Search Console properties to capture"),
   apps: z.array(z.string().trim().min(1)).default([]).describe("App Store apps, each a numeric app id or a bundle id"),
@@ -657,15 +677,15 @@ export const snapshotShape = {
   windowDays: z.number().int().min(1).max(480).default(28).describe("Search Console window in days, ending today"),
   platform: z.enum(["IOS", "MAC_OS", "TV_OS", "VISION_OS"]).default("IOS").describe("App Store platform for the app surfaces"),
   storefronts: z.array(z.string().regex(/^[a-z]{2}$/, "storefronts must be 2-letter lowercase country codes")).min(1).max(10).default(["us"]).describe("Storefront country codes for App Store ratings"),
-  outPath: z.string().trim().min(1).optional().describe("File name or path inside the snapshot directory (SEO_MCP_SNAPSHOT_DIR, default ~/.config/seo-mcp/snapshots); must end in .json. An existing file is not overwritten unless overwrite is true"),
+  outPath: z.string().trim().min(1).optional().describe("File name or path inside the snapshot directory (SEO_MCP_SNAPSHOT_DIR, default ~/.config/seo-mcp/snapshots); must end in .json, or pass auto to name the file after the moment it was taken. An existing file is not overwritten unless overwrite is true"),
   overwrite: z.boolean().default(false).describe("Replace an existing file at outPath; without it an existing file is left alone and reported"),
 };
 export const snapshotInput = z.object(snapshotShape);
 export const snapshotOutput = snapshotDocument;
 
 export const compareSnapshotsShape = {
-  from: z.string().trim().min(1).describe("Snapshot file name or path inside the snapshot directory"),
-  to: z.string().trim().min(1).describe("Snapshot file name or path inside the snapshot directory"),
+  from: z.string().trim().min(1).describe("Snapshot file name or path inside the snapshot directory; latest names the newest snapshot on disk and previous the one before it"),
+  to: z.string().trim().min(1).describe("Snapshot file name or path inside the snapshot directory; latest names the newest snapshot on disk and previous the one before it"),
   minImpressions: z.number().int().min(0).default(100).describe("Ignore page position moves below this many impressions on both sides"),
 };
 export const compareSnapshotsInput = z.object(compareSnapshotsShape);

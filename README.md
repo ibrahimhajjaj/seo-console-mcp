@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty-eight tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, WordPress.org, and real-user Core Web Vitals, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records every surface at one moment so a later run can diff against it.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty-nine tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, WordPress.org, and real-user Core Web Vitals, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records every surface at one moment so a later run can diff against it.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ What else you need depends on which tools you use. The setup wizard covers Searc
 | `crux_field_data`, `crux_history` | `SEO_MCP_CRUX_KEY` (or the PageSpeed key if it may call the CrUX API) | Google Cloud API key |
 | `indexnow_submit` | `SEO_MCP_INDEXNOW_KEY` | any key you host at `/<key>.txt` |
 | Search Console tools, `snapshot` properties | service account key | setup wizard, then add the account to the property |
-| `snapshot`, `compare_snapshots` | optional `SEO_MCP_SNAPSHOT_DIR` | where snapshot files live, defaulting to `~/.config/seo-mcp/snapshots` |
+| `snapshot`, `list_snapshots`, `compare_snapshots` | optional `SEO_MCP_SNAPSHOT_DIR` | where snapshot files live, defaulting to `~/.config/seo-mcp/snapshots` |
 | `verify` | `CLOUDFLARE_API_TOKEN` | Cloudflare, Zone.DNS:Edit |
 | `app_store_listing`, `app_store_discovery`, `app_store_reviews` | `SEO_MCP_ASC_KEY_PATH`, `SEO_MCP_ASC_KEY_ID`, `SEO_MCP_ASC_ISSUER_ID` | App Store Connect team key, any role that can read the app |
 | `app_store_sales` | the above plus `SEO_MCP_ASC_VENDOR_NUMBER` | team key created with Admin, Finance, or Sales and Reports |
@@ -164,7 +164,7 @@ For example:
 node dist/index.js --credentials /absolute/path/seo-mcp.key.json
 ```
 
-`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`. `keyword_ideas` only needs them when `siteUrl` is passed for the Search Console cross-reference. App Store Sales and Trends reads `SEO_MCP_ASC_VENDOR_NUMBER`. The Chrome UX Report tools read `SEO_MCP_CRUX_KEY`, falling back to `SEO_MCP_PAGESPEED_KEY` when the same key is allowed to call `chromeuxreport.googleapis.com`. `snapshot` and `compare_snapshots` keep their documents in `SEO_MCP_SNAPSHOT_DIR`, defaulting to `~/.config/seo-mcp/snapshots`, and cannot read or write outside it. The table under Requirements maps every tool to what it needs.
+`pagespeed` is public and does not use the service account. Set `SEO_MCP_PAGESPEED_KEY` or pass `apiKey` to that tool for a higher PageSpeed Insights quota. `seo_audit`, `audit_site`, and `indexnow_submit` also need no Google credentials; `indexnow_submit` instead takes an IndexNow key via `key` or `SEO_MCP_INDEXNOW_KEY`. `keyword_ideas` only needs them when `siteUrl` is passed for the Search Console cross-reference. App Store Sales and Trends reads `SEO_MCP_ASC_VENDOR_NUMBER`. The Chrome UX Report tools read `SEO_MCP_CRUX_KEY`, falling back to `SEO_MCP_PAGESPEED_KEY` when the same key is allowed to call `chromeuxreport.googleapis.com`. `snapshot`, `list_snapshots` and `compare_snapshots` keep their documents in `SEO_MCP_SNAPSHOT_DIR`, defaulting to `~/.config/seo-mcp/snapshots`, and cannot read or write outside it. The table under Requirements maps every tool to what it needs.
 
 ## Security model
 
@@ -548,6 +548,16 @@ which is why each entry carries `source`. A rating from a store page and a
 rating from a private API are not interchangeable and should not be compared as
 if they were the same measurement.
 
+### `list_snapshots`
+
+Lists the snapshot documents already in the snapshot directory, newest first, with when each was taken, the window it covers, and how many properties, apps, packages and plugins it holds.
+
+```json
+{ "limit": 50 }
+```
+
+A snapshot pair is worthless if nothing can say which files exist, and every caller was otherwise left keeping its own index of a directory the server owns. A file in the directory that is not a snapshot document is listed with its error rather than hidden, so a name you expect to find never quietly reads as absent. A missing directory is an empty list, not a failure: nothing has been captured yet. `total` and `truncated` sit beside the list because the command line prints the structured half alone, where a page cut at `limit` would otherwise read as the whole history.
+
 ### `snapshot`
 
 Captures every surface into one timestamped document: Search Console totals and top rows per property, App Store listings, Google Play installs and traffic, and WordPress.org stats. This is the tool for recording a point in a series, because none of the consoles keep a history you can diff against later.
@@ -567,7 +577,7 @@ A surface that cannot be read is recorded in place with its error and named in `
 }
 ```
 
-Pass `outPath` to write the document where `compare_snapshots` can read it later. It is a file name inside the snapshot directory, `SEO_MCP_SNAPSHOT_DIR` or `~/.config/seo-mcp/snapshots` by default; a path that resolves outside that directory or does not end in `.json` is refused, and an existing file is left in place and reported unless you pass `overwrite: true`. A model chooses this string, so the directory is the boundary that keeps a tool call from truncating anything else on the machine. Position and CTR are `null` rather than `0` when a window has no impressions, so an empty window never compares against real data as a collapse.
+Pass `outPath` to write the document where `compare_snapshots` can read it later, or `outPath: "auto"` to have it named after the moment it was taken (`2026-09-04T00-15Z.json`), which is what makes an unattended run produce a series rather than one file overwritten forever. It is a file name inside the snapshot directory, `SEO_MCP_SNAPSHOT_DIR` or `~/.config/seo-mcp/snapshots` by default; a path that resolves outside that directory or does not end in `.json` is refused, and an existing file is left in place and reported unless you pass `overwrite: true`. A model chooses this string, so the directory is the boundary that keeps a tool call from truncating anything else on the machine. Position and CTR are `null` rather than `0` when a window has no impressions, so an empty window never compares against real data as a collapse.
 
 ### `compare_snapshots`
 
@@ -577,7 +587,7 @@ Reads two snapshot documents and reports what changed between them: clicks, impr
 { "from": "2026-08-06.json", "to": "2026-09-03.json", "minImpressions": 100 }
 ```
 
-`from` and `to` resolve inside the same snapshot directory as `snapshot`'s `outPath`, so this tool reads snapshots and nothing else.
+`from` and `to` resolve inside the same snapshot directory as `snapshot`'s `outPath`, so this tool reads snapshots and nothing else. Either one also takes `latest` or `previous` instead of a file name, which is the comparison almost every caller actually wants and the only one they can ask for without listing the directory first. Both skip a file that will not parse, and asking for `previous` with a single snapshot on disk says so rather than comparing a document against itself.
 
 It does arithmetic, never judgement. It will not tell you whether a change was good or what caused it, because a diff cannot support that claim. A surface that failed or is missing on either side is marked not comparable and named, so a collection failure is never read as a change, and a file that is not a snapshot document is refused rather than half-parsed.
 
@@ -660,6 +670,13 @@ seo-mcp query wporg_plugin --help     # list one tool's parameters
 Flags are the tool's parameter names in kebab-case (`--site-url` for `siteUrl`); the camelCase spelling works too. List values are comma-separated. The result is written to `--out`, or to stdout when it is omitted, and a failure exits non-zero with the message on stderr. It runs the same implementation the MCP surface exposes, so the two cannot drift.
 
 Tools that change data (`submit_sitemap`, `delete_sitemap`, `request_recrawl`, `indexnow_submit`) are marked `(write)` in the listing and refuse to run from the command line unless `--allow-write` is passed.
+
+A history is one cron line away, and the server deliberately does not own a scheduler: your machine already has one that survives a restart.
+
+```sh
+# every Monday at 06:00, one snapshot named after the moment it was taken
+0 6 * * 1 seo-mcp query snapshot --properties sc-domain:example.com --out-path auto
+```
 
 ## Development
 

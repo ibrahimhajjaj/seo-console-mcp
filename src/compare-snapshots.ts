@@ -2,7 +2,7 @@ import { readFileSync, statSync } from "node:fs";
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
 import { compareSnapshotsInput, snapshotDocument } from "./schemas.js";
-import { resolveSnapshotPath } from "./snapshot-paths.js";
+import { listSnapshots, resolveSnapshotPath, snapshotDirectory } from "./snapshot-paths.js";
 
 type CompareParams = z.output<typeof compareSnapshotsInput>;
 type SnapshotDocument = z.output<typeof snapshotDocument>;
@@ -20,8 +20,17 @@ const STARS = ["5", "4", "3", "2", "1"] as const;
 
 export interface CompareDeps {
   readDocument?: (path: string) => string;
+  readDir?: (directory: string) => string[];
   env?: NodeJS.ProcessEnv;
 }
+
+// The two positions in the series a caller can name without having listed the
+// directory first. Anything else is a file name. A Map rather than an object,
+// so a caller passing "constructor" reaches no inherited member.
+const POSITIONS = new Map([
+  ["latest", { index: 0, needs: "one" }],
+  ["previous", { index: 1, needs: "two" }],
+]);
 
 // This tool does arithmetic, never judgement. It reports what moved between two
 // documents; whether a move is good, bad, or caused by anything is a claim about
@@ -31,8 +40,8 @@ export async function compareSnapshots(params: CompareParams, deps: CompareDeps 
   // Both sides go through the snapshot directory, so a caller cannot use this
   // tool to find out what else is on the machine.
   const options = deps.env ? { env: deps.env } : {};
-  const from = loadDocument(read, resolveSnapshotPath(params.from, options), "from");
-  const to = loadDocument(read, resolveSnapshotPath(params.to, options), "to");
+  const from = loadDocument(read, locate(params.from, deps, options), "from");
+  const to = loadDocument(read, locate(params.to, deps, options), "to");
 
   const elapsedHours = hoursBetween(from.takenAt, to.takenAt);
   // A surface that failed on either side has no comparable number. Saying so is
@@ -169,6 +178,27 @@ function readCappedFile(path: string): string {
     throw new Error(`The file at ${path} is ${Math.round(size / 1024 / 1024)}MB, larger than a snapshot document should ever be.`);
   }
   return readFileSync(path, "utf8");
+}
+
+// "Compare against the previous snapshot" is the only comparison most callers
+// ever want, and until the series can be addressed by position they have to know
+// two file names to ask for it. A file whose name happens to be latest.json is
+// unaffected: these two are the bare words, and every path still ends in .json.
+function locate(given: string, deps: CompareDeps, options: { env?: NodeJS.ProcessEnv }): string {
+  const position = POSITIONS.get(given);
+  if (!position) return resolveSnapshotPath(given, options);
+  // A document that will not load is no more a position in the series than an
+  // absent one, so it is skipped here rather than reported as the answer.
+  const usable = listSnapshots({
+    ...options,
+    ...(deps.readDir ? { readDir: deps.readDir } : {}),
+    ...(deps.readDocument ? { readFile: deps.readDocument } : {}),
+  }).filter((entry) => !entry.error);
+  const entry = usable[position.index];
+  if (!entry) {
+    throw new Error(`Only ${usable.length} snapshot(s) in ${snapshotDirectory(options.env)}; ${given} needs at least ${position.needs}.`);
+  }
+  return entry.path;
 }
 
 function loadDocument(read: (path: string) => string, path: string, side: string): SnapshotDocument {

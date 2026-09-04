@@ -309,6 +309,34 @@ describe("compareSnapshots", () => {
     )).rejects.toThrow(/Could not read the from snapshot/);
   });
 
+  it("takes previous and latest instead of two file names", async () => {
+    const files: Record<string, string> = {
+      "/snapshots/a.json": JSON.stringify(document()),
+      "/snapshots/b.json": JSON.stringify(document({ takenAt: "2026-08-15T10:00Z", slugs: [{ slug: "akismet", activeInstalls: 120, downloaded: 560, rating: 92, numRatings: 4 }] })),
+    };
+
+    const result = await compareSnapshots(
+      compareSnapshotsInput.parse({ from: "previous", to: "latest" }),
+      { env, readDir: () => Object.keys(files).map((path) => path.slice("/snapshots/".length)), readDocument: (path) => files[path] as string },
+    );
+    const comparison = result.structuredContent as Record<string, any>;
+
+    // b.json is the newer of the two, so it is the one "latest" resolves to.
+    expect(comparison.from.takenAt).toBe("2026-08-01T10:00Z");
+    expect(comparison.to.takenAt).toBe("2026-08-15T10:00Z");
+    expect(comparison.argumentsReversed).toBe(false);
+    expect(comparison.slugs[0].activeInstalls.change).toBe(20);
+  });
+
+  it("refuses previous when there is only one snapshot to compare", async () => {
+    const files: Record<string, string> = { "/snapshots/a.json": JSON.stringify(document()) };
+
+    await expect(compareSnapshots(
+      compareSnapshotsInput.parse({ from: "previous", to: "latest" }),
+      { env, readDir: () => ["a.json"], readDocument: (path) => files[path] as string },
+    )).rejects.toThrow(/needs at least two/);
+  });
+
   it("refuses a path outside the snapshot directory before reading anything", async () => {
     const readDocument = vi.fn(() => "{}");
 

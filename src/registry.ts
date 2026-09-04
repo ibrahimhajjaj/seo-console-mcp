@@ -14,6 +14,8 @@ import {
   cruxFieldDataShape,
   cruxHistoryOutput,
   cruxHistoryShape,
+  listSnapshotsOutput,
+  listSnapshotsShape,
   snapshotOutput,
   snapshotShape,
   auditSiteOutput,
@@ -82,6 +84,7 @@ import { appStoreDiscovery } from "./app-store-discovery.js";
 import { appStoreSales } from "./app-store-sales.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
+import { listSnapshotsTool } from "./list-snapshots.js";
 import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
 import { fetchHtml } from "./fetch-page.js";
@@ -358,6 +361,13 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: cruxHistoryShape,
     outputSchema: cruxHistoryOutput,
     run: (_ctx, params) => cruxHistory(params),
+  }),
+  defineTool({
+    name: "list_snapshots",
+    description: "List the snapshot documents already in the snapshot directory, newest first: when each was taken, the window it covers, and how many properties, apps, packages and plugins it holds. This is what says whether there is an earlier snapshot to compare against and what to name as from and to; a file that does not parse is listed with its error rather than hidden; read-only",
+    inputShape: listSnapshotsShape,
+    outputSchema: listSnapshotsOutput,
+    run: (_ctx, params) => listSnapshotsTool(params),
   }),
   defineTool({
     name: "snapshot",

@@ -150,6 +150,18 @@ describe("snapshot", () => {
     expect((result.structuredContent as any).writtenTo).toBe("/snapshots/snap.json");
   });
 
+  it("names the file after the moment it was taken when outPath is auto", async () => {
+    const written: Array<{ path: string; data: string }> = [];
+    const deps = readers({ writeFile: (path: string, data: string) => void written.push({ path, data }) });
+
+    const result = await snapshot(ctx, params({ slugs: ["akismet"], outPath: "auto" }), deps);
+
+    // Colons are out of the name; a series is only a series if the files sort
+    // the way their timestamps do.
+    expect(written[0]?.path).toBe("/snapshots/2026-09-03T11-30Z.json");
+    expect((result.structuredContent as any).writtenTo).toBe("/snapshots/2026-09-03T11-30Z.json");
+  });
+
   it("refuses an outPath that points outside the snapshot directory", async () => {
     const written: Array<{ path: string; data: string }> = [];
     const deps = readers({ writeFile: (path: string, data: string) => void written.push({ path, data }) });
