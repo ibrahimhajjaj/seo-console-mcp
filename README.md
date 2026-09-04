@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty-nine tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, WordPress.org, and real-user Core Web Vitals, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records every surface at one moment so a later run can diff against it.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty-nine tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, WordPress.org, and real-user Core Web Vitals, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records Search Console, the App Store, Google Play and WordPress.org at one moment so a later run can diff against it.
 
 ## Requirements
 
@@ -275,6 +275,12 @@ Every tool validates its input with Zod. Tool failures return an MCP error resul
 
 Lists every Google Search Console property the service account can access, returning each property's exact `siteUrl` and `permissionLevel`. It takes no input. Service-account credentials are required, unlike `pagespeed`, `seo_audit`, `audit_site`, and `indexnow_submit`.
 
+<!-- params:list_properties -->
+
+This tool takes no parameters.
+
+<!-- /params:list_properties -->
+
 ### `search_analytics`
 
 Queries `searchanalytics.query` and returns a compact ranked table plus structured rows.
@@ -299,7 +305,25 @@ Queries `searchanalytics.query` and returns a compact ranked table plus structur
 }
 ```
 
-`siteUrl` is required. `startDate` and `endDate` default to the latest 28-day UTC window. `dimensions` defaults to `["query"]`; allowed values are `query`, `page`, `country`, `device`, `date`, and `searchAppearance`. `rowLimit` defaults to 25 and is capped at 25,000. `maxTableRows` defaults to 25 and caps only the text table; structured rows remain complete. Set it to 0 for a summary without a table. `type` may be `web`, `image`, `video`, or `news`.
+<!-- params:search_analytics -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property, such as https://example.com/ or sc-domain:example.com |
+| `startDate` | string | no |  | Start date in YYYY-MM-DD; defaults to 28 days ago |
+| `endDate` | string | no |  | End date in YYYY-MM-DD; defaults to today |
+| `dimensions` | list of one of query, page, country, device, date, searchAppearance | no | `["query"]` | Dimensions used to group results |
+| `rowLimit` | number | no | `25` | Maximum rows to return |
+| `startRow` | number | no | `0` | Zero-based row to start from, for paging through a large result |
+| `maxTableRows` | number | no | `25` | Cap rows shown in the text table; structured rows are always complete. 0 = summary only. |
+| `dimensionFilterGroups` | JSON list | no |  | Search Console dimension filters |
+| `type` | one of web, image, video, news, discover, googleNews | no |  | Result type. discover is the Discover feed and googleNews is the Google News app and news.google.com, not the News tab in Search. Both support fewer dimensions than web: neither reports a query dimension |
+| `dataState` | one of full, all | no |  | full = finalized data (default, ~2-3 day lag); all = include recent partial data |
+| `aggregationType` | one of auto, byProperty, byPage | no |  | How Search Console aggregates rows |
+
+<!-- /params:search_analytics -->
+
+`maxTableRows` caps only the text table; the structured rows stay complete, so 0 returns the totals with no table rather than an empty result. `discover` and `googleNews` support fewer dimensions than `web`: neither reports a `query` dimension.
 
 ### `keyword_ideas`
 
@@ -316,6 +340,20 @@ Expands a seed through Google Autocomplete and returns normalized, deduplicated 
   "limit": 100
 }
 ```
+
+<!-- params:keyword_ideas -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seed` | string | yes |  | Seed keyword to expand |
+| `siteUrl` | string | no |  | Optional Search Console property used to identify queries already ranking |
+| `language` | string | no | `"en"` | Autocomplete interface language passed as hl |
+| `country` | string | no |  | Autocomplete country passed as gl |
+| `expansions` | list of one of alphabet, questions, prepositions, comparisons | no | `["alphabet","questions","prepositions","comparisons"]` | Suggestion expansion families to run beyond the bare seed |
+| `days` | number | no | `90` | Search Console lookback window in days |
+| `limit` | number | no | `100` | Maximum keyword ideas to return |
+
+<!-- /params:keyword_ideas -->
 
 All four expansion families run by default. `days` defaults to 90 and is capped at 480; `limit` defaults to 100 and is capped at 500. Individual autocomplete failures are counted without discarding successful suggestions.
 
@@ -335,6 +373,20 @@ Finds high-impression queries in striking distance of stronger rankings. It grou
 }
 ```
 
+<!-- params:search_opportunities -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property to analyze |
+| `startDate` | string | no |  | Start date in YYYY-MM-DD; defaults to the latest 28-day window |
+| `endDate` | string | no |  | End date in YYYY-MM-DD; defaults to today |
+| `minPosition` | number | no |  | Lowest average position to include; defaults to 5 |
+| `maxPosition` | number | no |  | Highest average position to include; defaults to 20 |
+| `minImpressions` | number | no |  | Minimum impressions required; defaults to 10 |
+| `limit` | number | no |  | Maximum opportunities to return; defaults to 50 |
+
+<!-- /params:search_opportunities -->
+
 ### `compare_search_periods`
 
 Compares a selected window with the immediately preceding equal-length window. It returns the largest click gainers and losers grouped by query or page.
@@ -349,6 +401,18 @@ Compares a selected window with the immediately preceding equal-length window. I
 }
 ```
 
+<!-- params:compare_search_periods -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property to analyze |
+| `startDate` | string | no |  | Start date in YYYY-MM-DD; defaults to the latest 28-day window |
+| `endDate` | string | no |  | End date in YYYY-MM-DD; defaults to today |
+| `by` | one of query, page | no | `"query"` | Dimension used to compare performance |
+| `limit` | number | no |  | Maximum gainers and losers to return; defaults to 50 each |
+
+<!-- /params:compare_search_periods -->
+
 ### `ctr_gaps`
 
 Finds high-impression queries or pages whose CTR trails the average for rows at the same rounded position. The missed-click estimate helps prioritize title and description rewrites.
@@ -361,6 +425,19 @@ Finds high-impression queries or pages whose CTR trails the average for rows at 
   "limit": 25
 }
 ```
+
+<!-- params:ctr_gaps -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property to analyze |
+| `startDate` | string | no |  | Start date in YYYY-MM-DD; defaults to the latest 28-day window |
+| `endDate` | string | no |  | End date in YYYY-MM-DD; defaults to today |
+| `by` | one of query, page | no | `"query"` | Dimension used to identify CTR gaps |
+| `minImpressions` | number | no |  | Minimum impressions required; defaults to 100 |
+| `limit` | number | no |  | Maximum gaps to return; defaults to 50 |
+
+<!-- /params:ctr_gaps -->
 
 ### `query_cannibalization`
 
@@ -375,6 +452,17 @@ Finds queries for which multiple pages receive Search Console impressions. Resul
 }
 ```
 
+<!-- params:query_cannibalization -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property to analyze |
+| `startDate` | string | no |  | Start date in YYYY-MM-DD; defaults to the latest 28-day window |
+| `endDate` | string | no |  | End date in YYYY-MM-DD; defaults to today |
+| `minImpressions` | number | no |  | Minimum impressions per query-page row; defaults to 10 |
+
+<!-- /params:query_cannibalization -->
+
 ### `list_sitemaps`
 
 Lists sitemap path, submission/download times, pending/index flags, warning/error counts, and content counts.
@@ -384,6 +472,14 @@ Lists sitemap path, submission/download times, pending/index flags, warning/erro
   "siteUrl": "https://www.example.com/"
 }
 ```
+
+<!-- params:list_sitemaps -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property |
+
+<!-- /params:list_sitemaps -->
 
 ### `submit_sitemap`
 
@@ -395,6 +491,16 @@ Submits a sitemap and refreshes its current state. This is a write operation. If
   "feedpath": "https://www.example.com/sitemap.xml"
 }
 ```
+
+<!-- params:submit_sitemap -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property |
+| `feedpath` | string | yes |  | Absolute URL of the sitemap to submit |
+| `dryRun` | boolean | no | `false` | If true, report what would be submitted without writing to Search Console |
+
+<!-- /params:submit_sitemap -->
 
 ### `delete_sitemap`
 
@@ -408,6 +514,16 @@ Removes a submitted sitemap from a Search Console property. This is a write oper
 }
 ```
 
+<!-- params:delete_sitemap -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property |
+| `feedpath` | string | yes |  | Absolute URL of the sitemap to remove |
+| `dryRun` | boolean | no | `false` | If true, report what would be removed without writing to Search Console |
+
+<!-- /params:delete_sitemap -->
+
 ### `inspect_url`
 
 Returns index coverage, verdict, robots state, indexing state, crawl time, fetch state, Google and user canonicals, mobile usability, and rich-result status.
@@ -418,6 +534,15 @@ Returns index coverage, verdict, robots state, indexing state, crawl time, fetch
   "inspectionUrl": "https://www.example.com/products/widget"
 }
 ```
+
+<!-- params:inspect_url -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property containing the inspected URL |
+| `inspectionUrl` | string | yes |  | Fully qualified URL to inspect |
+
+<!-- /params:inspect_url -->
 
 ### `index_coverage`
 
@@ -431,6 +556,17 @@ Fetches a sitemap and checks a bounded set of its direct page URLs with Google's
   "concurrency": 3
 }
 ```
+
+<!-- params:index_coverage -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property containing the sitemap URLs |
+| `sitemapUrl` | string | yes |  | Fully qualified sitemap URL to inspect |
+| `maxUrls` | number | no | `20` | Maximum URLs to inspect |
+| `concurrency` | number | no | `3` | Concurrent URL Inspection requests |
+
+<!-- /params:index_coverage -->
 
 `maxUrls` defaults to 20 and has a hard maximum of 50. `concurrency` defaults to 3 and has a hard maximum of 5. These limits protect the URL Inspection API quota, which is approximately 2,000 queries per day and 600 per minute for each property.
 
@@ -447,6 +583,20 @@ Checks URLs with the URL Inspection API and, when some are not indexed, resubmit
 }
 ```
 
+<!-- params:request_recrawl -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `siteUrl` | string | yes |  | Search Console property containing the URLs |
+| `urls` | list of string | no |  | Explicit URLs to check; omit to read them from sitemapUrl |
+| `sitemapUrl` | string | no |  | Sitemap to read URLs from; also the default sitemap to resubmit |
+| `feedpath` | string | no |  | Sitemap to resubmit when unindexed URLs are found; defaults to sitemapUrl |
+| `maxUrls` | number | no | `20` | Maximum sitemap URLs to inspect |
+| `concurrency` | number | no | `3` | Concurrent URL Inspection requests |
+| `dryRun` | boolean | no | `false` | If true, inspect and report without resubmitting the sitemap |
+
+<!-- /params:request_recrawl -->
+
 It shares the `index_coverage` caps (`maxUrls` up to 50, `concurrency` up to 5) because both draw on the same URL Inspection quota. Resubmission only prompts a recrawl of pages whose sitemap `lastmod` is fresh, so keep `lastmod` accurate for changed URLs.
 
 ### `indexnow_submit`
@@ -459,6 +609,18 @@ Submits up to 10,000 changed URLs in one call to an [IndexNow](https://www.index
   "key": "your-indexnow-key"
 }
 ```
+
+<!-- params:indexnow_submit -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `urls` | list of string | yes |  | Changed page URLs; one submission covers one host |
+| `key` | string | no |  | IndexNow key; defaults to SEO_MCP_INDEXNOW_KEY. The same key must be hosted on the site as a text file at https://<host>/<key>.txt (or at keyLocation) containing only the key |
+| `keyLocation` | string | no |  | URL of the hosted key file when it is not https://<host>/<key>.txt |
+| `endpoint` | one of api.indexnow.org, www.bing.com, yandex.com, searchadvisor.naver.com, search.seznam.cz, indexnow.yep.com | no | `"api.indexnow.org"` | IndexNow endpoint to notify; participating engines share submissions |
+| `dryRun` | boolean | no | `false` | If true, report what would be submitted without notifying the endpoint |
+
+<!-- /params:indexnow_submit -->
 
 All URLs in one submission must share one host. The key is any 8-128 character value of letters, digits, or dashes, passed as `key` or `SEO_MCP_INDEXNOW_KEY`, and must be hosted as a text file containing exactly the key at `https://<host>/<key>.txt` (or at `keyLocation` on the same host). Because key file URLs conventionally contain the key, neither the key nor `keyLocation` is ever echoed in tool output. `endpoint` defaults to `api.indexnow.org`; a submission to any participating endpoint reaches all of them.
 
@@ -474,6 +636,17 @@ Returns CrUX field data when available, including LCP, CLS, INP or FID, FCP, and
 }
 ```
 
+<!-- params:pagespeed -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `url` | string | yes |  | Public page URL to analyze |
+| `strategy` | one of mobile, desktop | no | `"mobile"` | Lighthouse device strategy |
+| `category` | list of one of performance, seo, accessibility, best-practices | no | `["performance","seo","accessibility","best-practices"]` | Lighthouse categories to run |
+| `apiKey` | string | no |  | Optional PageSpeed Insights API key; defaults to SEO_MCP_PAGESPEED_KEY |
+
+<!-- /params:pagespeed -->
+
 `strategy` defaults to `mobile`. All four categories are requested by default. `apiKey` is optional and overrides `SEO_MCP_PAGESPEED_KEY` for that call.
 
 ### `seo_audit`
@@ -485,6 +658,14 @@ Fetches up to 10 MB of HTML with redirects enabled, a 15-second timeout, and an 
   "url": "https://www.example.com/landing-page"
 }
 ```
+
+<!-- params:seo_audit -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `url` | string | yes |  | Public page URL to audit |
+
+<!-- /params:seo_audit -->
 
 ### `audit_site`
 
@@ -498,6 +679,16 @@ Fetches a sitemap and audits up to 50 of its page URLs with bounded concurrency.
 }
 ```
 
+<!-- params:audit_site -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `sitemapUrl` | string | yes |  | Public sitemap URL to audit |
+| `maxPages` | number | no | `20` | Maximum pages to audit |
+| `concurrency` | number | no | `5` | Maximum page fetches in flight |
+
+<!-- /params:audit_site -->
+
 `maxPages` defaults to 20 and `concurrency` defaults to 5. Their maximum values are 50 and 10, respectively.
 
 ### `wporg_plugin`
@@ -508,6 +699,16 @@ Looks up a WordPress.org plugin by slug and returns active installs, downloads, 
 { "slug": "akismet" }
 ```
 
+<!-- params:wporg_plugin -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `slug` | string | yes |  | WordPress.org plugin slug, e.g. akismet |
+| `downloadDays` | number | no | `30` | Days of daily download history to fetch; 0 skips it |
+| `includeVersionDistribution` | boolean | no | `true` | Also fetch the share of active installs on each plugin version |
+
+<!-- /params:wporg_plugin -->
+
 ### `play_store_stats`
 
 Reads the Google Play bulk reports for an app and returns Active Device Installs, plus store-listing visitors and acquisitions grouped by traffic source and search term. `hasPlaySearchRows` states outright whether any Play search traffic appears, since its absence is a finding rather than an error. Reports lag by days, so `lastDatePresent` is the last date actually in the files rather than today.
@@ -515,6 +716,23 @@ Reads the Google Play bulk reports for an app and returns Active Device Installs
 ```json
 { "packageName": "com.example.app", "month": "202608" }
 ```
+
+<!-- params:play_store_stats -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `packageName` | string | yes |  | Android package name, e.g. app.getpsst |
+| `month` | string | no |  | Report month as YYYYMM; defaults to the current UTC month. Ignored when startDate and endDate are given |
+| `installsDimension` | one of overview, country, language, device, os_version, carrier, app_version | no | `"overview"` | Which installs report to read. overview is undocumented by Google but present in real buckets; the others are the documented breakdowns |
+| `include` | list of one of ratings, crashes, reviews | no | `[]` | Extra report families to read. Missing files are normal: Google emits a report only when there is something to report |
+| `storePerformanceDimension` | one of traffic_source, country | no | `"traffic_source"` | Which store performance breakdown to read |
+| `storePerformanceTotals` | boolean | no | `false` | Read the cheaper total_ variant, which carries only headline acquisitions |
+| `ratingsDimension` | one of country, language, device, os_version, carrier, app_version | no | `"country"` | Dimension for the ratings report |
+| `crashesDimension` | one of device, os_version, app_version | no | `"app_version"` | Dimension for the crashes report |
+| `startDate` | string | no |  | Window start in YYYY-MM-DD. With endDate, reads every month the window touches and filters rows to it |
+| `endDate` | string | no |  | Window end in YYYY-MM-DD |
+
+<!-- /params:play_store_stats -->
 
 Set `SEO_MCP_PLAY_BUCKET` to the reporting bucket (`gs://pubsite_prod_...` and the bare name both work) and `SEO_MCP_PLAY_CREDENTIALS` to a service account key with read access to that bucket, falling back to `GOOGLE_APPLICATION_CREDENTIALS`. Read access to the bucket is a different grant from the Play Console invite `play_vitals` needs. `month` defaults to the current UTC month.
 
@@ -529,6 +747,18 @@ The reported state comes from `appVersionState`, falling back to the deprecated 
 ```json
 { "bundleId": "com.example.app", "state": "live", "platform": "IOS", "storefronts": ["us", "gb"] }
 ```
+
+<!-- params:app_store_listing -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `appId` | string | no |  | App Store Connect numeric app id; provide this or bundleId |
+| `bundleId` | string | no |  | Bundle id, resolved to an app id when appId is not given; provide this or appId |
+| `platform` | one of IOS, MAC_OS, TV_OS, VISION_OS | no | `"IOS"` | App Store platform whose version is read |
+| `state` | one of live, editable | no | `"live"` | Read the live listing or the editable one being prepared for release |
+| `storefronts` | list of string | no | `["us"]` | Storefront country codes for the public ratings lookup |
+
+<!-- /params:app_store_listing -->
 
 Provide `appId` or `bundleId`. Set `SEO_MCP_ASC_KEY_PATH` to the `.p8` private key and `SEO_MCP_ASC_KEY_ID` to its key id, plus `SEO_MCP_ASC_ISSUER_ID` for a team key (individual keys have no issuer id). The key and the token it signs never appear in output.
 
@@ -556,11 +786,19 @@ Lists the snapshot documents already in the snapshot directory, newest first, wi
 { "limit": 50 }
 ```
 
+<!-- params:list_snapshots -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `limit` | number | no | `50` | Maximum snapshots to return, newest first |
+
+<!-- /params:list_snapshots -->
+
 A snapshot pair is worthless if nothing can say which files exist, and every caller was otherwise left keeping its own index of a directory the server owns. A file in the directory that is not a snapshot document is listed with its error rather than hidden, so a name you expect to find never quietly reads as absent. A missing directory is an empty list, not a failure: nothing has been captured yet. `total` and `truncated` sit beside the list because the command line prints the structured half alone, where a page cut at `limit` would otherwise read as the whole history.
 
 ### `snapshot`
 
-Captures every surface into one timestamped document: Search Console totals and top rows per property, App Store listings, Google Play installs and traffic, and WordPress.org stats. This is the tool for recording a point in a series, because none of the consoles keep a history you can diff against later.
+Captures four surfaces into one timestamped document: Search Console totals and top rows per property, App Store listings, Google Play installs and traffic, and WordPress.org stats. Core Web Vitals field data, Android vitals, App Store sales and App Store reviews are not in it; `crux_field_data`, `play_vitals`, `app_store_sales` and `app_store_reviews` read those. This is the tool for recording a point in a series, because none of the consoles keep a history you can diff against later.
 
 Search Console totals come from the **date** dimension, never by summing the query dimension. Google withholds low-volume queries, so a query-level sum undercounts, and that gap reads later as a decline that never happened.
 
@@ -577,6 +815,22 @@ A surface that cannot be read is recorded in place with its error and named in `
 }
 ```
 
+<!-- params:snapshot -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `properties` | list of string | no | `[]` | Search Console properties to capture |
+| `apps` | list of string | no | `[]` | App Store apps, each a numeric app id or a bundle id |
+| `packages` | list of string | no | `[]` | Google Play package names |
+| `slugs` | list of string | no | `[]` | WordPress.org plugin slugs |
+| `windowDays` | number | no | `28` | Search Console window in days, ending today |
+| `platform` | one of IOS, MAC_OS, TV_OS, VISION_OS | no | `"IOS"` | App Store platform for the app surfaces |
+| `storefronts` | list of string | no | `["us"]` | Storefront country codes for App Store ratings |
+| `outPath` | string | no |  | File name or path inside the snapshot directory (SEO_MCP_SNAPSHOT_DIR, default ~/.config/seo-mcp/snapshots); must end in .json, or pass auto to name the file after the moment it was taken. An existing file is not overwritten unless overwrite is true |
+| `overwrite` | boolean | no | `false` | Replace an existing file at outPath; without it an existing file is left alone and reported |
+
+<!-- /params:snapshot -->
+
 Pass `outPath` to write the document where `compare_snapshots` can read it later, or `outPath: "auto"` to have it named after the moment it was taken (`2026-09-04T00-15Z.json`), which is what makes an unattended run produce a series rather than one file overwritten forever. It is a file name inside the snapshot directory, `SEO_MCP_SNAPSHOT_DIR` or `~/.config/seo-mcp/snapshots` by default; a path that resolves outside that directory or does not end in `.json` is refused, and an existing file is left in place and reported unless you pass `overwrite: true`. A model chooses this string, so the directory is the boundary that keeps a tool call from truncating anything else on the machine. Position and CTR are `null` rather than `0` when a window has no impressions, so an empty window never compares against real data as a collapse.
 
 ### `compare_snapshots`
@@ -586,6 +840,16 @@ Reads two snapshot documents and reports what changed between them: clicks, impr
 ```json
 { "from": "2026-08-06.json", "to": "2026-09-03.json", "minImpressions": 100 }
 ```
+
+<!-- params:compare_snapshots -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `from` | string | yes |  | Snapshot file name or path inside the snapshot directory; latest names the newest snapshot on disk and previous the one before it |
+| `to` | string | yes |  | Snapshot file name or path inside the snapshot directory; latest names the newest snapshot on disk and previous the one before it |
+| `minImpressions` | number | no | `100` | Ignore page position moves below this many impressions on both sides |
+
+<!-- /params:compare_snapshots -->
 
 `from` and `to` resolve inside the same snapshot directory as `snapshot`'s `outPath`, so this tool reads snapshots and nothing else. Either one also takes `latest` or `previous` instead of a file name, which is the comparison almost every caller actually wants and the only one they can ask for without listing the directory first. Both skip a file that will not parse, and asking for `previous` with a single snapshot on disk says so rather than comparing a document against itself.
 
@@ -601,6 +865,20 @@ Reads App Store customer reviews and your responses, filtered by star rating or 
 { "bundleId": "com.example.app", "rating": [1, 2], "territory": "USA", "limit": 100 }
 ```
 
+<!-- params:app_store_reviews -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `appId` | string | no |  | App Store Connect numeric app id; provide this or bundleId |
+| `bundleId` | string | no |  | Bundle id; provide this or appId |
+| `rating` | list of number | no |  | Only these star ratings |
+| `territory` | string | no |  | Only reviews from this storefront |
+| `sort` | one of -createdDate, createdDate, rating, -rating | no | `"-createdDate"` | Sort order; newest first by default |
+| `limit` | number | no | `100` | Maximum reviews to return across pages |
+| `maxPages` | number | no | `5` | Maximum pages to follow |
+
+<!-- /params:app_store_reviews -->
+
 It reports `meanOfFetched` and `histogramOfFetched`, never "the rating". Those describe only the reviews this call returned, and a filtered or truncated page would make a mean a different number wearing the same name. App Store Connect exposes no aggregate rating resource at all, which is verifiable in Apple's own OpenAPI specification: every path matching "rating" is an *age* rating.
 
 ### `app_store_discovery`
@@ -610,6 +888,20 @@ Reads the App Store surfaces beyond the listing text: **search keywords** (Apple
 ```json
 { "bundleId": "com.example.app", "locales": ["en-US", "ar-SA"], "platform": "IOS" }
 ```
+
+<!-- params:app_store_discovery -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `appId` | string | no |  | App Store Connect numeric app id; provide this or bundleId |
+| `bundleId` | string | no |  | Bundle id; provide this or appId |
+| `include` | list of one of searchKeywords, appTags, experiments, customProductPages, appEvents, availability, reviewSummarizations | no | `[]` | Which discovery surfaces to read; empty reads all of them |
+| `limit` | number | no | `50` | Rows per resource |
+| `locales` | list of string | no | `["en-US"]` | Locales for per-locale resources such as searchKeywords |
+| `platform` | one of IOS, MAC_OS, TV_OS, VISION_OS | no | `"IOS"` | Platform for resources that require one |
+| `includeRows` | boolean | no | `false` | Include every raw row as well as the counts; off by default so a summary call stays small |
+
+<!-- /params:app_store_discovery -->
 
 Each resource carries its own required parameters: `searchKeywords` needs both a platform and a locale filter, `appAvailabilityV2` is a to-one relationship that rejects `limit` outright. A resource this key or app cannot serve is reported as `available: false`, never as an empty list, because "no experiments" and "cannot read experiments" are different answers.
 
@@ -621,6 +913,17 @@ Real-user Core Web Vitals for an origin or a single URL from the Chrome UX Repor
 { "origin": "https://example.com", "formFactor": "PHONE" }
 ```
 
+<!-- params:crux_field_data -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `origin` | string | no |  | Origin such as https://example.com; aggregates every page under it. Give origin or url, not both |
+| `url` | string | no |  | A single page URL. Give origin or url, not both |
+| `formFactor` | one of PHONE, TABLET, DESKTOP | no |  | Device class; omit for all form factors combined |
+| `metrics` | list of string | no |  | Metric names to request; omit for all available |
+
+<!-- /params:crux_field_data -->
+
 This is field data, not a lab test; keep `pagespeed` for Lighthouse audits. Google is discontinuing PageSpeed's own real-world data, so this is where field measurements move. An origin with too few anonymized samples returns `hasData: false` with a note rather than an error or zeros, since a zeroed LCP would read as a catastrophic regression.
 
 ### `crux_history`
@@ -631,6 +934,18 @@ The same field metrics as a weekly series, roughly six months of history.
 { "origin": "https://example.com", "formFactor": "PHONE", "collectionPeriodCount": 25 }
 ```
 
+<!-- params:crux_history -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `origin` | string | no |  | Origin such as https://example.com; aggregates every page under it. Give origin or url, not both |
+| `url` | string | no |  | A single page URL. Give origin or url, not both |
+| `formFactor` | one of PHONE, TABLET, DESKTOP | no |  | Device class; omit for all form factors combined |
+| `metrics` | list of string | no |  | Metric names to request; omit for all available |
+| `collectionPeriodCount` | number | no |  | Weekly periods to return, 1 to 40. Documented history is about six months; the API decides what it actually has |
+
+<!-- /params:crux_history -->
+
 Each period is a 28-day rolling window stepped weekly, so consecutive points overlap by three weeks and a single week-on-week move is not an independent change. Periods with too few samples keep their place in the series as `null` rather than being dropped, so the values stay aligned with `collectionPeriods`.
 
 ### `app_store_sales`
@@ -640,6 +955,19 @@ Reads App Store Sales and Trends: units downloaded per day, per territory, per a
 ```json
 { "reportDate": "2026-08-30", "frequency": "DAILY", "reportType": "SALES", "reportSubType": "SUMMARY" }
 ```
+
+<!-- params:app_store_sales -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `reportDate` | string | no |  | Report date. DAILY and WEEKLY take YYYY-MM-DD (WEEKLY means the week's ending date), MONTHLY takes YYYY-MM, YEARLY takes YYYY. Defaults to the most recent complete period for the frequency |
+| `frequency` | one of DAILY, WEEKLY, MONTHLY, YEARLY | no | `"DAILY"` | Report period |
+| `reportType` | one of SALES, PRE_ORDER, SUBSCRIPTION, SUBSCRIPTION_EVENT, SUBSCRIBER, INSTALLS, FIRST_ANNUAL | no | `"SALES"` | Sales and Trends report type |
+| `reportSubType` | one of SUMMARY, DETAILED, SUMMARY_INSTALL_TYPE, SUMMARY_TERRITORY, SUMMARY_CHANNEL | no | `"SUMMARY"` | Report sub type |
+| `version` | string | no |  | Report version, such as 1_0 or 1_3, when the default is not accepted |
+| `includeRows` | boolean | no | `false` | Include every raw report row as well as the per-SKU summary |
+
+<!-- /params:app_store_sales -->
 
 Set `SEO_MCP_ASC_VENDOR_NUMBER`; App Store Connect shows the vendor number under Payments and Financial Reports, beside the legal entity name. Sales and Trends needs a team key with the Admin, Finance, or Sales and Reports role. Daily reports land the next day, so the default report date is two days back rather than today. `reportDate` takes the shape its frequency needs: `YYYY-MM-DD` for `DAILY` and for `WEEKLY`, where it means the week's ending Sunday, `YYYY-MM` for `MONTHLY`, and `YYYY` for `YEARLY`; leave it out and each frequency defaults to its most recent complete period.
 
@@ -652,6 +980,20 @@ Reads Android vitals from the Play Developer Reporting API: crash rate, ANR rate
 ```json
 { "packageName": "com.example.app", "metricSets": ["crashRate", "anrRate"], "days": 28 }
 ```
+
+<!-- params:play_vitals -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `packageName` | string | yes |  | Android package name |
+| `metricSets` | list of one of crashRate, anrRate, errorCount, slowStartRate, excessiveWakeupRate | no | `["crashRate","anrRate"]` | Which Android vitals metric sets to query |
+| `aggregationPeriod` | one of DAILY, HOURLY | no | `"DAILY"` | DAILY is reported in America/Los_Angeles, HOURLY in UTC |
+| `days` | number | no | `28` | How many days back to query |
+| `dimensions` | list of string | no | `[]` | Breakdown dimensions such as versionCode or countryCode |
+| `pageSize` | number | no | `1000` | Rows per metric set |
+| `includeRows` | boolean | no | `false` | Include every raw row as well as the counts; off by default so a summary call stays small |
+
+<!-- /params:play_vitals -->
 
 Set `SEO_MCP_PLAY_CREDENTIALS` to the service account key, falling back to `GOOGLE_APPLICATION_CREDENTIALS`. The account also has to be invited in Play Console under Users and permissions with the permission to view app information and app quality. The token is minted for the `playdeveloperreporting` scope, which is a separate grant from the Cloud Storage read `play_store_stats` needs. One account can hold both, but a key that only has the bucket grant gets a 403 here.
 

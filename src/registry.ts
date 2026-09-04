@@ -308,7 +308,7 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "play_store_stats",
-    description: "Read Google Play bulk reports for an app: active device installs and store-listing visitors and acquisitions by traffic source. Reads the reporting bucket named by SEO_MCP_PLAY_BUCKET; read-only",
+    description: "Read Google Play bulk reports for an app: active device installs and store-listing visitors and acquisitions by traffic source. installsDimension picks which installs breakdown is read (overview, country, language, device, os_version, carrier or app_version), include adds the ratings, crashes and reviews report families, and startDate with endDate reads every month the window touches instead of the single month in month. Reads the reporting bucket named by SEO_MCP_PLAY_BUCKET; read-only",
     inputShape: playStoreStatsShape,
     outputSchema: playStoreStatsOutput,
     run: (_ctx, params) => playStoreStats(params),
@@ -371,7 +371,7 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "snapshot",
-    description: "Capture every surface in one timestamped document: Search Console totals and top rows per property, App Store listings, Google Play installs and traffic, and WordPress.org stats. A surface that cannot be read is recorded as an error in place rather than omitted; read-only",
+    description: "Capture four surfaces in one timestamped document: Search Console totals and top rows per property, App Store listings, Google Play installs and traffic, and WordPress.org stats. Core Web Vitals field data, Android vitals, App Store sales and App Store reviews are not captured. A surface that cannot be read is recorded as an error in place rather than omitted; list_snapshots names the documents already on disk to compare an earlier one against; read-only",
     inputShape: snapshotShape,
     outputSchema: snapshotOutput,
     run: (ctx, params) => snapshot(ctx, params),

@@ -110,7 +110,7 @@ function pipeInput(schema: z.ZodType): z.ZodType {
 
 // A nested parameter such as a Search Console filter group has no comma-separated
 // form to split: commas appear inside the value itself. Those flags take JSON.
-function jsonShape(schema: z.ZodType): "object" | "list" | undefined {
+export function jsonShape(schema: z.ZodType): "object" | "list" | undefined {
   const resolved = pipeInput(schema);
   if (resolved instanceof z.ZodObject) return "object";
   if (resolved instanceof z.ZodArray) {
@@ -178,7 +178,7 @@ function describeTool(definition: ToolDefinition): string {
   ].join("\n");
 }
 
-function typeName(schema: z.ZodType): string {
+export function typeName(schema: z.ZodType): string {
   const json = jsonShape(schema);
   if (json) return json === "object" ? "JSON object" : "JSON list";
   if (schema instanceof z.ZodNumber) return "number";

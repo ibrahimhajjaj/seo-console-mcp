@@ -25,6 +25,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
+    "docs:params": "tsx scripts/param-docs.ts",
     "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
