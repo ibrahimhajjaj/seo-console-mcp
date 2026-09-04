@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
+
+Confident wrong answers turned into honest ones, and a snapshot series you can
+read back without remembering a filename.
 
 ### Added
 
@@ -13,7 +16,6 @@
   was taken, which is what lets a cron line build a series instead of
   overwriting one file forever. Scheduling stays out: an MCP server should not
   own a daemon, and the README carries the cron line instead.
-
 - `compare_snapshots` now diffs four things the snapshot documents already held
   and the comparison threw away: top queries alongside top pages, the per-locale
   name, subtitle, keyword, promotional-text and description lengths together
@@ -23,15 +25,75 @@
   two files already on disk, and this is retroactive: any pair of snapshots ever
   taken compares on the new fields, and a document from before a field existed
   reports it as a null delta rather than as a change.
+- Object-shaped parameters can be given to the command line as JSON.
+  `search_analytics --dimension-filter-groups` was advertised in `--help` and
+  could not work: the value was split on commas, and the commas are inside it.
+
+### Fixed
+
+- `app_store_sales` could not fetch a monthly or yearly report at all, and every
+  refusal from Apple came back as `hasData: false` with a note saying the period
+  had no sales. A month with real revenue read as a quiet one. Each frequency
+  now takes the date shape it needs, and only a 404 that actually says "no
+  sales" is reported as an absence.
+- The four insight tools asked for 5,000 rows and never said when there were
+  more. Search Console returns rows by clicks, so the cut fell exactly on the
+  low-click rows those tools exist to find, and `compare_search_periods` then
+  scored a query that had merely slipped below the cut as a total loss of every
+  click it used to have. They now report `truncated`, and a key missing from a
+  cut-off window counts as unknown rather than zero.
+- A gzipped sitemap parsed to zero URLs. `audit_site`, `index_coverage` and
+  `request_recrawl` each reported a clean empty result for the `.xml.gz` files
+  most large sites publish. Sitemaps are decompressed now, and a document with
+  no sitemap root is an error rather than an absence.
+- `play_store_stats` silently dropped a `startDate` given without an `endDate`
+  and answered for the current month instead, and a reversed window returned
+  nulls with no explanation. Both are refused by name, and a window given
+  alongside `month` says which one it used.
+- The CrUX tools accepted neither or both of `origin` and `url`, then posted an
+  empty body or quietly measured the origin. Exactly one is now required.
 
 ### Changed
 
+- `snapshot` and `compare_snapshots` only reach files inside one directory,
+  `SEO_MCP_SNAPSHOT_DIR` or `~/.config/seo-mcp/snapshots`, and an existing file
+  is never replaced without `overwrite`. `outPath` was a string a model chose
+  and `snapshot` handed it straight to a truncating write, so a wrong or
+  injected path could overwrite anything the server could write. Existing calls
+  that passed an absolute path elsewhere need a file name instead.
 - `play_vitals` and `app_store_discovery` no longer return their raw rows unless
   asked. Between them they could put a thousand row objects into a caller's
   context in one call, when the row counts and the freshness date already answer
   what was being asked. Pass `includeRows` to get the rows themselves, the same
   switch `app_store_sales` already carries, and the output says when it held rows
   back so a count with no rows beside it cannot be read as empty.
+- Independent requests are no longer awaited one at a time. A 13-locale
+  `app_store_discovery` run was 19 round trips deep; the metric sets in
+  `play_vitals`, the three Search Console reads per property in `snapshot`, the
+  two App Store Connect lists behind `app_store_listing`, and the monthly Play
+  files now overlap under a bounded pool.
+- The Cloudflare API and the Play reporting bucket were the only outbound calls
+  with no timeout, so `seo-mcp verify` could hang partway through writing a DNS
+  record with nothing to show for it. Both time out, and a Play window is capped
+  at 24 months so one call cannot become hundreds of report reads.
+- Every tool's parameter table in the README is generated from its schema, with
+  a check that fails when the two drift. Roughly twenty shipped parameters were
+  undocumented, and the page still said `search_analytics` could not take
+  `discover` or `googleNews`. There is also a table of which tools need which
+  credentials, and `play_vitals` finally documents the Play Console invite it
+  needs, which is a different grant from the bucket access `play_store_stats`
+  uses.
+
+### Security
+
+- The refusal to fetch non-public addresses now covers the IPv4 address carried
+  inside NAT64, 6to4 and IPv4-compatible IPv6 addresses, along with the reserved,
+  benchmarking and multicast ranges. A hostname resolving into one of those
+  reached an internal address that the IPv4 rules alone would have refused.
+- `undici` moved to 7.29.0 and the lockfile past every remaining advisory, so
+  `npm audit` reports nothing on the full tree. undici is the dependency that
+  implements the connect-time address pinning, and a test now proves that
+  pinning is honored rather than assuming it.
 
 ## 0.8.0
 
