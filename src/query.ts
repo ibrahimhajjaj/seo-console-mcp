@@ -46,9 +46,7 @@ export async function runQuery(command: QueryCommand, deps: RunQueryDeps = {}): 
 
   try {
     const params = z.object(definition.inputShape).parse(coerceCliParams(definition.inputShape, command.params));
-    const context = deps.makeContext
-      ? deps.makeContext(resolveCredentials(command))
-      : createToolContext(withCredentials(resolveCredentials(command)));
+    const context = deps.makeContext ? deps.makeContext(resolveCredentials(command)) : createToolContext(withCredentials(resolveCredentials(command)));
     const result = await definition.run(context, params);
     const json = JSON.stringify(result.structuredContent ?? result, null, 2);
     if (command.out) {
@@ -65,9 +63,7 @@ export async function runQuery(command: QueryCommand, deps: RunQueryDeps = {}): 
 }
 
 function resolveCredentials(command: QueryCommand): string | undefined {
-  return resolveCredentialsPath(
-    command.credentials ?? process.env.SEO_MCP_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS,
-  );
+  return resolveCredentialsPath(command.credentials ?? process.env.SEO_MCP_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS);
 }
 
 function withCredentials(credentialsPath: string | undefined): { credentialsPath?: string } {
@@ -82,7 +78,9 @@ export function coerceCliParams(shape: z.ZodRawShape, raw: Record<string, string
   for (const [key, value] of Object.entries(raw)) {
     const field = shape[key];
     if (!field) {
-      const valid = Object.keys(shape).map((name) => `--${camelToKebab(name)}`).join(", ");
+      const valid = Object.keys(shape)
+        .map((name) => `--${camelToKebab(name)}`)
+        .join(", ");
       throw new Error(`Unknown parameter --${camelToKebab(key)}. Valid parameters: ${valid || "(none)"}.`);
     }
     coerced[key] = coerceValue(unwrap(field as z.ZodType), value, `--${camelToKebab(key)}`);

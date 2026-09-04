@@ -92,19 +92,19 @@ export async function compareSnapshots(params: CompareParams, deps: CompareDeps 
       localesComparable,
       locales: localesComparable
         ? pairBy(beforeLocales, afterLocales, (entry) => entry.locale).map(([locale, left, right]) => ({
-          locale,
-          name: delta(left?.name, right?.name),
-          subtitle: delta(left?.subtitle, right?.subtitle),
-          keywords: delta(left?.keywords, right?.keywords),
-          promotionalText: delta(left?.promotionalText, right?.promotionalText),
-          description: delta(left?.description, right?.description),
-        }))
+            locale,
+            name: delta(left?.name, right?.name),
+            subtitle: delta(left?.subtitle, right?.subtitle),
+            keywords: delta(left?.keywords, right?.keywords),
+            promotionalText: delta(left?.promotionalText, right?.promotionalText),
+            description: delta(left?.description, right?.description),
+          }))
         : [],
       overLimit: localesComparable
         ? {
-          added: afterOverLimit.filter((entry) => !beforeOverLimit.includes(entry)),
-          removed: beforeOverLimit.filter((entry) => !afterOverLimit.includes(entry)),
-        }
+            added: afterOverLimit.filter((entry) => !beforeOverLimit.includes(entry)),
+            removed: beforeOverLimit.filter((entry) => !afterOverLimit.includes(entry)),
+          }
         : { added: [], removed: [] },
     };
   });
@@ -224,11 +224,7 @@ function loadDocument(read: (path: string) => string, path: string, side: string
   return result.data;
 }
 
-function pairBy<T extends Record<string, unknown>>(
-  before: T[],
-  after: T[],
-  key: (entry: T) => string,
-): Array<[string, T | undefined, T | undefined]> {
+function pairBy<T extends Record<string, unknown>>(before: T[], after: T[], key: (entry: T) => string): Array<[string, T | undefined, T | undefined]> {
   const names = [...new Set([...before.map(key), ...after.map(key)])].sort();
   return names.map((name) => [name, before.find((entry) => key(entry) === name), after.find((entry) => key(entry) === name)]);
 }
@@ -240,12 +236,7 @@ function delta(before: number | null | undefined, after: number | null | undefin
 
 // A position move on a handful of impressions is noise, so the floor keeps the
 // list to rows that carry enough weight to mean something.
-function rowMovement(
-  beforeRows: SnapshotRow[],
-  afterRows: SnapshotRow[],
-  keyOf: (row: SnapshotRow) => string,
-  minImpressions: number,
-) {
+function rowMovement(beforeRows: SnapshotRow[], afterRows: SnapshotRow[], keyOf: (row: SnapshotRow) => string, minImpressions: number) {
   const before = new Map(beforeRows.map((row) => [keyOf(row), row]));
   const afterKeys = new Set(afterRows.map(keyOf));
   const movers: Array<{ key: string; positionFrom: number; positionTo: number; change: number; impressions: number }> = [];
@@ -273,30 +264,35 @@ function rowMovement(
 function localeLengths(entry: SnapshotDocument["apps"][number] | undefined): LocaleLengths[] | null {
   const locales = entry?.locales;
   if (!Array.isArray(locales)) return null;
-  return locales.filter(isRecord).filter((locale) => typeof locale.locale === "string").map((locale) => ({
-    locale: String(locale.locale),
-    name: numberOrNull(locale.name),
-    subtitle: numberOrNull(locale.subtitle),
-    keywords: numberOrNull(locale.keywords),
-    promotionalText: numberOrNull(locale.promotionalText),
-    description: numberOrNull(locale.description),
-  }));
+  return locales
+    .filter(isRecord)
+    .filter((locale) => typeof locale.locale === "string")
+    .map((locale) => ({
+      locale: String(locale.locale),
+      name: numberOrNull(locale.name),
+      subtitle: numberOrNull(locale.subtitle),
+      keywords: numberOrNull(locale.keywords),
+      promotionalText: numberOrNull(locale.promotionalText),
+      description: numberOrNull(locale.description),
+    }));
 }
 
 function trafficSourceTotals(entry: SnapshotDocument["packages"][number] | undefined): TrafficSourceTotals[] {
   const rows = entry?.trafficSources;
   if (!Array.isArray(rows)) return [];
-  return rows
-    .filter(isRecord)
-    // Search-term and campaign rows split one source across many entries, so a
-    // union keyed by source alone would pair rows measuring different things.
-    .filter((row) => typeof row.source === "string" && !row.searchTerm && !row.utmSource && !row.utmCampaign)
-    .map((row) => ({
-      source: String(row.source),
-      visitors: numberOrNull(row.visitors),
-      acquisitions: numberOrNull(row.acquisitions),
-      conversionRate: numberOrNull(row.conversionRate),
-    }));
+  return (
+    rows
+      .filter(isRecord)
+      // Search-term and campaign rows split one source across many entries, so a
+      // union keyed by source alone would pair rows measuring different things.
+      .filter((row) => typeof row.source === "string" && !row.searchTerm && !row.utmSource && !row.utmCampaign)
+      .map((row) => ({
+        source: String(row.source),
+        visitors: numberOrNull(row.visitors),
+        acquisitions: numberOrNull(row.acquisitions),
+        conversionRate: numberOrNull(row.conversionRate),
+      }))
+  );
 }
 
 function histogramDeltas(before: unknown, after: unknown) {
@@ -321,10 +317,7 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
-function compareRatings(
-  before: SnapshotDocument["apps"][number]["ratings"],
-  after: SnapshotDocument["apps"][number]["ratings"],
-) {
+function compareRatings(before: SnapshotDocument["apps"][number]["ratings"], after: SnapshotDocument["apps"][number]["ratings"]) {
   const storefronts = [...new Set([...(before ?? []).map((entry) => entry.storefront), ...(after ?? []).map((entry) => entry.storefront)])].sort();
   return storefronts.map((storefront) => {
     const left = (before ?? []).find((entry) => entry.storefront === storefront);
@@ -363,35 +356,36 @@ function formatComparison(comparison: {
     lines.push("The 'from' document is the later of the two, so every difference below has its sign reversed. Swap the arguments.");
   }
   for (const property of comparison.properties) {
-    lines.push(property.comparable
-      ? `- ${property.siteUrl}: clicks ${signed(property.clicks.change)}, impressions ${signed(property.impressions.change)}, position ${signed(property.position.change)}`
-      : `- ${property.siteUrl}: not comparable, one side is missing`);
+    lines.push(
+      property.comparable
+        ? `- ${property.siteUrl}: clicks ${signed(property.clicks.change)}, impressions ${signed(property.impressions.change)}, position ${signed(property.position.change)}`
+        : `- ${property.siteUrl}: not comparable, one side is missing`,
+    );
   }
   for (const app of comparison.apps) {
-    lines.push(app.comparable
-      ? `- app ${app.app}: version ${app.versionString.from ?? "unknown"} to ${app.versionString.to ?? "unknown"}, locales ${signed(app.localeCount.change)}`
-      : `- app ${app.app}: not comparable, one side is missing`);
+    lines.push(
+      app.comparable
+        ? `- app ${app.app}: version ${app.versionString.from ?? "unknown"} to ${app.versionString.to ?? "unknown"}, locales ${signed(app.localeCount.change)}`
+        : `- app ${app.app}: not comparable, one side is missing`,
+    );
   }
   for (const entry of comparison.packages) {
-    lines.push(entry.comparable
-      ? `- package ${entry.package}: active installs ${signed(entry.activeDeviceInstalls.change)}`
-      : `- package ${entry.package}: not comparable, one side is missing`);
+    lines.push(entry.comparable ? `- package ${entry.package}: active installs ${signed(entry.activeDeviceInstalls.change)}` : `- package ${entry.package}: not comparable, one side is missing`);
   }
   for (const slug of comparison.slugs) {
-    lines.push(slug.comparable
-      ? `- plugin ${slug.slug}: active installs ${signed(slug.activeInstalls.change)}, rating ${signed(slug.rating.change)}`
-      : `- plugin ${slug.slug}: not comparable, one side is missing`);
+    lines.push(
+      slug.comparable
+        ? `- plugin ${slug.slug}: active installs ${signed(slug.activeInstalls.change)}, rating ${signed(slug.rating.change)}`
+        : `- plugin ${slug.slug}: not comparable, one side is missing`,
+    );
   }
   // The closing line has to account for surfaces that are simply absent on one
   // side, not only ones that recorded an error, or it reassures falsely.
-  const incomparable = [...comparison.properties, ...comparison.apps, ...comparison.packages, ...comparison.slugs]
-    .filter((entry) => !entry.comparable).length;
+  const incomparable = [...comparison.properties, ...comparison.apps, ...comparison.packages, ...comparison.slugs].filter((entry) => !entry.comparable).length;
   if (comparison.surfacesWithErrors.length) {
     lines.push(`A surface failed on one side: ${comparison.surfacesWithErrors.join(", ")}. Do not read these as a change.`);
   }
-  lines.push(incomparable === 0 && comparison.surfacesWithErrors.length === 0
-    ? "Every surface was captured on both sides."
-    : `${incomparable} surface(s) could not be compared.`);
+  lines.push(incomparable === 0 && comparison.surfacesWithErrors.length === 0 ? "Every surface was captured on both sides." : `${incomparable} surface(s) could not be compared.`);
   lines.push("These are differences, not verdicts. Whether a move is good or was caused by any particular change is not something this comparison can tell you.");
   return lines.join("\n");
 }

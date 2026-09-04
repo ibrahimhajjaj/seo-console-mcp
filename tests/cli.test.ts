@@ -2,12 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseCliArgs, UsageError } from "../src/cli.js";
 
 describe("parseCliArgs", () => {
-  it.each([
-    ["--help"],
-    ["-h"],
-    ["setup", "--help"],
-    ["verify", "x.com", "--help"],
-  ])("returns help for %j", (...args) => {
+  it.each([["--help"], ["-h"], ["setup", "--help"], ["verify", "x.com", "--help"]])("returns help for %j", (...args) => {
     expect(parseCliArgs(args)).toEqual({ kind: "help" });
   });
 
@@ -80,13 +75,7 @@ describe("parseCliArgs", () => {
   });
 
   it("parses a query with tool, parameter flags, and out", () => {
-    expect(parseCliArgs([
-      "query", "search_analytics",
-      "--site-url", "sc-domain:example.com",
-      "--start-date", "2026-08-05",
-      "--dimensions", "date",
-      "--out", "/tmp/sg.json",
-    ])).toEqual({
+    expect(parseCliArgs(["query", "search_analytics", "--site-url", "sc-domain:example.com", "--start-date", "2026-08-05", "--dimensions", "date", "--out", "/tmp/sg.json"])).toEqual({
       kind: "query",
       tool: "search_analytics",
       params: { siteUrl: "sc-domain:example.com", startDate: "2026-08-05", dimensions: "date" },

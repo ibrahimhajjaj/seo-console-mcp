@@ -15,7 +15,10 @@ const RECORD = {
     metrics: {
       largest_contentful_paint: {
         percentiles: { p75: 1220 },
-        histogram: [{ start: 0, end: 2500, density: 0.85 }, { start: 2500, density: 0.15 }],
+        histogram: [
+          { start: 0, end: 2500, density: 0.85 },
+          { start: 2500, density: 0.15 },
+        ],
       },
     },
   },
@@ -69,23 +72,20 @@ describe("cruxFieldData", () => {
   it("reports a rejected key distinctly from missing data", async () => {
     const fetchImpl = responding({ error: { code: 403, status: "PERMISSION_DENIED" } }, 403);
 
-    await expect(cruxFieldData(cruxFieldDataInput.parse({ origin: "https://example.com" }), { fetchImpl, apiKey: KEY }))
-      .rejects.toThrow(/rejected the key/);
+    await expect(cruxFieldData(cruxFieldDataInput.parse({ origin: "https://example.com" }), { fetchImpl, apiKey: KEY })).rejects.toThrow(/rejected the key/);
   });
 
   it("refuses a request with no target rather than posting an empty body", async () => {
     const fetchImpl = responding(RECORD);
 
-    await expect(cruxFieldData(cruxFieldDataInput.parse({}), { fetchImpl, apiKey: KEY }))
-      .rejects.toThrow(/exactly one of origin or url/);
+    await expect(cruxFieldData(cruxFieldDataInput.parse({}), { fetchImpl, apiKey: KEY })).rejects.toThrow(/exactly one of origin or url/);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("refuses both targets rather than silently measuring the origin", async () => {
     const fetchImpl = responding(RECORD);
 
-    await expect(cruxFieldData(cruxFieldDataInput.parse({ origin: "https://example.com", url: "https://example.com/a" }), { fetchImpl, apiKey: KEY }))
-      .rejects.toThrow(/exactly one of origin or url/);
+    await expect(cruxFieldData(cruxFieldDataInput.parse({ origin: "https://example.com", url: "https://example.com/a" }), { fetchImpl, apiKey: KEY })).rejects.toThrow(/exactly one of origin or url/);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -95,8 +95,7 @@ describe("cruxFieldData", () => {
     delete process.env.SEO_MCP_CRUX_KEY;
     delete process.env.SEO_MCP_PAGESPEED_KEY;
     try {
-      await expect(cruxFieldData(cruxFieldDataInput.parse({ origin: "https://example.com" }), { fetchImpl }))
-        .rejects.toThrow(/SEO_MCP_CRUX_KEY/);
+      await expect(cruxFieldData(cruxFieldDataInput.parse({ origin: "https://example.com" }), { fetchImpl })).rejects.toThrow(/SEO_MCP_CRUX_KEY/);
     } finally {
       if (saved.crux !== undefined) process.env.SEO_MCP_CRUX_KEY = saved.crux;
       if (saved.ps !== undefined) process.env.SEO_MCP_PAGESPEED_KEY = saved.ps;
@@ -125,16 +124,14 @@ describe("cruxHistory", () => {
   it("refuses a request with no target rather than posting an empty body", async () => {
     const fetchImpl = responding(HISTORY);
 
-    await expect(cruxHistory(cruxHistoryInput.parse({}), { fetchImpl, apiKey: KEY }))
-      .rejects.toThrow(/exactly one of origin or url/);
+    await expect(cruxHistory(cruxHistoryInput.parse({}), { fetchImpl, apiKey: KEY })).rejects.toThrow(/exactly one of origin or url/);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("refuses both targets rather than silently measuring the origin", async () => {
     const fetchImpl = responding(HISTORY);
 
-    await expect(cruxHistory(cruxHistoryInput.parse({ origin: "https://example.com", url: "https://example.com/a" }), { fetchImpl, apiKey: KEY }))
-      .rejects.toThrow(/exactly one of origin or url/);
+    await expect(cruxHistory(cruxHistoryInput.parse({ origin: "https://example.com", url: "https://example.com/a" }), { fetchImpl, apiKey: KEY })).rejects.toThrow(/exactly one of origin or url/);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 

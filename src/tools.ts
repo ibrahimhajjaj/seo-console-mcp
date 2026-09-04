@@ -14,25 +14,32 @@ export interface ToolDependencies {
 export function registerTools(server: McpServer, dependencies: ToolDependencies = {}): void {
   const context = createToolContext(dependencies);
 
-  server.registerResource("properties", "seo://properties", {
-    title: "Search Console properties",
-    description: "Live list of Google Search Console properties available to the service account",
-    mimeType: "application/json",
-  }, async (uri) => {
-    try {
-      const properties = await listProperties(context.getAuthenticatedClients());
-      return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(properties.structuredContent) }] };
-    } catch (error) {
-      return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify({ error: formatToolError(error) }) }] };
-    }
-  });
+  server.registerResource(
+    "properties",
+    "seo://properties",
+    {
+      title: "Search Console properties",
+      description: "Live list of Google Search Console properties available to the service account",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      try {
+        const properties = await listProperties(context.getAuthenticatedClients());
+        return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(properties.structuredContent) }] };
+      } catch (error) {
+        return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify({ error: formatToolError(error) }) }] };
+      }
+    },
+  );
 
   for (const definition of toolDefinitions) {
-    server.registerTool(definition.name, {
-      description: definition.description,
-      inputSchema: definition.inputShape,
-      outputSchema: definition.outputSchema,
-    },
+    server.registerTool(
+      definition.name,
+      {
+        description: definition.description,
+        inputSchema: definition.inputShape,
+        outputSchema: definition.outputSchema,
+      },
       async (params) => safely(() => definition.run(context, params)),
     );
   }

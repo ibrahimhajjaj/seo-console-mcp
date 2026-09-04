@@ -22,10 +22,7 @@ describe("normalizeSiteUrl", () => {
     expect(normalizeSiteUrl("sc-domain:Example.COM")).toBe("sc-domain:example.com");
   });
 
-  it.each(["example.com", "ftp://example.com", "sc-domain:https://example.com", "javascript:alert(1)"])(
-    "rejects invalid property %s",
-    (value) => expect(() => normalizeSiteUrl(value)).toThrow(),
-  );
+  it.each(["example.com", "ftp://example.com", "sc-domain:https://example.com", "javascript:alert(1)"])("rejects invalid property %s", (value) => expect(() => normalizeSiteUrl(value)).toThrow());
 });
 
 describe("tool input schemas", () => {
@@ -49,10 +46,12 @@ describe("tool input schemas", () => {
   });
 
   it("rejects an invalid search analytics data state", () => {
-    expect(() => searchAnalyticsInput.parse({
-      siteUrl: "sc-domain:example.com",
-      dataState: "weekly",
-    })).toThrow();
+    expect(() =>
+      searchAnalyticsInput.parse({
+        siteUrl: "sc-domain:example.com",
+        dataState: "weekly",
+      }),
+    ).toThrow();
   });
 
   it("rejects invalid search analytics inputs", () => {
@@ -62,10 +61,12 @@ describe("tool input schemas", () => {
   });
 
   it("rejects duplicate search analytics dimensions", () => {
-    expect(() => searchAnalyticsInput.parse({
-      siteUrl: "https://example.com",
-      dimensions: ["query", "query"],
-    })).toThrow("dimensions must be unique");
+    expect(() =>
+      searchAnalyticsInput.parse({
+        siteUrl: "https://example.com",
+        dimensions: ["query", "query"],
+      }),
+    ).toThrow("dimensions must be unique");
   });
 
   it("validates list_sitemaps", () => {
@@ -92,8 +93,7 @@ describe("tool input schemas", () => {
 
   it("rejects URLs with embedded credentials", () => {
     expect(pageSpeedInput.parse({ url: "https://example.com/" }).url).toBe("https://example.com/");
-    expect(() => pageSpeedInput.parse({ url: "https://user:pass@example.com/" }))
-      .toThrow("URL must not contain embedded credentials");
+    expect(() => pageSpeedInput.parse({ url: "https://user:pass@example.com/" })).toThrow("URL must not contain embedded credentials");
   });
 
   it("validates seo_audit", () => {
@@ -110,8 +110,7 @@ describe("tool input schemas", () => {
   it("validates indexnow_submit keys and defaults", () => {
     const parsed = indexNowSubmitInput.parse({ urls: ["https://example.com/a"], key: "a1b2c3d4e5f6" });
     expect(parsed).toMatchObject({ endpoint: "api.indexnow.org", dryRun: false });
-    expect(() => indexNowSubmitInput.parse({ urls: ["https://example.com/a"], key: "short" }))
-      .toThrow("8-128 characters");
+    expect(() => indexNowSubmitInput.parse({ urls: ["https://example.com/a"], key: "short" })).toThrow("8-128 characters");
   });
 
   it("validates keyword_ideas defaults and bounds", () => {

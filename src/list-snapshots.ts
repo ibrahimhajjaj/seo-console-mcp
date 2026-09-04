@@ -32,9 +32,11 @@ function format(directory: string, total: number, snapshots: SnapshotListing[]):
   const shown = snapshots.length < total ? `, showing the ${snapshots.length} most recent` : "";
   const lines = [`${total} snapshot(s) in ${directory}${shown}`];
   for (const entry of snapshots) {
-    lines.push(entry.error
-      ? `- ${entry.name}: ${entry.error}`
-      : `- ${entry.name}: taken ${entry.takenAt}, ${entry.windowDays}-day window, ${entry.surfaces.properties} properties, ${entry.surfaces.apps} apps, ${entry.surfaces.packages} packages, ${entry.surfaces.slugs} plugins`);
+    lines.push(
+      entry.error
+        ? `- ${entry.name}: ${entry.error}`
+        : `- ${entry.name}: taken ${entry.takenAt}, ${entry.windowDays}-day window, ${entry.surfaces.properties} properties, ${entry.surfaces.apps} apps, ${entry.surfaces.packages} packages, ${entry.surfaces.slugs} plugins`,
+    );
   }
   return lines.join("\n");
 }

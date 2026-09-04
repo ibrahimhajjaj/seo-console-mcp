@@ -35,8 +35,7 @@ export type SetupOutcome = "ready" | "manual" | "failed";
 const serviceAccountName = "seo-mcp";
 const apiServices = ["searchconsole.googleapis.com", "pagespeedonline.googleapis.com", "siteverification.googleapis.com"];
 const projectIdPattern = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/;
-const projectIdRule =
-  "Project IDs are 6-30 characters: a lowercase letter first, then lowercase letters, digits, or hyphens, not ending in a hyphen.";
+const projectIdRule = "Project IDs are 6-30 characters: a lowercase letter first, then lowercase letters, digits, or hyphens, not ending in a hyphen.";
 
 export async function runSetupWizard(options: SetupOptions = {}): Promise<SetupOutcome> {
   try {
@@ -53,7 +52,11 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
   const cwd = options.cwd ?? process.cwd();
   const prompt = options.prompt ?? defaultPrompt;
   const fileExists = options.fileExists ?? canRead;
-  const makeDir = options.makeDir ?? ((dir: string) => { mkdirSync(dir, { recursive: true }); });
+  const makeDir =
+    options.makeDir ??
+    ((dir: string) => {
+      mkdirSync(dir, { recursive: true });
+    });
 
   print("seo-mcp setup");
   print("This wizard creates a Google Cloud service account for Search Console.");
@@ -106,10 +109,7 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
   print(`[5/6] Checking service account ${serviceAccountEmail}...`);
   const described = await runner.capture(["iam", "service-accounts", "describe", serviceAccountEmail, `--project=${projectId}`]);
   if (!described.ok) {
-    const created = await runner.inherit([
-      "iam", "service-accounts", "create", serviceAccountName,
-      "--display-name=SEO MCP", `--project=${projectId}`, "--quiet",
-    ]);
+    const created = await runner.inherit(["iam", "service-accounts", "create", serviceAccountName, "--display-name=SEO MCP", `--project=${projectId}`, "--quiet"]);
     if (!created.ok) return fail(print, "Could not create the seo-mcp service account. Resolve the gcloud error above and run setup again.");
   } else {
     print("Service account already exists; keeping it.");
@@ -124,10 +124,7 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
   } else {
     // We only own the directory for the default path; a user-supplied --key must resolve to a real dir.
     if (usingDefaultKeyPath) makeDir(dirname(keyPath));
-    const key = await runner.inherit([
-      "iam", "service-accounts", "keys", "create", keyPath,
-      `--iam-account=${serviceAccountEmail}`, `--project=${projectId}`, "--quiet",
-    ]);
+    const key = await runner.inherit(["iam", "service-accounts", "keys", "create", keyPath, `--iam-account=${serviceAccountEmail}`, `--project=${projectId}`, "--quiet"]);
     if (!key.ok) return fail(print, "Could not create the service account key. Resolve the gcloud error above and run setup again.");
   }
 
@@ -135,29 +132,29 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
   // supply a project ID) without consenting to provision a billed key, so a
   // non-interactive run with no explicit --pagespeed-key must default to skip.
   const canPrompt = Boolean(stdin.isTTY && stdout.isTTY);
-  const wantPageSpeedKey = options.pagespeedKey
-    ?? (canPrompt && /^y/i.test((await prompt("Create a PageSpeed Insights API key for higher quota? [y/N]: ")).trim()));
+  const wantPageSpeedKey = options.pagespeedKey ?? (canPrompt && /^y/i.test((await prompt("Create a PageSpeed Insights API key for higher quota? [y/N]: ")).trim()));
   let pageSpeedKey: string | undefined;
   if (!wantPageSpeedKey) {
     print("PageSpeed quota: using the low anonymous quota; add an API key later for higher quota.");
   } else {
     print("PageSpeed quota: creating a project-scoped API key...");
     try {
-      const apiKeysEnabled = await runner.inherit([
-        "services", "enable", "apikeys.googleapis.com", `--project=${projectId}`, "--quiet",
-      ]);
+      const apiKeysEnabled = await runner.inherit(["services", "enable", "apikeys.googleapis.com", `--project=${projectId}`, "--quiet"]);
       if (!apiKeysEnabled.ok) throw new Error("API Keys API could not be enabled");
 
       const createdPageSpeedKey = await runner.capture([
-        "services", "api-keys", "create", "--display-name=seo-mcp pagespeed",
-        "--api-target=service=pagespeedonline.googleapis.com", `--project=${projectId}`, "--format=value(name)",
+        "services",
+        "api-keys",
+        "create",
+        "--display-name=seo-mcp pagespeed",
+        "--api-target=service=pagespeedonline.googleapis.com",
+        `--project=${projectId}`,
+        "--format=value(name)",
       ]);
       const keyName = createdPageSpeedKey.stdout.trim();
       if (!createdPageSpeedKey.ok || !keyName) throw new Error("PageSpeed API key could not be created");
 
-      const keyString = await runner.capture([
-        "services", "api-keys", "get-key-string", keyName, "--format=value(keyString)",
-      ]);
+      const keyString = await runner.capture(["services", "api-keys", "get-key-string", keyName, "--format=value(keyString)"]);
       pageSpeedKey = keyString.stdout.trim();
       if (!keyString.ok || !pageSpeedKey) throw new Error("PageSpeed API key string could not be retrieved");
     } catch {
@@ -179,27 +176,29 @@ async function runWizard(options: SetupOptions): Promise<SetupOutcome> {
   print("");
   print("MCP client configuration:");
   if (pageSpeedKey) print("Save this key; it grants PageSpeed quota on your project and is shown only in the configuration below.");
-  print(JSON.stringify({
-    mcpServers: {
-      "seo-mcp": {
-        type: "stdio",
-        command: "node",
-        args: [distEntry],
-        env: {
-          GOOGLE_APPLICATION_CREDENTIALS: keyPath,
-          ...(pageSpeedKey ? { SEO_MCP_PAGESPEED_KEY: pageSpeedKey } : {}),
+  print(
+    JSON.stringify(
+      {
+        mcpServers: {
+          "seo-mcp": {
+            type: "stdio",
+            command: "node",
+            args: [distEntry],
+            env: {
+              GOOGLE_APPLICATION_CREDENTIALS: keyPath,
+              ...(pageSpeedKey ? { SEO_MCP_PAGESPEED_KEY: pageSpeedKey } : {}),
+            },
+          },
         },
       },
-    },
-  }, null, 2));
+      null,
+      2,
+    ),
+  );
   return "ready";
 }
 
-async function promptForProjectId(
-  prompt: (question: string) => Promise<string>,
-  print: (line: string) => void,
-  current: string,
-): Promise<string> {
+async function promptForProjectId(prompt: (question: string) => Promise<string>, print: (line: string) => void, current: string): Promise<string> {
   const question = current ? `GCP project ID [${current}]: ` : "GCP project ID to use or create: ";
   for (let attempt = 0; attempt < 5; attempt++) {
     const answer = (await prompt(question)).trim();
@@ -236,16 +235,15 @@ function spawnGcloud(args: string[], output: "pipe" | "inherit"): Promise<Comman
   return new Promise((resolveResult) => {
     // Never hand gcloud our stdin: prompts are disabled, and an inherited TTY lets gcloud
     // leave the terminal in raw mode, which staircases every later line of output.
-    const stdio: ["ignore", "pipe", "inherit"] | ["ignore", "inherit", "inherit"] =
-      output === "pipe" ? ["ignore", "pipe", "inherit"] : ["ignore", "inherit", "inherit"];
+    const stdio: ["ignore", "pipe", "inherit"] | ["ignore", "inherit", "inherit"] = output === "pipe" ? ["ignore", "pipe", "inherit"] : ["ignore", "inherit", "inherit"];
     const env = { ...process.env, CLOUDSDK_CORE_DISABLE_PROMPTS: "1" };
-    const child = process.platform === "win32"
-      ? spawn(windowsCommandLine(args), { shell: true, stdio, env })
-      : spawn("gcloud", args, { stdio, env });
+    const child = process.platform === "win32" ? spawn(windowsCommandLine(args), { shell: true, stdio, env }) : spawn("gcloud", args, { stdio, env });
     let captured = "";
     if (output === "pipe" && child.stdout) {
       child.stdout.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => { captured += chunk; });
+      child.stdout.on("data", (chunk: string) => {
+        captured += chunk;
+      });
     }
     child.once("error", (error: NodeJS.ErrnoException) => {
       resolveResult({ ok: false, stdout: captured, exitCode: null, ...(error.code ? { errorCode: error.code } : {}) });
@@ -274,7 +272,12 @@ function resetTty(): void {
 }
 
 function canRead(path: string): boolean {
-  try { accessSync(path, constants.R_OK); return true; } catch { return false; }
+  try {
+    accessSync(path, constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function fail(print: (line: string) => void, message: string): "failed" {

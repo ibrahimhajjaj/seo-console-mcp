@@ -27,9 +27,5 @@ export function normalizeSiteUrl(value: string): string {
 
 function isValidHostname(value: string): boolean {
   if (value.length > 253 || value.endsWith(".")) return false;
-  return value.split(".").every((label) =>
-    label.length > 0
-    && label.length <= 63
-    && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
-  );
+  return value.split(".").every((label) => label.length > 0 && label.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label));
 }

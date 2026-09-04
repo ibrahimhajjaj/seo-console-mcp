@@ -12,8 +12,7 @@ describe("README parameter tables", () => {
 
   it.each([...rendered.keys()])("%s matches its schema", (name) => {
     expect(documented.has(name), `README.md carries no <!-- params:${name} --> block; run npm run docs:params`).toBe(true);
-    expect(documented.get(name), `${name}'s parameter table has drifted from its schema; run npm run docs:params`)
-      .toBe(rendered.get(name));
+    expect(documented.get(name), `${name}'s parameter table has drifted from its schema; run npm run docs:params`).toBe(rendered.get(name));
   });
 });
 

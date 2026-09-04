@@ -8,8 +8,12 @@ const NOW = new Date("2026-09-03T11:30:45Z");
 const SNAPSHOT_DIR = "/snapshots";
 
 const ctx: ToolContext = {
-  getClients: () => { throw new Error("no clients in test"); },
-  getAuthenticatedClients: () => { throw new Error("no clients in test"); },
+  getClients: () => {
+    throw new Error("no clients in test");
+  },
+  getAuthenticatedClients: () => {
+    throw new Error("no clients in test");
+  },
 };
 
 function params(overrides: Record<string, unknown> = {}) {
@@ -41,12 +45,16 @@ describe("snapshot", () => {
   it("captures every surface into one timestamped document", async () => {
     const deps = readers();
 
-    const result = await snapshot(ctx, params({
-      properties: ["https://example.com/"],
-      apps: ["1234567890"],
-      packages: ["app.example"],
-      slugs: ["akismet"],
-    }), deps);
+    const result = await snapshot(
+      ctx,
+      params({
+        properties: ["https://example.com/"],
+        apps: ["1234567890"],
+        packages: ["app.example"],
+        slugs: ["akismet"],
+      }),
+      deps,
+    );
 
     const document = result.structuredContent as Record<string, any>;
     expect(document.takenAt).toBe("2026-09-03T11:30Z");
@@ -61,13 +69,19 @@ describe("snapshot", () => {
 
   it("records a failed surface in place instead of dropping it", async () => {
     const deps = readers({
-      readPackage: vi.fn(async () => { throw new Error("bucket unreachable"); }),
+      readPackage: vi.fn(async () => {
+        throw new Error("bucket unreachable");
+      }),
     });
 
-    const result = await snapshot(ctx, params({
-      properties: ["https://example.com/"],
-      packages: ["app.example"],
-    }), deps);
+    const result = await snapshot(
+      ctx,
+      params({
+        properties: ["https://example.com/"],
+        packages: ["app.example"],
+      }),
+      deps,
+    );
 
     const document = result.structuredContent as Record<string, any>;
     // The surface is present with an error, never silently absent: a missing
@@ -105,10 +119,14 @@ describe("snapshot", () => {
     const query = vi.fn(async (request: any) => {
       const dimension = request.requestBody.dimensions[0];
       if (dimension === "date") {
-        return { data: { rows: [
-          { keys: ["2026-09-01"], clicks: 3, impressions: 400, ctr: 0.0075, position: 20 },
-          { keys: ["2026-09-02"], clicks: 2, impressions: 238, ctr: 0.008, position: 4 },
-        ] } };
+        return {
+          data: {
+            rows: [
+              { keys: ["2026-09-01"], clicks: 3, impressions: 400, ctr: 0.0075, position: 20 },
+              { keys: ["2026-09-02"], clicks: 2, impressions: 238, ctr: 0.008, position: 4 },
+            ],
+          },
+        };
       }
       return { data: { rows: [{ keys: ["one"], clicks: 3, impressions: 270, ctr: 0.011, position: 9 }] } };
     });
@@ -222,13 +240,15 @@ const LISTING: Record<string, unknown> = {
   localeCount: 2,
   overLimit: ["en-US keywords"],
   ratings: [{ storefront: "us", source: "itunes-lookup", averageUserRating: 4.5, userRatingCount: 12 }],
-  locales: [{
-    locale: "en-US",
-    indexed: { name: { length: 4 }, subtitle: { length: 12 }, keywords: { length: 101 } },
-    promotionalText: { length: 0 },
-    description: { length: 300 },
-    partial: false,
-  }],
+  locales: [
+    {
+      locale: "en-US",
+      indexed: { name: { length: 4 }, subtitle: { length: 12 }, keywords: { length: 101 } },
+      promotionalText: { length: 0 },
+      description: { length: 300 },
+      partial: false,
+    },
+  ],
   notes: [],
 };
 
@@ -322,16 +342,15 @@ describe("surface readers", () => {
     expect(months).toEqual(["202601", "202512"]);
     expect(document.packages[0].fellBackFromMonth).toBe("202601");
     expect(document.packages[0].month).toBe("202512");
-    expect(document.packages[0].notes).toEqual([
-      "installs are as of the last date present",
-      expect.stringContaining("was read instead"),
-    ]);
+    expect(document.packages[0].notes).toEqual(["installs are as of the last date present", expect.stringContaining("was read instead")]);
     // A month that has not been emitted yet is not a broken surface.
     expect(document.surfacesWithErrors).toEqual([]);
   });
 
   it("records the package as unread when neither month can be read", async () => {
-    const readStats = async () => { throw new Error("bucket unreachable"); };
+    const readStats = async () => {
+      throw new Error("bucket unreachable");
+    };
 
     const result = await snapshot(ctx, params({ packages: ["app.example"] }), { now: NOW, readStats });
 

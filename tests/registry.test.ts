@@ -53,7 +53,10 @@ describe("tool registry invariants", () => {
   });
 
   it("marks exactly the tools that change remote state as writes", () => {
-    const flagged = toolDefinitions.filter((tool) => tool.write).map((tool) => tool.name).sort();
+    const flagged = toolDefinitions
+      .filter((tool) => tool.write)
+      .map((tool) => tool.name)
+      .sort();
 
     expect(flagged).toEqual(writeTools);
   });
@@ -64,16 +67,10 @@ describe("tool registry invariants", () => {
       const kind = typeOf(resolved);
       if (kind === "array") {
         const element = elementOf(resolved);
-        expect(
-          flagTypes.has(typeOf(element)),
-          `${tool.name}.${field} is a list of ${typeOf(element)}; the CLI has no flag form for that`,
-        ).toBe(true);
+        expect(flagTypes.has(typeOf(element)), `${tool.name}.${field} is a list of ${typeOf(element)}; the CLI has no flag form for that`).toBe(true);
         continue;
       }
-      expect(
-        flagTypes.has(kind),
-        `${tool.name}.${field} is ${kind}; no --flag value can express it`,
-      ).toBe(true);
+      expect(flagTypes.has(kind), `${tool.name}.${field} is ${kind}; no --flag value can express it`).toBe(true);
     }
   });
 

@@ -99,12 +99,13 @@ describe("wporgPlugin", () => {
   });
 
   it("keeps the full ratings histogram, not just the average", async () => {
-    const fetchImpl = routedFetch({ info: { name: "P", added: "2015-01-01", short_description: "x", icons: { "1x": "i" }, rating: 90, num_ratings: 1186, ratings: { "5": 1033, "4": 67, "3": 16, "2": 13, "1": 57 } } });
+    const fetchImpl = routedFetch({
+      info: { name: "P", added: "2015-01-01", short_description: "x", icons: { "1x": "i" }, rating: 90, num_ratings: 1186, ratings: { "5": 1033, "4": 67, "3": 16, "2": 13, "1": 57 } },
+    });
 
     const output = await wporgPlugin(params("p"), { fetchImpl });
 
-    expect((output.structuredContent as { ratings: Record<string, number> }).ratings)
-      .toEqual({ "1": 57, "2": 13, "3": 16, "4": 67, "5": 1033 });
+    expect((output.structuredContent as { ratings: Record<string, number> }).ratings).toEqual({ "1": 57, "2": 13, "3": 16, "4": 67, "5": 1033 });
   });
 
   it("fetches daily downloads, the summary and the version split", async () => {

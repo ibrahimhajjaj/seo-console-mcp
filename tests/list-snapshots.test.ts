@@ -12,12 +12,14 @@ function document(takenAt: string, overrides: Record<string, unknown> = {}) {
     takenAt,
     windowDays: 28,
     window: { startDate: "2026-08-07", endDate: "2026-09-03" },
-    properties: [{
-      siteUrl: "https://example.com/",
-      totals: { clicks: 10, impressions: 100, ctr: 0.1, position: 5, daysWithData: 28, firstIncompleteDate: null },
-      topQueries: { rows: [], truncated: false },
-      topPages: { rows: [], truncated: false },
-    }],
+    properties: [
+      {
+        siteUrl: "https://example.com/",
+        totals: { clicks: 10, impressions: 100, ctr: 0.1, position: 5, daysWithData: 28, firstIncompleteDate: null },
+        topQueries: { rows: [], truncated: false },
+        topPages: { rows: [], truncated: false },
+      },
+    ],
     apps: [],
     packages: [],
     slugs: [{ slug: "akismet", activeInstalls: 100, downloaded: 500, rating: 90, numRatings: 3 }],
@@ -31,7 +33,11 @@ function directory(files: Record<string, string>) {
     env,
     // readdirSync yields bare names, not paths.
     readDir: () => Object.keys(files).map((path) => path.slice("/snapshots/".length)),
-    readFile: (path: string) => files[path] ?? (() => { throw new Error("ENOENT"); })(),
+    readFile: (path: string) =>
+      files[path] ??
+      (() => {
+        throw new Error("ENOENT");
+      })(),
   };
 }
 
@@ -98,13 +104,18 @@ describe("list_snapshots", () => {
 
   it("treats a directory that does not exist as an empty history", () => {
     // Nothing has been captured yet, which is not a failure to report.
-    expect(listSnapshots({ env, readDir: () => { throw new Error("ENOENT"); } })).toEqual([]);
+    expect(
+      listSnapshots({
+        env,
+        readDir: () => {
+          throw new Error("ENOENT");
+        },
+      }),
+    ).toEqual([]);
   });
 
   it("says when the list was cut at the limit", async () => {
-    const files = Object.fromEntries(
-      Array.from({ length: 5 }, (_, index) => [`/snapshots/${index}.json`, document(`2026-09-0${index + 1}T10:00Z`)]),
-    );
+    const files = Object.fromEntries(Array.from({ length: 5 }, (_, index) => [`/snapshots/${index}.json`, document(`2026-09-0${index + 1}T10:00Z`)]));
 
     const result = await run(files, { limit: 2 });
     const listing = result.structuredContent as Record<string, any>;

@@ -28,11 +28,7 @@ const parameterNames = new Set(["outPath", "siteUrl"]);
 
 describe("prompt playbooks", () => {
   it("registers the three workflow prompts", () => {
-    expect(registered.map((prompt) => prompt.name)).toEqual([
-      "seo_triage",
-      "content_opportunities",
-      "launch_seo_check",
-    ]);
+    expect(registered.map((prompt) => prompt.name)).toEqual(["seo_triage", "content_opportunities", "launch_seo_check"]);
   });
 
   it.each(registered)("$name only tells a model to call tools that exist", ({ name, handler }) => {
@@ -42,10 +38,7 @@ describe("prompt playbooks", () => {
     expect(tokens.length).toBeGreaterThan(0);
     for (const token of tokens) {
       if (parameterNames.has(token)) continue;
-      expect(
-        toolNames.has(token),
-        `${name} names \`${token}\`, which is neither a registered tool nor a known parameter`,
-      ).toBe(true);
+      expect(toolNames.has(token), `${name} names \`${token}\`, which is neither a registered tool nor a known parameter`).toBe(true);
     }
   });
 });

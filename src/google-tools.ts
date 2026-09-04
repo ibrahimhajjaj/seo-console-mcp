@@ -50,8 +50,7 @@ const INSIGHT_TRUNCATION_NOTE = `Note: Search Console returned more than ${INSIG
 // key configured" rather than "you are querying too hard". Say which.
 function pageSpeedFailure(error: unknown, hasKey: boolean): Error {
   const message = error instanceof Error ? error.message : String(error);
-  const status = (error as { status?: number; code?: number } | null)?.status
-    ?? (error as { code?: number } | null)?.code;
+  const status = (error as { status?: number; code?: number } | null)?.status ?? (error as { code?: number } | null)?.code;
   const rateLimited = status === 429 || /rateLimitExceeded|quota/i.test(message);
   if (rateLimited && !hasKey) {
     return new Error(`${message} PageSpeed Insights gives unkeyed callers a small shared quota. Set SEO_MCP_PAGESPEED_KEY or pass apiKey; \`seo-mcp setup --pagespeed-key\` creates one.`);
@@ -85,10 +84,7 @@ function tableCell(value: string): string {
 export function createGoogleClients(credentialsPath?: string): GoogleClients {
   const auth = new googleAuth.GoogleAuth({
     ...(credentialsPath ? { keyFile: credentialsPath } : {}),
-    scopes: [
-      "https://www.googleapis.com/auth/webmasters",
-      "https://www.googleapis.com/auth/webmasters.readonly",
-    ],
+    scopes: ["https://www.googleapis.com/auth/webmasters", "https://www.googleapis.com/auth/webmasters.readonly"],
   });
   return {
     searchConsole: searchconsole({ version: "v1", auth }),
@@ -117,8 +113,7 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     ...(params.aggregationType ? { aggregationType: params.aggregationType } : {}),
   };
   const response = await clients.searchConsole.searchanalytics.query({ siteUrl: params.siteUrl, requestBody });
-  const firstIncompleteDate = response.data.metadata?.firstIncompleteDate
-    ?? response.data.metadata?.firstIncompleteHour;
+  const firstIncompleteDate = response.data.metadata?.firstIncompleteDate ?? response.data.metadata?.firstIncompleteHour;
   const fetched = response.data.rows ?? [];
   // At the API's own ceiling there is no spare row to ask for, so a full page
   // means "there may be more" rather than a certainty.
@@ -134,20 +129,28 @@ export async function searchAnalytics(clients: GoogleClients, params: SearchAnal
     position: row.position ?? 0,
   }));
 
-  const lines = params.maxTableRows === 0
-    ? [`Search analytics for ${params.siteUrl} returned ${rows.length} rows (${startDate} to ${endDate}). See structured data.`]
-    : [
-      `Search analytics for ${params.siteUrl} (${startDate} to ${endDate})`,
-      `# | ${params.dimensions.join(" / ")} | Clicks | Impressions | CTR | Position`,
-      `--- | --- | ---: | ---: | ---: | ---:`,
-      ...rows.slice(0, params.maxTableRows).map((row) => `${row.rank} | ${params.dimensions.map((dimension) => tableCell(String(row.keys[dimension]))).join(" / ")} | ${row.clicks} | ${row.impressions} | ${(row.ctr * 100).toFixed(2)}% | ${row.position.toFixed(2)}`),
-    ];
+  const lines =
+    params.maxTableRows === 0
+      ? [`Search analytics for ${params.siteUrl} returned ${rows.length} rows (${startDate} to ${endDate}). See structured data.`]
+      : [
+          `Search analytics for ${params.siteUrl} (${startDate} to ${endDate})`,
+          `# | ${params.dimensions.join(" / ")} | Clicks | Impressions | CTR | Position`,
+          `--- | --- | ---: | ---: | ---: | ---:`,
+          ...rows
+            .slice(0, params.maxTableRows)
+            .map(
+              (row) =>
+                `${row.rank} | ${params.dimensions.map((dimension) => tableCell(String(row.keys[dimension]))).join(" / ")} | ${row.clicks} | ${row.impressions} | ${(row.ctr * 100).toFixed(2)}% | ${row.position.toFixed(2)}`,
+            ),
+        ];
   if (params.maxTableRows > 0 && rows.length === 0) lines.push("No rows returned.");
   if (params.maxTableRows > 0 && rows.length > params.maxTableRows) {
     lines.push(`... ${rows.length - params.maxTableRows} more rows (see structured data).`);
   }
   if (truncated) {
-    lines.push(`Note: more rows exist beyond rowLimit ${params.rowLimit}. This result is cut off, so treat a missing query as unknown rather than absent; raise rowLimit or page with startRow ${startRow + params.rowLimit} to see the rest.`);
+    lines.push(
+      `Note: more rows exist beyond rowLimit ${params.rowLimit}. This result is cut off, so treat a missing query as unknown rather than absent; raise rowLimit or page with startRow ${startRow + params.rowLimit} to see the rest.`,
+    );
   }
   // Even a page that is not cut off is not proof of completeness: Search Console
   // documents that it may return only top rows regardless of the limit asked for.
@@ -208,10 +211,10 @@ export async function compareSearchPeriods(clients: GoogleClients, params: Compa
   ];
   if (gainers.length === 0 && losers.length === 0) lines.push("No click changes found.");
   if (current.truncated || previous.truncated) {
-    const cutOff = current.truncated && previous.truncated
-      ? "both windows"
-      : current.truncated ? "the current window" : "the previous window";
-    lines.push(`Note: Search Console returned more than ${INSIGHT_ROW_LIMIT} rows for ${cutOff}, so a key missing from a cut-off window is unknown there rather than lost; keys left out of this comparison for that reason: ${droppedAsUnknown}.`);
+    const cutOff = current.truncated && previous.truncated ? "both windows" : current.truncated ? "the current window" : "the previous window";
+    lines.push(
+      `Note: Search Console returned more than ${INSIGHT_ROW_LIMIT} rows for ${cutOff}, so a key missing from a cut-off window is unknown there rather than lost; keys left out of this comparison for that reason: ${droppedAsUnknown}.`,
+    );
   }
   return result(lines.join("\n"), {
     siteUrl: params.siteUrl,
@@ -281,10 +284,14 @@ export async function listSitemaps(clients: GoogleClients, params: ListSitemapsP
 
 export async function submitSitemap(clients: GoogleClients, params: SubmitSitemapParams): Promise<ToolResult> {
   if (params.dryRun) {
-    return result(
-      `Dry run: would submit ${params.feedpath} to ${params.siteUrl}. No write performed.`,
-      { success: true, dryRun: true, siteUrl: params.siteUrl, feedpath: params.feedpath, sitemap: null, stateRefreshError: null },
-    );
+    return result(`Dry run: would submit ${params.feedpath} to ${params.siteUrl}. No write performed.`, {
+      success: true,
+      dryRun: true,
+      siteUrl: params.siteUrl,
+      feedpath: params.feedpath,
+      sitemap: null,
+      stateRefreshError: null,
+    });
   }
   await clients.searchConsole.sitemaps.submit({ siteUrl: params.siteUrl, feedpath: params.feedpath });
   let sitemap: Record<string, unknown> | null = null;
@@ -304,16 +311,10 @@ export async function submitSitemap(clients: GoogleClients, params: SubmitSitema
 
 export async function deleteSitemap(clients: GoogleClients, params: DeleteSitemapParams): Promise<ToolResult> {
   if (params.dryRun) {
-    return result(
-      `Dry run: would delete ${params.feedpath} from ${params.siteUrl}. No write performed.`,
-      { success: true, dryRun: true, siteUrl: params.siteUrl, feedpath: params.feedpath },
-    );
+    return result(`Dry run: would delete ${params.feedpath} from ${params.siteUrl}. No write performed.`, { success: true, dryRun: true, siteUrl: params.siteUrl, feedpath: params.feedpath });
   }
   await clients.searchConsole.sitemaps.delete({ siteUrl: params.siteUrl, feedpath: params.feedpath });
-  return result(
-    `Removed ${params.feedpath} from ${params.siteUrl}.`,
-    { success: true, siteUrl: params.siteUrl, feedpath: params.feedpath },
-  );
+  return result(`Removed ${params.feedpath} from ${params.siteUrl}.`, { success: true, siteUrl: params.siteUrl, feedpath: params.feedpath });
 }
 
 export async function inspectUrl(clients: GoogleClients, params: InspectUrlParams): Promise<ToolResult> {
@@ -332,14 +333,18 @@ export async function inspectUrl(clients: GoogleClients, params: InspectUrlParam
     userCanonical: index?.userCanonical ?? null,
     pageFetchState: index?.pageFetchState ?? null,
   };
-  const mobileUsability = inspection?.mobileUsabilityResult ? {
-    verdict: inspection.mobileUsabilityResult.verdict ?? null,
-    issues: inspection.mobileUsabilityResult.issues ?? [],
-  } : null;
-  const richResults = inspection?.richResultsResult ? {
-    verdict: inspection.richResultsResult.verdict ?? null,
-    detectedItems: inspection.richResultsResult.detectedItems ?? [],
-  } : null;
+  const mobileUsability = inspection?.mobileUsabilityResult
+    ? {
+        verdict: inspection.mobileUsabilityResult.verdict ?? null,
+        issues: inspection.mobileUsabilityResult.issues ?? [],
+      }
+    : null;
+  const richResults = inspection?.richResultsResult
+    ? {
+        verdict: inspection.richResultsResult.verdict ?? null,
+        detectedItems: inspection.richResultsResult.detectedItems ?? [],
+      }
+    : null;
   const text = [
     `URL inspection for ${params.inspectionUrl}`,
     `Verdict: ${indexStatus.verdict ?? "unknown"}`,
@@ -353,11 +358,7 @@ export async function inspectUrl(clients: GoogleClients, params: InspectUrlParam
   return result(text, { siteUrl: params.siteUrl, inspectionUrl: params.inspectionUrl, indexStatus, mobileUsability, richResults });
 }
 
-export async function indexCoverage(
-  clients: GoogleClients,
-  params: IndexCoverageParams,
-  deps: { fetchImpl?: typeof fetchHtml } = {},
-): Promise<ToolResult> {
+export async function indexCoverage(clients: GoogleClients, params: IndexCoverageParams, deps: { fetchImpl?: typeof fetchHtml } = {}): Promise<ToolResult> {
   // Enforce the quota caps here too, not only in the MCP schema: this function is
   // exported and can be called directly with out-of-range or non-finite values.
   const maxUrls = Math.min(50, Math.max(1, Math.trunc(params.maxUrls) || 1));
@@ -368,9 +369,7 @@ export async function indexCoverage(
   const results = await inspectIndexStatuses(clients, params.siteUrl, selectedUrls, concurrency);
   const failed = results.filter((item) => item.error !== null).length;
   const indexed = results.filter((item) => item.indexed).length;
-  const notIndexed = results
-    .filter((item) => !item.indexed && item.error === null)
-    .map(({ url, coverageState }) => ({ url, coverageState }));
+  const notIndexed = results.filter((item) => !item.indexed && item.error === null).map(({ url, coverageState }) => ({ url, coverageState }));
   const sitemapIndexOnly = parsed.urls.length === 0 && parsed.childSitemaps.length > 0;
   // A skipped sitemap index means coverage is incomplete, so structured clients
   // must see truncated=true, not just a note in the human text.
@@ -394,11 +393,7 @@ export async function indexCoverage(
   });
 }
 
-export async function requestRecrawl(
-  clients: GoogleClients,
-  params: RequestRecrawlParams,
-  deps: { fetchImpl?: typeof fetchHtml } = {},
-): Promise<ToolResult> {
+export async function requestRecrawl(clients: GoogleClients, params: RequestRecrawlParams, deps: { fetchImpl?: typeof fetchHtml } = {}): Promise<ToolResult> {
   // Enforce the quota caps here too, not only in the MCP schema: this function is
   // exported and can be called directly with out-of-range or non-finite values.
   const maxUrls = Math.min(50, Math.max(1, Math.trunc(params.maxUrls) || 1));
@@ -421,9 +416,7 @@ export async function requestRecrawl(
   const results = await inspectIndexStatuses(clients, params.siteUrl, selectedUrls, concurrency);
   const indexed = results.filter((item) => item.indexed).length;
   const failed = results.filter((item) => item.error !== null).length;
-  const notIndexed = results
-    .filter((item) => !item.indexed && item.error === null)
-    .map(({ url, coverageState }) => ({ url, coverageState }));
+  const notIndexed = results.filter((item) => !item.indexed && item.error === null).map(({ url, coverageState }) => ({ url, coverageState }));
   const feedpath = params.feedpath ?? params.sitemapUrl ?? null;
 
   let performed = false;
@@ -486,13 +479,15 @@ export async function runPageSpeed(clients: GoogleClients, params: PageSpeedPara
     fcp: fieldMetric(metrics["FIRST_CONTENTFUL_PAINT_MS"]),
     ttfb: fieldMetric(metrics["EXPERIMENTAL_TIME_TO_FIRST_BYTE"]),
   };
-  const scores = Object.fromEntries(Object.entries(data.lighthouseResult?.categories ?? {})
-    .filter((entry): entry is [string, pagespeedonline_v5.Schema$LighthouseCategoryV5] => Boolean(entry[1]))
-    .map(([key, category]) => [key, category.score === null || category.score === undefined ? null : Math.round(category.score * 100)]));
+  const scores = Object.fromEntries(
+    Object.entries(data.lighthouseResult?.categories ?? {})
+      .filter((entry): entry is [string, pagespeedonline_v5.Schema$LighthouseCategoryV5] => Boolean(entry[1]))
+      .map(([key, category]) => [key, category.score === null || category.score === undefined ? null : Math.round(category.score * 100)]),
+  );
   const opportunities = Object.entries(data.lighthouseResult?.audits ?? {})
     .flatMap(([id, audit]) => {
       if (!audit || audit.score === 1 || audit.scoreDisplayMode === "notApplicable") return [];
-      const savingsMs = numericDetail(audit.details, "overallSavingsMs") ?? (audit.numericUnit === "millisecond" ? audit.numericValue ?? null : null);
+      const savingsMs = numericDetail(audit.details, "overallSavingsMs") ?? (audit.numericUnit === "millisecond" ? (audit.numericValue ?? null) : null);
       if (!savingsMs || savingsMs <= 0) return [];
       return [{ id, title: audit.title ?? id, description: audit.description ?? null, savingsMs: Math.round(savingsMs) }];
     })
@@ -501,8 +496,16 @@ export async function runPageSpeed(clients: GoogleClients, params: PageSpeedPara
   const presentFieldData = Object.fromEntries(Object.entries(fieldData).filter(([, value]) => value !== null));
   const text = [
     `PageSpeed Insights for ${params.url} (${params.strategy})`,
-    `Lab scores: ${Object.entries(scores).map(([name, score]) => `${name}=${score ?? "n/a"}`).join(", ") || "not reported"}`,
-    `Field data: ${Object.entries(presentFieldData).map(([name, metric]) => `${name.toUpperCase()}=${metric?.value} (${metric?.category ?? "unknown"})`).join(", ") || "not available"}`,
+    `Lab scores: ${
+      Object.entries(scores)
+        .map(([name, score]) => `${name}=${score ?? "n/a"}`)
+        .join(", ") || "not reported"
+    }`,
+    `Field data: ${
+      Object.entries(presentFieldData)
+        .map(([name, metric]) => `${name.toUpperCase()}=${metric?.value} (${metric?.category ?? "unknown"})`)
+        .join(", ") || "not available"
+    }`,
     "Top opportunities:",
     ...(opportunities.length ? opportunities.map((item) => `- ${item.title}: about ${item.savingsMs} ms`) : ["- None reported"]),
   ].join("\n");
@@ -518,12 +521,7 @@ type UrlIndexStatus = {
   error: string | null;
 };
 
-async function inspectIndexStatuses(
-  clients: GoogleClients,
-  siteUrl: string,
-  urls: string[],
-  concurrency: number,
-): Promise<UrlIndexStatus[]> {
+async function inspectIndexStatuses(clients: GoogleClients, siteUrl: string, urls: string[], concurrency: number): Promise<UrlIndexStatus[]> {
   return mapWithConcurrency(urls, concurrency, async (url) => {
     try {
       const response = await clients.searchConsole.urlInspection.index.inspect({
@@ -533,8 +531,7 @@ async function inspectIndexStatuses(
       const coverageState = status?.coverageState ?? null;
       const verdict = status?.verdict ?? null;
       const normalizedCoverage = coverageState?.toLowerCase() ?? "";
-      const indexed = verdict === "PASS"
-        || (normalizedCoverage.includes("indexed") && !normalizedCoverage.includes("not indexed"));
+      const indexed = verdict === "PASS" || (normalizedCoverage.includes("indexed") && !normalizedCoverage.includes("not indexed"));
       return {
         url,
         coverageState,
@@ -615,11 +612,7 @@ function insightRequest(window: AnalysisWindow, dimensions: string[]): searchcon
   return { ...window, dimensions, rowLimit: INSIGHT_ROW_LIMIT + 1 };
 }
 
-async function fetchInsightRows(
-  clients: GoogleClients,
-  siteUrl: string,
-  requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest,
-): Promise<{ rows: InsightRow[]; truncated: boolean }> {
+async function fetchInsightRows(clients: GoogleClients, siteUrl: string, requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest): Promise<{ rows: InsightRow[]; truncated: boolean }> {
   const response = await clients.searchConsole.searchanalytics.query({ siteUrl, requestBody });
   // Asking for one row more than is analyzed is what separates "there were
   // exactly this many rows" from "the list was cut off". Rows come back ordered

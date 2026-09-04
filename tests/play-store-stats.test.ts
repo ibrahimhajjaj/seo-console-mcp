@@ -11,11 +11,7 @@ interface TrafficGroup {
   conversionRate: number | null;
 }
 
-const INSTALLS_202310 =
-  "Date,Package Name,Active Device Installs\r\n" +
-  "2023-10-01,app.getpsst,100\r\n" +
-  "2023-10-02,app.getpsst,105\r\n" +
-  "2023-10-03,app.getpsst,110\r\n";
+const INSTALLS_202310 = "Date,Package Name,Active Device Installs\r\n" + "2023-10-01,app.getpsst,100\r\n" + "2023-10-02,app.getpsst,105\r\n" + "2023-10-03,app.getpsst,110\r\n";
 
 const TRAFFIC_202310 =
   "Date,Package Name,Traffic source,Search term,UTM source,UTM campaign,Store listing visitors,Store listing acquisitions\r\n" +
@@ -137,23 +133,14 @@ describe("playStoreStats", () => {
   });
 
   it("reads every month a window touches and filters rows to it", async () => {
-    const august =
-      "Date,Package Name,Active Device Installs,Daily Device Installs\r\n" +
-      "2023-08-30,app.getpsst,90,3\r\n" +
-      "2023-08-31,app.getpsst,95,5\r\n";
-    const september =
-      "Date,Package Name,Active Device Installs,Daily Device Installs\r\n" +
-      "2023-09-01,app.getpsst,100,4\r\n" +
-      "2023-09-02,app.getpsst,110,6\r\n";
+    const august = "Date,Package Name,Active Device Installs,Daily Device Installs\r\n" + "2023-08-30,app.getpsst,90,3\r\n" + "2023-08-31,app.getpsst,95,5\r\n";
+    const september = "Date,Package Name,Active Device Installs,Daily Device Installs\r\n" + "2023-09-01,app.getpsst,100,4\r\n" + "2023-09-02,app.getpsst,110,6\r\n";
     const { readReport, calls } = reader({
       "installs_app.getpsst_202308": august,
       "installs_app.getpsst_202309": september,
     });
 
-    const result = await playStoreStats(
-      { packageName: "app.getpsst", startDate: "2023-08-31", endDate: "2023-09-01" },
-      { readReport },
-    );
+    const result = await playStoreStats({ packageName: "app.getpsst", startDate: "2023-08-31", endDate: "2023-09-01" }, { readReport });
 
     // Both monthly files must be fetched for a window that straddles them.
     expect(calls.some((path) => path.includes("_202308_"))).toBe(true);
@@ -169,29 +156,21 @@ describe("playStoreStats", () => {
   it("refuses a window longer than 24 months before reading anything", async () => {
     const { readReport, calls } = reader({});
 
-    await expect(
-      playStoreStats({ packageName: "app.getpsst", startDate: "2024-01-01", endDate: "2026-01-31" }, { readReport }),
-    ).rejects.toThrow(/more than 24 months/);
+    await expect(playStoreStats({ packageName: "app.getpsst", startDate: "2024-01-01", endDate: "2026-01-31" }, { readReport })).rejects.toThrow(/more than 24 months/);
     expect(calls).toEqual([]);
   });
 
   it("refuses a reversed window instead of reading it as a single month", async () => {
     const { readReport } = reader({});
 
-    await expect(
-      playStoreStats({ packageName: "app.getpsst", startDate: "2023-10-07", endDate: "2023-10-01" }, { readReport }),
-    ).rejects.toThrow(/startDate must be on or before endDate/);
+    await expect(playStoreStats({ packageName: "app.getpsst", startDate: "2023-10-07", endDate: "2023-10-01" }, { readReport })).rejects.toThrow(/startDate must be on or before endDate/);
   });
 
   it("refuses half a window instead of answering for a single month", async () => {
     const { readReport, calls } = reader({});
 
-    await expect(
-      playStoreStats({ packageName: "app.getpsst", startDate: "2023-10-01" }, { readReport }),
-    ).rejects.toThrow(/both startDate and endDate/);
-    await expect(
-      playStoreStats({ packageName: "app.getpsst", endDate: "2023-10-07" }, { readReport }),
-    ).rejects.toThrow(/both startDate and endDate/);
+    await expect(playStoreStats({ packageName: "app.getpsst", startDate: "2023-10-01" }, { readReport })).rejects.toThrow(/both startDate and endDate/);
+    await expect(playStoreStats({ packageName: "app.getpsst", endDate: "2023-10-07" }, { readReport })).rejects.toThrow(/both startDate and endDate/);
     expect(calls).toEqual([]);
   });
 
@@ -199,10 +178,7 @@ describe("playStoreStats", () => {
     const csv = "Date,Package Name,Active Device Installs\r\n2023-10-01,app.getpsst,100\r\n";
     const { readReport } = reader({ "installs_app.getpsst_202310": csv });
 
-    const result = await playStoreStats(
-      { packageName: "app.getpsst", month: "202309", startDate: "2023-10-01", endDate: "2023-10-07" },
-      { readReport },
-    );
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202309", startDate: "2023-10-01", endDate: "2023-10-07" }, { readReport });
 
     expect((result.structuredContent as { notes: string[] }).notes.join(" ")).toMatch(/month was ignored/);
   });
@@ -212,16 +188,12 @@ describe("playStoreStats", () => {
 
     // Failing on the missing reports rather than the cap is what proves the
     // window was accepted.
-    await expect(
-      playStoreStats({ packageName: "app.getpsst", startDate: "2024-01-01", endDate: "2025-12-31" }, { readReport }),
-    ).rejects.toThrow(/Neither installs nor store performance report found/);
+    await expect(playStoreStats({ packageName: "app.getpsst", startDate: "2024-01-01", endDate: "2025-12-31" }, { readReport })).rejects.toThrow(/Neither installs nor store performance report found/);
     expect(calls.filter((path) => path.startsWith("stats/installs/"))).toHaveLength(24);
   });
 
   it("keeps every install column rather than only the one it reads", async () => {
-    const csv =
-      "Date,Package Name,Active Device Installs,Daily Device Uninstalls,Total User Installs\r\n" +
-      "2023-10-01,app.getpsst,100,2,500\r\n";
+    const csv = "Date,Package Name,Active Device Installs,Daily Device Uninstalls,Total User Installs\r\n" + "2023-10-01,app.getpsst,100,2,500\r\n";
     const { readReport } = reader({ "installs_app.getpsst_202310": csv });
 
     const result = await playStoreStats({ packageName: "app.getpsst", month: "202310" }, { readReport });
@@ -234,29 +206,18 @@ describe("playStoreStats", () => {
     const csv = "Date,Package Name,Active Device Installs\r\n2023-10-01,app.getpsst,100\r\n";
     const { readReport } = reader({ "installs_app.getpsst_202310": csv });
 
-    const result = await playStoreStats(
-      { packageName: "app.getpsst", startDate: "2023-10-01", endDate: "2023-10-07" },
-      { readReport },
-    );
+    const result = await playStoreStats({ packageName: "app.getpsst", startDate: "2023-10-01", endDate: "2023-10-07" }, { readReport });
 
-    expect((result.structuredContent as { notes: string[] }).notes.join(" "))
-      .toMatch(/covers 7 days but only 1 of them has install rows/);
+    expect((result.structuredContent as { notes: string[] }).notes.join(" ")).toMatch(/covers 7 days but only 1 of them has install rows/);
   });
 
   it("matches the verb to the count rather than always saying have", async () => {
-    const csv =
-      "Date,Package Name,Active Device Installs\r\n" +
-      "2023-10-01,app.getpsst,100\r\n" +
-      "2023-10-02,app.getpsst,110\r\n";
+    const csv = "Date,Package Name,Active Device Installs\r\n" + "2023-10-01,app.getpsst,100\r\n" + "2023-10-02,app.getpsst,110\r\n";
     const { readReport } = reader({ "installs_app.getpsst_202310": csv });
 
-    const result = await playStoreStats(
-      { packageName: "app.getpsst", startDate: "2023-10-01", endDate: "2023-10-07" },
-      { readReport },
-    );
+    const result = await playStoreStats({ packageName: "app.getpsst", startDate: "2023-10-01", endDate: "2023-10-07" }, { readReport });
 
-    expect((result.structuredContent as { notes: string[] }).notes.join(" "))
-      .toMatch(/covers 7 days but only 2 of them have install rows/);
+    expect((result.structuredContent as { notes: string[] }).notes.join(" ")).toMatch(/covers 7 days but only 2 of them have install rows/);
   });
 
   it("accepts a bucket with or without the gs:// prefix", () => {
@@ -274,9 +235,7 @@ describe("playStoreStats", () => {
   it("defaults the month to the current UTC month", async () => {
     const { readReport, calls } = reader({});
 
-    await expect(
-      playStoreStats({ packageName: "app.getpsst" }, { readReport, now: new Date("2026-07-14T00:00:00Z") }),
-    ).rejects.toThrow(/Neither/);
+    await expect(playStoreStats({ packageName: "app.getpsst" }, { readReport, now: new Date("2026-07-14T00:00:00Z") })).rejects.toThrow(/Neither/);
     expect(calls.some((path) => path.includes("app.getpsst_202607_"))).toBe(true);
   });
 });
@@ -290,10 +249,7 @@ describe("playStoreStats report families", () => {
       "2023-10-02,app.azkarly,GB,3.0,3.1\r\n";
     const { readReport } = reader({ "ratings_app.azkarly_202310": ratings });
 
-    const result = await playStoreStats(
-      { packageName: "app.azkarly", month: "202310", include: ["ratings"], ratingsDimension: "country" } as any,
-      { readReport },
-    );
+    const result = await playStoreStats({ packageName: "app.azkarly", month: "202310", include: ["ratings"], ratingsDimension: "country" } as any, { readReport });
 
     const report = (result.structuredContent as any).ratings;
     expect(report.dimension).toBe("Country");
@@ -306,10 +262,7 @@ describe("playStoreStats report families", () => {
     const installs = "Date,Package Name,Active Device Installs\r\n2023-10-01,app.getpsst,100\r\n";
     const { readReport } = reader({ "installs_app.getpsst_202310": installs });
 
-    const result = await playStoreStats(
-      { packageName: "app.getpsst", month: "202310", include: ["ratings"] } as any,
-      { readReport },
-    );
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310", include: ["ratings"] } as any, { readReport });
 
     expect((result.structuredContent as any).ratings).toBeNull();
     expect((result.structuredContent as any).notes.join(" ")).toMatch(/absence rather than a fetch failure/);
@@ -317,16 +270,10 @@ describe("playStoreStats report families", () => {
   });
 
   it("reads a breakdown dimension instead of the overview file when asked", async () => {
-    const byCountry =
-      "Date,Package Name,Country,Active Device Installs,Daily Device Installs\r\n" +
-      "2023-10-01,app.getpsst,US,80,3\r\n" +
-      "2023-10-01,app.getpsst,GB,20,1\r\n";
+    const byCountry = "Date,Package Name,Country,Active Device Installs,Daily Device Installs\r\n" + "2023-10-01,app.getpsst,US,80,3\r\n" + "2023-10-01,app.getpsst,GB,20,1\r\n";
     const { readReport, calls } = reader({ "installs_app.getpsst_202310_country": byCountry });
 
-    await playStoreStats(
-      { packageName: "app.getpsst", month: "202310", installsDimension: "country" } as any,
-      { readReport },
-    );
+    await playStoreStats({ packageName: "app.getpsst", month: "202310", installsDimension: "country" } as any, { readReport });
 
     expect(calls.some((path) => path.includes("_202310_country.csv"))).toBe(true);
     expect(calls.some((path) => path.includes("_overview.csv"))).toBe(false);
@@ -335,16 +282,10 @@ describe("playStoreStats report families", () => {
 
 describe("playStoreStats remaining families", () => {
   it("reads the reviews CSV, preserving every column", async () => {
-    const reviews =
-      "Package Name,Reviewer Language,Star Rating,Review Title,Review Text\r\n" +
-      "app.azkarly,en,5,Great,Love it\r\n" +
-      "app.azkarly,ar,3,Ok,Fine\r\n";
+    const reviews = "Package Name,Reviewer Language,Star Rating,Review Title,Review Text\r\n" + "app.azkarly,en,5,Great,Love it\r\n" + "app.azkarly,ar,3,Ok,Fine\r\n";
     const { readReport } = reader({ "reviews_app.azkarly_202310": reviews });
 
-    const result = await playStoreStats(
-      { packageName: "app.azkarly", month: "202310", include: ["reviews"] } as any,
-      { readReport },
-    );
+    const result = await playStoreStats({ packageName: "app.azkarly", month: "202310", include: ["reviews"] } as any, { readReport });
 
     const rows = (result.structuredContent as any).reviews;
     expect(rows).toHaveLength(2);
@@ -360,10 +301,7 @@ describe("playStoreStats remaining families", () => {
   it("reads the country breakdown and the cheaper total_ variant when asked", async () => {
     const { readReport, calls } = reader({});
 
-    await playStoreStats(
-      { packageName: "app.getpsst", month: "202310", storePerformanceDimension: "country", storePerformanceTotals: true } as any,
-      { readReport },
-    ).catch(() => undefined);
+    await playStoreStats({ packageName: "app.getpsst", month: "202310", storePerformanceDimension: "country", storePerformanceTotals: true } as any, { readReport }).catch(() => undefined);
 
     expect(calls.some((path) => path.includes("total_store_performance_app.getpsst_202310_country.csv"))).toBe(true);
   });
@@ -372,10 +310,7 @@ describe("playStoreStats remaining families", () => {
     const installs = "Date,Package Name,Active Device Installs\r\n2023-10-01,app.getpsst,100\r\n";
     const { readReport } = reader({ "installs_app.getpsst_202310": installs });
 
-    const result = await playStoreStats(
-      { packageName: "app.getpsst", month: "202310", include: ["reviews"] } as any,
-      { readReport },
-    );
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310", include: ["reviews"] } as any, { readReport });
 
     expect((result.structuredContent as any).reviews).toBeNull();
     expect((result.structuredContent as any).notes.join(" ")).toMatch(/absence rather than a fetch failure/);

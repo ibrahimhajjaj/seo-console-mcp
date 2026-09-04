@@ -154,11 +154,7 @@ async function captureProperty(ctx: ToolContext, siteUrl: string, window: Window
 // Only the fields a later comparison can use, plus per-locale lengths. Storing
 // every locale's description body would make the document tens of kilobytes of
 // prose that nothing reads.
-async function captureApp(
-  app: string,
-  options: { platform: string; storefronts: string[] },
-  listApp: typeof appStoreListing,
-): Promise<Record<string, unknown>> {
+async function captureApp(app: string, options: { platform: string; storefronts: string[] }, listApp: typeof appStoreListing): Promise<Record<string, unknown>> {
   const identity = /^\d+$/.test(app) ? { appId: app } : { bundleId: app };
   const result = await listApp(appStoreListingInput.parse({ ...identity, platform: options.platform, storefronts: options.storefronts }));
   const listing = result.structuredContent as Record<string, any>;
@@ -203,10 +199,7 @@ async function capturePackage(packageName: string, window: Window, readStats: ty
       package: packageName,
       ...(result.structuredContent as Record<string, unknown>),
       fellBackFromMonth: current,
-      notes: [
-        ...((result.structuredContent as { notes?: string[] }).notes ?? []),
-        `No reports exist for ${current} yet (${formatToolError(error)}), so ${previous} was read instead.`,
-      ],
+      notes: [...((result.structuredContent as { notes?: string[] }).notes ?? []), `No reports exist for ${current} yet (${formatToolError(error)}), so ${previous} was read instead.`],
     };
   }
 }
@@ -236,12 +229,7 @@ function job(kind: string, id: string, run: () => Promise<Record<string, unknown
 // One unreachable surface must not cost the whole document: the failure is
 // recorded in place, because a surface that silently vanishes reads later as a
 // collapse to zero.
-async function runPool(
-  jobs: Job[],
-  concurrency: number,
-  timeoutMs: number,
-  surfacesWithErrors: string[],
-): Promise<Array<{ kind: string; value: Record<string, unknown> }>> {
+async function runPool(jobs: Job[], concurrency: number, timeoutMs: number, surfacesWithErrors: string[]): Promise<Array<{ kind: string; value: Record<string, unknown> }>> {
   const results = new Array<{ kind: string; value: Record<string, unknown> }>(jobs.length);
   let next = 0;
   const workers = Array.from({ length: Math.min(concurrency, jobs.length) }, async () => {
@@ -328,27 +316,33 @@ function formatSnapshot(document: {
   const lines = [`Snapshot taken ${document.takenAt} covering ${document.window.startDate} to ${document.window.endDate}`];
   for (const property of document.properties) {
     const totals = property.totals as { clicks: number; impressions: number } | undefined;
-    lines.push(totals
-      ? `- ${String(property.siteUrl)}: ${totals.clicks} clicks, ${totals.impressions} impressions`
-      : `- ${String(property.siteUrl)}: not captured (${String(property.error)})`);
+    lines.push(totals ? `- ${String(property.siteUrl)}: ${totals.clicks} clicks, ${totals.impressions} impressions` : `- ${String(property.siteUrl)}: not captured (${String(property.error)})`);
   }
   for (const app of document.apps) {
-    lines.push(app.error
-      ? `- app ${String(app.app)}: not captured (${String(app.error)})`
-      : `- app ${String(app.app)}: version ${String(app.versionString)}, ${String(app.localeCount)} locale(s), editable record ${app.hasEditableRecord ? "exists" : "none"}`);
+    lines.push(
+      app.error
+        ? `- app ${String(app.app)}: not captured (${String(app.error)})`
+        : `- app ${String(app.app)}: version ${String(app.versionString)}, ${String(app.localeCount)} locale(s), editable record ${app.hasEditableRecord ? "exists" : "none"}`,
+    );
   }
   for (const entry of document.packages) {
-    lines.push(entry.error
-      ? `- package ${String(entry.package)}: not captured (${String(entry.error)})`
-      : `- package ${String(entry.package)}: ${String(entry.activeDeviceInstalls)} active installs as of ${String(entry.lastDatePresent)}`);
+    lines.push(
+      entry.error
+        ? `- package ${String(entry.package)}: not captured (${String(entry.error)})`
+        : `- package ${String(entry.package)}: ${String(entry.activeDeviceInstalls)} active installs as of ${String(entry.lastDatePresent)}`,
+    );
   }
   for (const slug of document.slugs) {
-    lines.push(slug.error
-      ? `- plugin ${String(slug.slug)}: not captured (${String(slug.error)})`
-      : `- plugin ${String(slug.slug)}: ${String(slug.activeInstalls)} active installs, rating ${String(slug.rating)}`);
+    lines.push(
+      slug.error
+        ? `- plugin ${String(slug.slug)}: not captured (${String(slug.error)})`
+        : `- plugin ${String(slug.slug)}: ${String(slug.activeInstalls)} active installs, rating ${String(slug.rating)}`,
+    );
   }
-  lines.push(document.surfacesWithErrors.length
-    ? `${document.surfacesWithErrors.length} surface(s) could not be read: ${document.surfacesWithErrors.join(", ")}. Their numbers are missing, not zero.`
-    : "Every requested surface was captured.");
+  lines.push(
+    document.surfacesWithErrors.length
+      ? `${document.surfacesWithErrors.length} surface(s) could not be read: ${document.surfacesWithErrors.join(", ")}. Their numbers are missing, not zero.`
+      : "Every requested surface was captured.",
+  );
   return lines.join("\n");
 }

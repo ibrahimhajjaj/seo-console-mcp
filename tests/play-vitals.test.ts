@@ -26,14 +26,11 @@ const FRESHNESS = {
 
 describe("playVitals", () => {
   it("clamps the window to the API's own freshness instead of today", async () => {
-    const { fetchImpl, calls } = router((url) => url.endsWith(":query")
-      ? { status: 200, body: { rows: [{ startTime: { year: 2026, month: 9, day: 1 }, metrics: [] }] } }
-      : { status: 200, body: FRESHNESS });
-
-    const result = await playVitals(
-      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"], days: 14 }),
-      { fetchImpl, accessToken: "t", now: NOW },
+    const { fetchImpl, calls } = router((url) =>
+      url.endsWith(":query") ? { status: 200, body: { rows: [{ startTime: { year: 2026, month: 9, day: 1 }, metrics: [] }] } } : { status: 200, body: FRESHNESS },
     );
+
+    const result = await playVitals(playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"], days: 14 }), { fetchImpl, accessToken: "t", now: NOW });
 
     const query = calls.find((call) => call.url.endsWith(":query"))?.body as any;
     // Asking through today is refused by the API; the freshness date is the cap.
@@ -44,14 +41,9 @@ describe("playVitals", () => {
   });
 
   it("reports zero rows against a known date rather than as a bare zero", async () => {
-    const { fetchImpl } = router((url) => url.endsWith(":query")
-      ? { status: 200, body: { rows: [] } }
-      : { status: 200, body: FRESHNESS });
+    const { fetchImpl } = router((url) => (url.endsWith(":query") ? { status: 200, body: { rows: [] } } : { status: 200, body: FRESHNESS }));
 
-    const result = await playVitals(
-      playVitalsInput.parse({ packageName: "app.example", metricSets: ["anrRate"] }),
-      { fetchImpl, accessToken: "t", now: NOW },
-    );
+    const result = await playVitals(playVitalsInput.parse({ packageName: "app.example", metricSets: ["anrRate"] }), { fetchImpl, accessToken: "t", now: NOW });
 
     expect((result.structuredContent as any).metricSets.anrRate).toMatchObject({ available: true, rowCount: 0, latestDataAt: "2026-09-01" });
   });
@@ -59,9 +51,13 @@ describe("playVitals", () => {
   it("issues every metric set's freshness read before answering any of them", async () => {
     const seen: string[] = [];
     let releaseGets = (): void => {};
-    const gate = new Promise<void>((resolve) => { releaseGets = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      releaseGets = resolve;
+    });
     let bothArrived = (): void => {};
-    const arrived = new Promise<void>((resolve) => { bothArrived = resolve; });
+    const arrived = new Promise<void>((resolve) => {
+      bothArrived = resolve;
+    });
     const isQuery = (url: string): boolean => url.endsWith(":query");
 
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
@@ -75,10 +71,7 @@ describe("playVitals", () => {
       return new Response(JSON.stringify(FRESHNESS), { status: 200 });
     });
 
-    const pending = playVitals(
-      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate", "anrRate"] }),
-      { fetchImpl, accessToken: "t", now: NOW },
-    );
+    const pending = playVitals(playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate", "anrRate"] }), { fetchImpl, accessToken: "t", now: NOW });
 
     await arrived;
     const gets = seen.filter((url) => !isQuery(url));
@@ -95,41 +88,28 @@ describe("playVitals", () => {
   });
 
   it("carries the API's own message through instead of a bare status", async () => {
-    const { fetchImpl } = router((url) => url.endsWith(":query")
-      ? { status: 400, body: { error: { message: "At least one 'metric' should be specified" } } }
-      : { status: 200, body: FRESHNESS });
+    const { fetchImpl } = router((url) => (url.endsWith(":query") ? { status: 400, body: { error: { message: "At least one 'metric' should be specified" } } } : { status: 200, body: FRESHNESS }));
 
-    const result = await playVitals(
-      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }),
-      { fetchImpl, accessToken: "t", now: NOW },
-    );
+    const result = await playVitals(playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }), { fetchImpl, accessToken: "t", now: NOW });
 
     expect((result.structuredContent as any).metricSets.crashRate.error).toMatch(/At least one 'metric' should be specified/);
   });
 
   it("keeps the package name a single path segment", async () => {
-    const { fetchImpl, calls } = router((url) => url.endsWith(":query")
-      ? { status: 200, body: { rows: [] } }
-      : { status: 200, body: FRESHNESS });
+    const { fetchImpl, calls } = router((url) => (url.endsWith(":query") ? { status: 200, body: { rows: [] } } : { status: 200, body: FRESHNESS }));
 
-    await playVitals(
-      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }),
-      { fetchImpl, accessToken: "t", now: NOW },
-    );
+    await playVitals(playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }), { fetchImpl, accessToken: "t", now: NOW });
 
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) expect(call.url).toContain("/apps/app.example/");
   });
 
   it("keeps the row count but withholds the rows unless they were asked for", async () => {
-    const { fetchImpl } = router((url) => url.endsWith(":query")
-      ? { status: 200, body: { rows: [{ startTime: { year: 2026, month: 9, day: 1 }, metrics: [] }] } }
-      : { status: 200, body: FRESHNESS });
-
-    const result = await playVitals(
-      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }),
-      { fetchImpl, accessToken: "t", now: NOW },
+    const { fetchImpl } = router((url) =>
+      url.endsWith(":query") ? { status: 200, body: { rows: [{ startTime: { year: 2026, month: 9, day: 1 }, metrics: [] }] } } : { status: 200, body: FRESHNESS },
     );
+
+    const result = await playVitals(playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }), { fetchImpl, accessToken: "t", now: NOW });
     const content = result.structuredContent as any;
 
     expect(content.metricSets.crashRate).toMatchObject({ available: true, rowCount: 1 });
@@ -138,14 +118,11 @@ describe("playVitals", () => {
   });
 
   it("returns the rows and drops the note when includeRows is set", async () => {
-    const { fetchImpl } = router((url) => url.endsWith(":query")
-      ? { status: 200, body: { rows: [{ startTime: { year: 2026, month: 9, day: 1 }, metrics: [] }] } }
-      : { status: 200, body: FRESHNESS });
-
-    const result = await playVitals(
-      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"], includeRows: true }),
-      { fetchImpl, accessToken: "t", now: NOW },
+    const { fetchImpl } = router((url) =>
+      url.endsWith(":query") ? { status: 200, body: { rows: [{ startTime: { year: 2026, month: 9, day: 1 }, metrics: [] }] } } : { status: 200, body: FRESHNESS },
     );
+
+    const result = await playVitals(playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"], includeRows: true }), { fetchImpl, accessToken: "t", now: NOW });
     const content = result.structuredContent as any;
 
     expect(content.metricSets.crashRate.rows).toHaveLength(1);
@@ -155,10 +132,7 @@ describe("playVitals", () => {
   it("says it carries no acquisition data", async () => {
     const { fetchImpl } = router(() => ({ status: 200, body: FRESHNESS }));
 
-    const result = await playVitals(
-      playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }),
-      { fetchImpl, accessToken: "t", now: NOW },
-    );
+    const result = await playVitals(playVitalsInput.parse({ packageName: "app.example", metricSets: ["crashRate"] }), { fetchImpl, accessToken: "t", now: NOW });
 
     expect((result.structuredContent as any).notes.join(" ")).toMatch(/no acquisition or conversion data/);
   });

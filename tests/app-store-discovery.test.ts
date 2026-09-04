@@ -42,10 +42,10 @@ describe("appStoreDiscovery", () => {
       return { status: 200, body: { data: [{ type: "appKeywords", id: `kw-${locale}` }] } };
     });
 
-    const result = await appStoreDiscovery(
-      appStoreDiscoveryInput.parse({ appId: "1", locales: ["en-GB", "ar-SA"], include: ["searchKeywords"], includeRows: true }),
-      { fetchImpl, credentials: credentials() },
-    );
+    const result = await appStoreDiscovery(appStoreDiscoveryInput.parse({ appId: "1", locales: ["en-GB", "ar-SA"], include: ["searchKeywords"], includeRows: true }), {
+      fetchImpl,
+      credentials: credentials(),
+    });
 
     const keywords = (result.structuredContent as any).resources.searchKeywords;
     expect(keywords.count).toBe(2);
@@ -64,10 +64,10 @@ describe("appStoreDiscovery", () => {
       return new Response(JSON.stringify({ data: [{ type: "appKeywords", id: `kw-${locale}` }] }), { status: 200 });
     });
 
-    const result = await appStoreDiscovery(
-      appStoreDiscoveryInput.parse({ appId: "1", locales: ["en-US", "en-GB", "ar-SA"], include: ["searchKeywords"], includeRows: true }),
-      { fetchImpl, credentials: credentials() },
-    );
+    const result = await appStoreDiscovery(appStoreDiscoveryInput.parse({ appId: "1", locales: ["en-US", "en-GB", "ar-SA"], include: ["searchKeywords"], includeRows: true }), {
+      fetchImpl,
+      credentials: credentials(),
+    });
 
     expect(maxInFlight).toBeGreaterThan(1);
     // Overlapping calls must not reorder the answer: rows still follow the
@@ -77,14 +77,9 @@ describe("appStoreDiscovery", () => {
   });
 
   it("separates a resource it cannot read from one that is genuinely empty", async () => {
-    const fetchImpl = router((url) => url.includes("appEvents")
-      ? { status: 403, body: { errors: [{ detail: "forbidden" }] } }
-      : { status: 200, body: { data: [] } });
+    const fetchImpl = router((url) => (url.includes("appEvents") ? { status: 403, body: { errors: [{ detail: "forbidden" }] } } : { status: 200, body: { data: [] } }));
 
-    const result = await appStoreDiscovery(
-      appStoreDiscoveryInput.parse({ appId: "1", include: ["appEvents", "appTags"] }),
-      { fetchImpl, credentials: credentials() },
-    );
+    const result = await appStoreDiscovery(appStoreDiscoveryInput.parse({ appId: "1", include: ["appEvents", "appTags"] }), { fetchImpl, credentials: credentials() });
     const resources = (result.structuredContent as any).resources;
 
     expect(resources.appTags).toMatchObject({ available: true, count: 0 });
@@ -96,10 +91,7 @@ describe("appStoreDiscovery", () => {
   it("keeps the count but withholds the rows unless they were asked for", async () => {
     const fetchImpl = router(() => ({ status: 200, body: { data: [{ type: "appKeywords", id: "kw" }] } }));
 
-    const result = await appStoreDiscovery(
-      appStoreDiscoveryInput.parse({ appId: "1", include: ["appTags"] }),
-      { fetchImpl, credentials: credentials() },
-    );
+    const result = await appStoreDiscovery(appStoreDiscoveryInput.parse({ appId: "1", include: ["appTags"] }), { fetchImpl, credentials: credentials() });
     const content = result.structuredContent as any;
 
     expect(content.resources.appTags).toMatchObject({ available: true, count: 1 });
@@ -110,10 +102,7 @@ describe("appStoreDiscovery", () => {
   it("returns the rows and drops the note when includeRows is set", async () => {
     const fetchImpl = router(() => ({ status: 200, body: { data: [{ type: "appKeywords", id: "kw" }] } }));
 
-    const result = await appStoreDiscovery(
-      appStoreDiscoveryInput.parse({ appId: "1", include: ["appTags"], includeRows: true }),
-      { fetchImpl, credentials: credentials() },
-    );
+    const result = await appStoreDiscovery(appStoreDiscoveryInput.parse({ appId: "1", include: ["appTags"], includeRows: true }), { fetchImpl, credentials: credentials() });
     const content = result.structuredContent as any;
 
     expect(content.resources.appTags.rows).toHaveLength(1);
@@ -121,7 +110,8 @@ describe("appStoreDiscovery", () => {
   });
 
   it("requires an appId or a bundleId", async () => {
-    await expect(appStoreDiscovery(appStoreDiscoveryInput.parse({}), { fetchImpl: router(() => ({ status: 200, body: { data: [] } })), credentials: credentials() }))
-      .rejects.toThrow(/appId or bundleId/);
+    await expect(appStoreDiscovery(appStoreDiscoveryInput.parse({}), { fetchImpl: router(() => ({ status: 200, body: { data: [] } })), credentials: credentials() })).rejects.toThrow(
+      /appId or bundleId/,
+    );
   });
 });

@@ -83,12 +83,7 @@ describe("createAscToken", () => {
     // Apple requires the raw r||s form: exactly 64 bytes for P-256, not DER.
     const signature = Buffer.from(encodedSignature ?? "", "base64url");
     expect(signature).toHaveLength(64);
-    expect(verifyWithKey(
-      "sha256",
-      Buffer.from(`${encodedHeader}.${encodedPayload}`),
-      { key: createPublicKey(creds.privateKey), dsaEncoding: "ieee-p1363" },
-      signature,
-    )).toBe(true);
+    expect(verifyWithKey("sha256", Buffer.from(`${encodedHeader}.${encodedPayload}`), { key: createPublicKey(creds.privateKey), dsaEncoding: "ieee-p1363" }, signature)).toBe(true);
   });
 
   it("identifies an individual key with sub instead of iss", () => {
@@ -223,9 +218,7 @@ describe("appStoreListing", () => {
   });
 
   it("requires an appId or a bundleId", async () => {
-    await expect(
-      appStoreListing(appStoreListingInput.parse({}), { fetchImpl: fakeFetch(), credentials: credentials() }),
-    ).rejects.toThrow(/appId or bundleId/);
+    await expect(appStoreListing(appStoreListingInput.parse({}), { fetchImpl: fakeFetch(), credentials: credentials() })).rejects.toThrow(/appId or bundleId/);
   });
 
   it("reports a credentials rejection distinctly from other failures", async () => {
@@ -291,21 +284,32 @@ describe("appStoreListing assets", () => {
       const url = String(input);
       if (url.includes("itunes.apple.com")) return new Response(JSON.stringify({ results: [] }), { status: 200 });
       if (url.includes("/appInfoLocalizations")) {
-        return new Response(JSON.stringify({ data: [
-          { type: "appInfoLocalizations", id: "a", attributes: { locale: "en-GB", name: "N", subtitle: "S" } },
-          { type: "appInfoLocalizations", id: "b", attributes: { locale: "fr-FR", name: "N", subtitle: "S" } },
-        ] }), { status: 200 });
+        return new Response(
+          JSON.stringify({
+            data: [
+              { type: "appInfoLocalizations", id: "a", attributes: { locale: "en-GB", name: "N", subtitle: "S" } },
+              { type: "appInfoLocalizations", id: "b", attributes: { locale: "fr-FR", name: "N", subtitle: "S" } },
+            ],
+          }),
+          { status: 200 },
+        );
       }
       if (url.includes("/appStoreVersionLocalizations")) {
-        return new Response(JSON.stringify({
-          data: [
-            { type: "appStoreVersionLocalizations", id: "vl-en", attributes: { locale: "en-GB", keywords: "k" },
-              relationships: { appScreenshotSets: { data: [{ type: "appScreenshotSets", id: "s1" }] }, appPreviewSets: { data: [] } } },
-            { type: "appStoreVersionLocalizations", id: "vl-fr", attributes: { locale: "fr-FR", keywords: "k" },
-              relationships: { appScreenshotSets: { data: [] }, appPreviewSets: { data: [] } } },
-          ],
-          included: [{ type: "appScreenshotSets", id: "s1", attributes: { screenshotDisplayType: "APP_IPHONE_67" } }],
-        }), { status: 200 });
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                type: "appStoreVersionLocalizations",
+                id: "vl-en",
+                attributes: { locale: "en-GB", keywords: "k" },
+                relationships: { appScreenshotSets: { data: [{ type: "appScreenshotSets", id: "s1" }] }, appPreviewSets: { data: [] } },
+              },
+              { type: "appStoreVersionLocalizations", id: "vl-fr", attributes: { locale: "fr-FR", keywords: "k" }, relationships: { appScreenshotSets: { data: [] }, appPreviewSets: { data: [] } } },
+            ],
+            included: [{ type: "appScreenshotSets", id: "s1", attributes: { screenshotDisplayType: "APP_IPHONE_67" } }],
+          }),
+          { status: 200 },
+        );
       }
       if (url.includes("/appInfos")) return new Response(JSON.stringify({ data: [LIVE_INFO] }), { status: 200 });
       return new Response(JSON.stringify({ data: [LIVE_VERSION] }), { status: 200 });

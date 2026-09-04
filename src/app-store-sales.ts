@@ -60,7 +60,9 @@ export async function appStoreSales(params: SalesParams, deps: SalesDeps = {}): 
     // does not exist for these parameters. Only the first is an absence of
     // sales; the second must surface as the request failure it is.
     if (/no sales/i.test(detail)) return empty(reportDate, params, vendorNumber, detail);
-    throw new Error(`App Store Connect has no ${params.frequency} ${params.reportType} ${params.reportSubType} report for ${reportDate}${detail ? `: ${detail}` : "."} Check the frequency, report type and date shape.`);
+    throw new Error(
+      `App Store Connect has no ${params.frequency} ${params.reportType} ${params.reportSubType} report for ${reportDate}${detail ? `: ${detail}` : "."} Check the frequency, report type and date shape.`,
+    );
   }
   if (response.status === 401 || response.status === 403) {
     throw new Error(`App Store Connect rejected the credentials for sales reports (HTTP ${response.status}). Sales and Trends needs a team key with the Admin, Finance, or Sales and Reports role.`);
@@ -100,9 +102,7 @@ export async function appStoreSales(params: SalesParams, deps: SalesDeps = {}): 
     totalUnits,
     apps: [...bySku.values()].sort((left, right) => right.units - left.units),
     rows: params.includeRows ? rows : [],
-    notes: [
-      "Units are downloads and redownloads as Apple counts them for Sales and Trends, which is a different pipeline from App Analytics and can differ from it.",
-    ],
+    notes: ["Units are downloads and redownloads as Apple counts them for Sales and Trends, which is a different pipeline from App Analytics and can differ from it."],
   };
 
   const lines = [

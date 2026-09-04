@@ -33,10 +33,7 @@ interface PluginInfo {
   error?: string;
 }
 
-export async function wporgPlugin(
-  params: WporgPluginParams,
-  deps: { fetchImpl?: typeof fetch; now?: Date } = {},
-): Promise<ToolResult> {
+export async function wporgPlugin(params: WporgPluginParams, deps: { fetchImpl?: typeof fetch; now?: Date } = {}): Promise<ToolResult> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const query = new URLSearchParams({ action: "plugin_information", "request[slug]": params.slug });
   const url = `https://api.wordpress.org/plugins/info/1.2/?${query.toString()}`;
@@ -144,7 +141,11 @@ async function fetchDownloads(
     if (summaryResponse.ok) {
       const raw = (await summaryResponse.json()) as Record<string, string> | null;
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-        summary = Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Number(value)]).filter(([, value]) => Number.isFinite(value as number)));
+        summary = Object.fromEntries(
+          Object.entries(raw)
+            .map(([key, value]) => [key, Number(value)])
+            .filter(([, value]) => Number.isFinite(value as number)),
+        );
       }
     }
     return { daily, summary };
@@ -154,11 +155,7 @@ async function fetchDownloads(
   }
 }
 
-async function fetchVersionDistribution(
-  slug: string,
-  fetchImpl: typeof fetch,
-  notes: string[],
-): Promise<Array<{ version: string; percentage: number }> | null> {
+async function fetchVersionDistribution(slug: string, fetchImpl: typeof fetch, notes: string[]): Promise<Array<{ version: string; percentage: number }> | null> {
   try {
     const response = await fetchImpl(`https://api.wordpress.org/stats/plugin/1.0/?${new URLSearchParams({ slug })}`, {
       headers: { "user-agent": USER_AGENT },

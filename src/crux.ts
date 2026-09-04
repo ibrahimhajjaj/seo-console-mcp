@@ -45,14 +45,19 @@ export async function cruxFieldData(params: FieldDataParams, deps: CruxDeps = {}
   if (!outcome.hasData) return noData(params, "There is no Chrome UX Report data for this origin or URL.");
 
   const record = outcome.response.record ?? {};
-  const metrics = Object.fromEntries(Object.entries(record.metrics ?? {}).map(([name, metric]) => [name, {
-    p75: numberOrNull(metric.percentiles?.p75),
-    histogram: (metric.histogram ?? []).map((bin) => ({
-      start: numberOrNull(bin.start),
-      end: bin.end === undefined ? null : numberOrNull(bin.end),
-      density: typeof bin.density === "number" ? bin.density : null,
-    })),
-  }]));
+  const metrics = Object.fromEntries(
+    Object.entries(record.metrics ?? {}).map(([name, metric]) => [
+      name,
+      {
+        p75: numberOrNull(metric.percentiles?.p75),
+        histogram: (metric.histogram ?? []).map((bin) => ({
+          start: numberOrNull(bin.start),
+          end: bin.end === undefined ? null : numberOrNull(bin.end),
+          density: typeof bin.density === "number" ? bin.density : null,
+        })),
+      },
+    ]),
+  );
 
   const structuredContent = {
     ...target(params),
@@ -91,9 +96,14 @@ export async function cruxHistory(params: HistoryParams, deps: CruxDeps = {}): P
   // A period with too few samples returns "NaN" densities and null p75s rather
   // than being dropped, so the arrays stay aligned with collectionPeriods. Keep
   // that alignment and represent the gaps as null rather than as zero.
-  const metrics = Object.fromEntries(Object.entries(record.metrics ?? {}).map(([name, metric]) => [name, {
-    p75s: (metric.percentilesTimeseries?.p75s ?? []).map(numberOrNull),
-  }]));
+  const metrics = Object.fromEntries(
+    Object.entries(record.metrics ?? {}).map(([name, metric]) => [
+      name,
+      {
+        p75s: (metric.percentilesTimeseries?.p75s ?? []).map(numberOrNull),
+      },
+    ]),
+  );
 
   const structuredContent = {
     ...target(params),
@@ -131,7 +141,9 @@ interface Outcome {
 async function queryCrux(method: string, request: Record<string, unknown>, deps: CruxDeps): Promise<Outcome> {
   const apiKey = deps.apiKey ?? process.env.SEO_MCP_CRUX_KEY ?? process.env.SEO_MCP_PAGESPEED_KEY;
   if (!apiKey) {
-    throw new Error("A Google API key with the Chrome UX Report API enabled is required. Set SEO_MCP_CRUX_KEY, or SEO_MCP_PAGESPEED_KEY if the same key is allowed to call chromeuxreport.googleapis.com.");
+    throw new Error(
+      "A Google API key with the Chrome UX Report API enabled is required. Set SEO_MCP_CRUX_KEY, or SEO_MCP_PAGESPEED_KEY if the same key is allowed to call chromeuxreport.googleapis.com.",
+    );
   }
   const response = await (deps.fetchImpl ?? fetch)(`${API}:${method}?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",

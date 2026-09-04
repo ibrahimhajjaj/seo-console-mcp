@@ -84,8 +84,14 @@ export function comparePeriods(current: InsightRow[], previous: InsightRow[], op
   }
 
   return {
-    gainers: items.filter(({ clicksDelta }) => clicksDelta > 0).sort((left, right) => right.clicksDelta - left.clicksDelta).slice(0, limit),
-    losers: items.filter(({ clicksDelta }) => clicksDelta < 0).sort((left, right) => left.clicksDelta - right.clicksDelta).slice(0, limit),
+    gainers: items
+      .filter(({ clicksDelta }) => clicksDelta > 0)
+      .sort((left, right) => right.clicksDelta - left.clicksDelta)
+      .slice(0, limit),
+    losers: items
+      .filter(({ clicksDelta }) => clicksDelta < 0)
+      .sort((left, right) => left.clicksDelta - right.clicksDelta)
+      .slice(0, limit),
     droppedAsUnknown,
   };
 }

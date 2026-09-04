@@ -98,7 +98,9 @@ export async function appStoreReviews(params: ReviewParams, deps: ReviewDeps = {
   const lines = [
     `${reviews.length} review(s) for app ${appId}${params.territory ? ` in ${params.territory}` : ""}`,
     `Mean of these ${reviews.length}: ${structuredContent.meanOfFetched?.toFixed(2) ?? "unknown"} (not the lifetime App Store rating)`,
-    `Star split of these: ${Object.entries(histogram).map(([star, count]) => `${star}★ ${count}`).join(", ")}`,
+    `Star split of these: ${Object.entries(histogram)
+      .map(([star, count]) => `${star}★ ${count}`)
+      .join(", ")}`,
     `${withoutResponse} of them have no developer response.`,
   ];
   return { content: [{ type: "text", text: lines.join("\n") }], structuredContent };

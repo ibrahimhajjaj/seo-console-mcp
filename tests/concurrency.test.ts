@@ -22,13 +22,17 @@ describe("mapWithConcurrency", () => {
     let inFlight = 0;
     let maxInFlight = 0;
 
-    await mapWithConcurrency(Array.from({ length: 6 }, (_, index) => index), 2, async (value) => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      await deferred(5);
-      inFlight -= 1;
-      return value;
-    });
+    await mapWithConcurrency(
+      Array.from({ length: 6 }, (_, index) => index),
+      2,
+      async (value) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await deferred(5);
+        inFlight -= 1;
+        return value;
+      },
+    );
 
     expect(maxInFlight).toBe(2);
   });
@@ -62,10 +66,12 @@ describe("mapWithConcurrency", () => {
   });
 
   it("rejects when a job rejects", async () => {
-    await expect(mapWithConcurrency([1, 2], 2, async (value) => {
-      if (value === 2) throw new Error("boom");
-      return value;
-    })).rejects.toThrow(/boom/);
+    await expect(
+      mapWithConcurrency([1, 2], 2, async (value) => {
+        if (value === 2) throw new Error("boom");
+        return value;
+      }),
+    ).rejects.toThrow(/boom/);
   });
 
   it("is the same function audit-site re-exports", () => {

@@ -42,12 +42,14 @@ function document(overrides: Record<string, unknown> = {}) {
     takenAt: "2026-08-01T10:00Z",
     windowDays: 28,
     window: { startDate: "2026-07-05", endDate: "2026-08-01" },
-    properties: [{
-      siteUrl: "https://example.com/",
-      totals: { clicks: 100, impressions: 1000, ctr: 0.1, position: 8, daysWithData: 28, firstIncompleteDate: null },
-      topQueries: { rows: [], truncated: false },
-      topPages: { rows: [row("https://example.com/a", 8, 500), row("https://example.com/b", 12, 20)], truncated: false },
-    }],
+    properties: [
+      {
+        siteUrl: "https://example.com/",
+        totals: { clicks: 100, impressions: 1000, ctr: 0.1, position: 8, daysWithData: 28, firstIncompleteDate: null },
+        topQueries: { rows: [], truncated: false },
+        topPages: { rows: [row("https://example.com/a", 8, 500), row("https://example.com/b", 12, 20)], truncated: false },
+      },
+    ],
     apps: [{ app: "123", versionString: "1.0.0", localeCount: 1, hasEditableRecord: false, ratings: [{ storefront: "us", averageUserRating: 4.5, userRatingCount: 10 }] }],
     packages: [{ package: "app.example", activeDeviceInstalls: 10, lastDatePresent: "2026-07-30" }],
     slugs: [{ slug: "akismet", activeInstalls: 100, downloaded: 500, rating: 90, numRatings: 3 }],
@@ -62,22 +64,28 @@ const env = { SEO_MCP_SNAPSHOT_DIR: "/snapshots" };
 
 function compare(from: unknown, to: unknown, overrides: Record<string, unknown> = {}) {
   const files: Record<string, string> = { "/snapshots/from.json": JSON.stringify(from), "/snapshots/to.json": JSON.stringify(to) };
-  return compareSnapshots(
-    compareSnapshotsInput.parse({ from: "from.json", to: "to.json", ...overrides }),
-    { env, readDocument: (path) => files[path] ?? (() => { throw new Error("missing"); })() },
-  );
+  return compareSnapshots(compareSnapshotsInput.parse({ from: "from.json", to: "to.json", ...overrides }), {
+    env,
+    readDocument: (path) =>
+      files[path] ??
+      (() => {
+        throw new Error("missing");
+      })(),
+  });
 }
 
 describe("compareSnapshots", () => {
   it("reports deltas across every surface", async () => {
     const later = document({
       takenAt: "2026-08-15T10:00Z",
-      properties: [{
-        siteUrl: "https://example.com/",
-        totals: { clicks: 150, impressions: 1200, ctr: 0.125, position: 7, daysWithData: 28, firstIncompleteDate: null },
-        topQueries: { rows: [], truncated: false },
-        topPages: { rows: [row("https://example.com/a", 5, 600), row("https://example.com/b", 9, 25)], truncated: false },
-      }],
+      properties: [
+        {
+          siteUrl: "https://example.com/",
+          totals: { clicks: 150, impressions: 1200, ctr: 0.125, position: 7, daysWithData: 28, firstIncompleteDate: null },
+          topQueries: { rows: [], truncated: false },
+          topPages: { rows: [row("https://example.com/a", 5, 600), row("https://example.com/b", 9, 25)], truncated: false },
+        },
+      ],
       slugs: [{ slug: "akismet", activeInstalls: 120, downloaded: 560, rating: 92, numRatings: 4 }],
     });
 
@@ -94,13 +102,15 @@ describe("compareSnapshots", () => {
 
   it("keeps low-impression position moves out of the movers list", async () => {
     const later = document({
-      properties: [{
-        siteUrl: "https://example.com/",
-        totals: { clicks: 100, impressions: 1000, ctr: 0.1, position: 8, daysWithData: 28, firstIncompleteDate: null },
-        topQueries: { rows: [], truncated: false },
-        // /a has weight and moved 3; /b moved 4 but on 20-25 impressions.
-        topPages: { rows: [row("https://example.com/a", 5, 500), row("https://example.com/b", 8, 25)], truncated: false },
-      }],
+      properties: [
+        {
+          siteUrl: "https://example.com/",
+          totals: { clicks: 100, impressions: 1000, ctr: 0.1, position: 8, daysWithData: 28, firstIncompleteDate: null },
+          topQueries: { rows: [], truncated: false },
+          // /a has weight and moved 3; /b moved 4 but on 20-25 impressions.
+          topPages: { rows: [row("https://example.com/a", 5, 500), row("https://example.com/b", 8, 25)], truncated: false },
+        },
+      ],
     });
 
     const result = await compare(document(), later, { minImpressions: 100 });
@@ -161,12 +171,14 @@ describe("compareSnapshots", () => {
 
   it("reads truncation from the top-row lists, not the date totals", async () => {
     const truncated = document({
-      properties: [{
-        siteUrl: "https://example.com/",
-        totals: { clicks: 100, impressions: 1000, ctr: 0.1, position: 8, daysWithData: 28, firstIncompleteDate: null },
-        topQueries: { rows: [], truncated: false },
-        topPages: { rows: [], truncated: true },
-      }],
+      properties: [
+        {
+          siteUrl: "https://example.com/",
+          totals: { clicks: 100, impressions: 1000, ctr: 0.1, position: 8, daysWithData: 28, firstIncompleteDate: null },
+          topQueries: { rows: [], truncated: false },
+          topPages: { rows: [], truncated: true },
+        },
+      ],
     });
 
     const result = await compare(document(), truncated);
@@ -176,12 +188,14 @@ describe("compareSnapshots", () => {
 
   it("lists pages that left the captured top rows rather than dropping them", async () => {
     const later = document({
-      properties: [{
-        siteUrl: "https://example.com/",
-        totals: { clicks: 100, impressions: 1000, ctr: 0.1, position: 8, daysWithData: 28, firstIncompleteDate: null },
-        topQueries: { rows: [], truncated: false },
-        topPages: { rows: [row("https://example.com/a", 8, 500)], truncated: true },
-      }],
+      properties: [
+        {
+          siteUrl: "https://example.com/",
+          totals: { clicks: 100, impressions: 1000, ctr: 0.1, position: 8, daysWithData: 28, firstIncompleteDate: null },
+          topQueries: { rows: [], truncated: false },
+          topPages: { rows: [row("https://example.com/a", 8, 500)], truncated: true },
+        },
+      ],
     });
 
     const result = await compare(document(), later);
@@ -196,9 +210,7 @@ describe("compareSnapshots", () => {
     const result = await compare(before, after);
     const comparison = result.structuredContent as Record<string, any>;
 
-    expect(comparison.properties[0].queryMovers).toEqual([
-      { query: "seo mcp", positionFrom: 9, positionTo: 6, change: -3, impressions: 450 },
-    ]);
+    expect(comparison.properties[0].queryMovers).toEqual([{ query: "seo mcp", positionFrom: 9, positionTo: 6, change: -3, impressions: 450 }]);
     expect(comparison.properties[0].droppedOutOfTopQueries).toEqual(["search console mcp"]);
     expect(() => compareSnapshotsOutput.parse(comparison)).not.toThrow();
   });
@@ -247,21 +259,20 @@ describe("compareSnapshots", () => {
     const result = await compare(before, after);
     const comparison = result.structuredContent as Record<string, any>;
 
-    expect(comparison.packages[0].trafficSources).toEqual([{
-      source: "Google Play search",
-      visitors: { from: null, to: 200, change: null },
-      acquisitions: { from: null, to: 40, change: null },
-      conversionRate: { from: null, to: 0.2, change: null },
-    }]);
+    expect(comparison.packages[0].trafficSources).toEqual([
+      {
+        source: "Google Play search",
+        visitors: { from: null, to: 200, change: null },
+        acquisitions: { from: null, to: 40, change: null },
+        conversionRate: { from: null, to: 0.2, change: null },
+      },
+    ]);
     expect(comparison.packages[0].hasPlaySearchRows).toEqual({ from: false, to: true });
     expect(() => compareSnapshotsOutput.parse(comparison)).not.toThrow();
   });
 
   it("keeps search-term rows out of the per-source list", async () => {
-    const rows = (visitors: number) => [
-      source("Google Play search", visitors, 10),
-      source("Google Play search", 5, 1, { searchTerm: "psst" }),
-    ];
+    const rows = (visitors: number) => [source("Google Play search", visitors, 10), source("Google Play search", 5, 1, { searchTerm: "psst" })];
     const before = document({ packages: [playPackage(rows(100), true)] });
     const after = document({ packages: [playPackage(rows(160), true)] });
 
@@ -296,17 +307,20 @@ describe("compareSnapshots", () => {
     // Unparseable and parseable-but-wrong share one message, so a caller cannot
     // learn the shape of a file from the refusal.
     const files: Record<string, string> = { "/snapshots/from.json": "not json", "/snapshots/to.json": "{}" };
-    await expect(compareSnapshots(
-      compareSnapshotsInput.parse({ from: "from.json", to: "to.json" }),
-      { env, readDocument: (path) => files[path] as string },
-    )).rejects.toThrow(/not a snapshot document/);
+    await expect(compareSnapshots(compareSnapshotsInput.parse({ from: "from.json", to: "to.json" }), { env, readDocument: (path) => files[path] as string })).rejects.toThrow(
+      /not a snapshot document/,
+    );
   });
 
   it("reports an unreadable path without guessing at its contents", async () => {
-    await expect(compareSnapshots(
-      compareSnapshotsInput.parse({ from: "missing.json", to: "to.json" }),
-      { env, readDocument: () => { throw new Error("ENOENT"); } },
-    )).rejects.toThrow(/Could not read the from snapshot/);
+    await expect(
+      compareSnapshots(compareSnapshotsInput.parse({ from: "missing.json", to: "to.json" }), {
+        env,
+        readDocument: () => {
+          throw new Error("ENOENT");
+        },
+      }),
+    ).rejects.toThrow(/Could not read the from snapshot/);
   });
 
   it("takes previous and latest instead of two file names", async () => {
@@ -315,10 +329,11 @@ describe("compareSnapshots", () => {
       "/snapshots/b.json": JSON.stringify(document({ takenAt: "2026-08-15T10:00Z", slugs: [{ slug: "akismet", activeInstalls: 120, downloaded: 560, rating: 92, numRatings: 4 }] })),
     };
 
-    const result = await compareSnapshots(
-      compareSnapshotsInput.parse({ from: "previous", to: "latest" }),
-      { env, readDir: () => Object.keys(files).map((path) => path.slice("/snapshots/".length)), readDocument: (path) => files[path] as string },
-    );
+    const result = await compareSnapshots(compareSnapshotsInput.parse({ from: "previous", to: "latest" }), {
+      env,
+      readDir: () => Object.keys(files).map((path) => path.slice("/snapshots/".length)),
+      readDocument: (path) => files[path] as string,
+    });
     const comparison = result.structuredContent as Record<string, any>;
 
     // b.json is the newer of the two, so it is the one "latest" resolves to.
@@ -331,19 +346,15 @@ describe("compareSnapshots", () => {
   it("refuses previous when there is only one snapshot to compare", async () => {
     const files: Record<string, string> = { "/snapshots/a.json": JSON.stringify(document()) };
 
-    await expect(compareSnapshots(
-      compareSnapshotsInput.parse({ from: "previous", to: "latest" }),
-      { env, readDir: () => ["a.json"], readDocument: (path) => files[path] as string },
-    )).rejects.toThrow(/needs at least two/);
+    await expect(compareSnapshots(compareSnapshotsInput.parse({ from: "previous", to: "latest" }), { env, readDir: () => ["a.json"], readDocument: (path) => files[path] as string })).rejects.toThrow(
+      /needs at least two/,
+    );
   });
 
   it("refuses a path outside the snapshot directory before reading anything", async () => {
     const readDocument = vi.fn(() => "{}");
 
-    await expect(compareSnapshots(
-      compareSnapshotsInput.parse({ from: "../evil.json", to: "to.json" }),
-      { env, readDocument },
-    )).rejects.toThrow(/\/snapshots/);
+    await expect(compareSnapshots(compareSnapshotsInput.parse({ from: "../evil.json", to: "to.json" }), { env, readDocument })).rejects.toThrow(/\/snapshots/);
     expect(readDocument).not.toHaveBeenCalled();
   });
 });

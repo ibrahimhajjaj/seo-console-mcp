@@ -46,14 +46,22 @@ const writeTool: ToolDefinition = {
 const filterShape = {
   siteUrl: z.string().min(1),
   dimensions: z.array(z.string()).default([]),
-  dimensionFilterGroups: z.array(z.object({
-    groupType: z.enum(["and"]).default("and"),
-    filters: z.array(z.object({
-      dimension: z.string(),
-      operator: z.string(),
-      expression: z.string(),
-    })).min(1),
-  })).optional(),
+  dimensionFilterGroups: z
+    .array(
+      z.object({
+        groupType: z.enum(["and"]).default("and"),
+        filters: z
+          .array(
+            z.object({
+              dimension: z.string(),
+              operator: z.string(),
+              expression: z.string(),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .optional(),
 };
 
 const filterTool: ToolDefinition = {
@@ -75,11 +83,17 @@ function capture() {
   const err: string[] = [];
   const files: Array<{ path: string; data: string }> = [];
   const noCredentials: ToolContext = {
-    getClients: () => { throw new Error("no clients in test"); },
-    getAuthenticatedClients: () => { throw new Error("credentials are not configured"); },
+    getClients: () => {
+      throw new Error("no clients in test");
+    },
+    getAuthenticatedClients: () => {
+      throw new Error("credentials are not configured");
+    },
   };
   return {
-    out, err, files,
+    out,
+    err,
+    files,
     deps: {
       tools,
       makeContext: () => noCredentials,
@@ -94,10 +108,13 @@ describe("runQuery", () => {
   it("coerces string flags to the schema types and writes JSON to stdout", async () => {
     const io = capture();
 
-    const code = await runQuery(command({
-      tool: "echo",
-      params: { siteUrl: "https://example.com/", days: "90", dimensions: "date,query", dryRun: "true" },
-    }), io.deps);
+    const code = await runQuery(
+      command({
+        tool: "echo",
+        params: { siteUrl: "https://example.com/", days: "90", dimensions: "date,query", dryRun: "true" },
+      }),
+      io.deps,
+    );
 
     expect(code).toBe(0);
     expect(io.files).toHaveLength(0);
@@ -174,24 +191,28 @@ describe("runQuery", () => {
     const io = capture();
     const groups = '[{"groupType":"and","filters":[{"dimension":"query","operator":"contains","expression":"seo"}]}]';
 
-    const code = await runQuery(command({
-      tool: "filtered",
-      params: { siteUrl: "https://example.com/", dimensionFilterGroups: groups },
-    }), io.deps);
+    const code = await runQuery(
+      command({
+        tool: "filtered",
+        params: { siteUrl: "https://example.com/", dimensionFilterGroups: groups },
+      }),
+      io.deps,
+    );
 
     expect(code).toBe(0);
-    expect(JSON.parse(io.out.join("")).params.dimensionFilterGroups).toEqual([
-      { groupType: "and", filters: [{ dimension: "query", operator: "contains", expression: "seo" }] },
-    ]);
+    expect(JSON.parse(io.out.join("")).params.dimensionFilterGroups).toEqual([{ groupType: "and", filters: [{ dimension: "query", operator: "contains", expression: "seo" }] }]);
   });
 
   it("rejects malformed JSON by naming the flag rather than repeating the parser's complaint", async () => {
     const io = capture();
 
-    const code = await runQuery(command({
-      tool: "filtered",
-      params: { siteUrl: "https://example.com/", dimensionFilterGroups: "[{groupType: and}]" },
-    }), io.deps);
+    const code = await runQuery(
+      command({
+        tool: "filtered",
+        params: { siteUrl: "https://example.com/", dimensionFilterGroups: "[{groupType: and}]" },
+      }),
+      io.deps,
+    );
 
     expect(code).toBe(1);
     expect(io.err.join("")).toContain('Expected JSON for --dimension-filter-groups but got "[{groupType: and}]".');
@@ -201,10 +222,13 @@ describe("runQuery", () => {
   it("still splits a list of scalars on commas", async () => {
     const io = capture();
 
-    const code = await runQuery(command({
-      tool: "filtered",
-      params: { siteUrl: "https://example.com/", dimensions: "date,query" },
-    }), io.deps);
+    const code = await runQuery(
+      command({
+        tool: "filtered",
+        params: { siteUrl: "https://example.com/", dimensions: "date,query" },
+      }),
+      io.deps,
+    );
 
     expect(code).toBe(0);
     expect(JSON.parse(io.out.join("")).params.dimensions).toEqual(["date", "query"]);

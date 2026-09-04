@@ -126,10 +126,7 @@ async function verifyDomain(domain: string, deps: VerifyDeps): Promise<boolean> 
 function createVerifyClients(credentialsPath?: string): VerifyClients {
   const auth = new googleAuth.GoogleAuth({
     ...(credentialsPath ? { keyFile: credentialsPath } : {}),
-    scopes: [
-      "https://www.googleapis.com/auth/siteverification",
-      "https://www.googleapis.com/auth/webmasters",
-    ],
+    scopes: ["https://www.googleapis.com/auth/siteverification", "https://www.googleapis.com/auth/webmasters"],
   });
   const siteVerification = siteVerificationApi({ version: "v1", auth });
   const searchConsole = searchconsole({ version: "v1", auth });

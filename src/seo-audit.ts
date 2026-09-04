@@ -24,18 +24,27 @@ export function parseSeoHtml(html: string, pageUrl: string): SeoAuditResult {
   const clean = (value: string | undefined): string | null => value?.replace(/\s+/g, " ").trim() || null;
   // document.title semantics: SVG/MathML <title> elements are not page titles.
   const titleElements = $("title").filter((_, element) => $(element).parents("svg,math").length === 0);
-  const titles = titleElements.map((_, element) => clean($(element).text())).get().filter((value): value is string => value !== null);
+  const titles = titleElements
+    .map((_, element) => clean($(element).text()))
+    .get()
+    .filter((value): value is string => value !== null);
   const description = clean($("meta[name='description' i]").first().attr("content"));
   const canonicalHref = clean($("link[rel~='canonical' i]").first().attr("href"));
   let canonical: string | null = null;
   if (canonicalHref) {
-    try { canonical = new URL(canonicalHref, pageUrl).toString(); } catch { canonical = canonicalHref; }
+    try {
+      canonical = new URL(canonicalHref, pageUrl).toString();
+    } catch {
+      canonical = canonicalHref;
+    }
   }
 
-  const headings = $("h1,h2,h3,h4,h5,h6").map((_, element) => ({
-    level: Number(element.tagName.slice(1)),
-    text: clean($(element).text()) ?? "",
-  })).get();
+  const headings = $("h1,h2,h3,h4,h5,h6")
+    .map((_, element) => ({
+      level: Number(element.tagName.slice(1)),
+      text: clean($(element).text()) ?? "",
+    }))
+    .get();
   const h1Texts = headings.filter(({ level }) => level === 1).map(({ text }) => text);
   const openGraph = collectMeta($, "property", "og:");
   const twitter = collectMeta($, "name", "twitter:");
@@ -125,7 +134,9 @@ function countLinks($: cheerio.CheerioAPI, pageUrl: string): { internal: number;
       if (target.protocol !== "http:" && target.protocol !== "https:") return;
       if (target.hostname === pageHost) internal += 1;
       else external += 1;
-    } catch { /* ignore malformed links */ }
+    } catch {
+      /* ignore malformed links */
+    }
   });
   return { internal, external };
 }

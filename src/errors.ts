@@ -8,7 +8,7 @@ export function formatToolError(error: unknown): string {
   const message = stringValue(apiError?.message) ?? stringValue(record.message) ?? "Unknown error";
   if (!response && !apiError && !status) return message;
   const errors = apiError && Array.isArray(apiError.errors) ? apiError.errors : [];
-  const reasons = errors.flatMap((entry) => isRecord(entry) && stringValue(entry.reason) ? [stringValue(entry.reason) as string] : []);
+  const reasons = errors.flatMap((entry) => (isRecord(entry) && stringValue(entry.reason) ? [stringValue(entry.reason) as string] : []));
   const statusText = status ? `Google API ${status}` : "Google API error";
   const reasonText = reasons.length ? ` (${[...new Set(reasons)].join(", ")})` : "";
   if (status === 403) {

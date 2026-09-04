@@ -33,10 +33,7 @@ describe("runVerify", () => {
   });
 
   it("retries verification until DNS propagates", async () => {
-    const verifyOwnership = vi.fn()
-      .mockRejectedValueOnce(new Error("token not found"))
-      .mockRejectedValueOnce(new Error("token not found"))
-      .mockResolvedValueOnce(undefined);
+    const verifyOwnership = vi.fn().mockRejectedValueOnce(new Error("token not found")).mockRejectedValueOnce(new Error("token not found")).mockResolvedValueOnce(undefined);
     const clients = fakeClients({ verifyOwnership });
     const ok = await runVerify(["getpsst.app"], { clients, cloudflare: fakeCloudflare(), print: () => {}, ...noWait });
     expect(ok).toBe(true);
@@ -44,7 +41,9 @@ describe("runVerify", () => {
   });
 
   it("gives up cleanly when verification never succeeds", async () => {
-    const verifyOwnership = vi.fn(async () => { throw new Error("token not found"); });
+    const verifyOwnership = vi.fn(async () => {
+      throw new Error("token not found");
+    });
     const clients = fakeClients({ verifyOwnership });
     const lines: string[] = [];
     const ok = await runVerify(["getpsst.app"], { clients, cloudflare: fakeCloudflare(), print: (line) => lines.push(line), attempts: 3, ...noWait });

@@ -10,12 +10,7 @@ function credentials(): AscCredentials {
   return { keyId: "K", issuerId: "I", privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString() };
 }
 
-const TSV = [
-  "Provider\tSKU\tTitle\tUnits\tCountry Code",
-  "APPLE\tpsst\tPsst\t1\tNL",
-  "APPLE\tzad-ios\tZad\t2\tPK",
-  "APPLE\tzad-ios\tZad\t1\tSA",
-].join("\n");
+const TSV = ["Provider\tSKU\tTitle\tUnits\tCountry Code", "APPLE\tpsst\tPsst\t1\tNL", "APPLE\tzad-ios\tZad\t2\tPK", "APPLE\tzad-ios\tZad\t1\tSA"].join("\n");
 
 function gzipResponding(tsv: string) {
   return vi.fn(async () => new Response(gzipSync(Buffer.from(tsv, "utf8")), { status: 200 }));
@@ -25,10 +20,7 @@ describe("appStoreSales", () => {
   it("gunzips the tab-delimited report and groups units by SKU and territory", async () => {
     const fetchImpl = gzipResponding(TSV);
 
-    const result = await appStoreSales(
-      appStoreSalesInput.parse({ reportDate: "2026-08-30" }),
-      { fetchImpl, credentials: credentials(), vendorNumber: "123" },
-    );
+    const result = await appStoreSales(appStoreSalesInput.parse({ reportDate: "2026-08-30" }), { fetchImpl, credentials: credentials(), vendorNumber: "123" });
     const content = result.structuredContent as any;
 
     expect(content.totalUnits).toBe(4);
@@ -42,10 +34,7 @@ describe("appStoreSales", () => {
   it("treats a period with no sales as an absence, not an error", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ errors: [{ detail: "There were no sales for the date specified." }] }), { status: 404 }));
 
-    const result = await appStoreSales(
-      appStoreSalesInput.parse({ reportDate: "2026-08-31" }),
-      { fetchImpl, credentials: credentials(), vendorNumber: "123" },
-    );
+    const result = await appStoreSales(appStoreSalesInput.parse({ reportDate: "2026-08-31" }), { fetchImpl, credentials: credentials(), vendorNumber: "123" });
 
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toMatchObject({ hasData: false, totalUnits: 0, apps: [] });
@@ -55,10 +44,7 @@ describe("appStoreSales", () => {
   it("reports a 404 that is not about sales as a failed request", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ errors: [{ detail: "Report not available for the specified parameters." }] }), { status: 404 }));
 
-    const outcome = await appStoreSales(
-      appStoreSalesInput.parse({ reportDate: "2026-08-31" }),
-      { fetchImpl, credentials: credentials(), vendorNumber: "123" },
-    ).catch((error: unknown) => error);
+    const outcome = await appStoreSales(appStoreSalesInput.parse({ reportDate: "2026-08-31" }), { fetchImpl, credentials: credentials(), vendorNumber: "123" }).catch((error: unknown) => error);
 
     expect(outcome).toBeInstanceOf(Error);
     expect((outcome as Error).message).toMatch(/has no DAILY SALES SUMMARY report/);
@@ -69,18 +55,16 @@ describe("appStoreSales", () => {
   it("names the role requirement when the key is rejected", async () => {
     const fetchImpl = vi.fn(async () => new Response("{}", { status: 403 }));
 
-    await expect(appStoreSales(
-      appStoreSalesInput.parse({}),
-      { fetchImpl, credentials: credentials(), vendorNumber: "123" },
-    )).rejects.toThrow(/Sales and Reports role|Admin, Finance, or Sales and Reports/);
+    await expect(appStoreSales(appStoreSalesInput.parse({}), { fetchImpl, credentials: credentials(), vendorNumber: "123" })).rejects.toThrow(
+      /Sales and Reports role|Admin, Finance, or Sales and Reports/,
+    );
   });
 
   it("requires a vendor number and says where to find it", async () => {
     const saved = process.env.SEO_MCP_ASC_VENDOR_NUMBER;
     delete process.env.SEO_MCP_ASC_VENDOR_NUMBER;
     try {
-      await expect(appStoreSales(appStoreSalesInput.parse({}), { fetchImpl: gzipResponding(TSV), credentials: credentials() }))
-        .rejects.toThrow(/Payments and Financial Reports/);
+      await expect(appStoreSales(appStoreSalesInput.parse({}), { fetchImpl: gzipResponding(TSV), credentials: credentials() })).rejects.toThrow(/Payments and Financial Reports/);
     } finally {
       if (saved !== undefined) process.env.SEO_MCP_ASC_VENDOR_NUMBER = saved;
     }
@@ -89,10 +73,7 @@ describe("appStoreSales", () => {
   it("defaults to a date Apple has actually published", async () => {
     const fetchImpl = gzipResponding(TSV);
 
-    await appStoreSales(
-      appStoreSalesInput.parse({}),
-      { fetchImpl, credentials: credentials(), vendorNumber: "123", now: new Date("2026-09-03T00:00:00Z") },
-    );
+    await appStoreSales(appStoreSalesInput.parse({}), { fetchImpl, credentials: credentials(), vendorNumber: "123", now: new Date("2026-09-03T00:00:00Z") });
 
     // Daily reports land the next day, so today is never available.
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("2026-09-01");
@@ -101,10 +82,9 @@ describe("appStoreSales", () => {
   it("rejects a day-shaped reportDate for a MONTHLY report", async () => {
     const fetchImpl = gzipResponding(TSV);
 
-    await expect(appStoreSales(
-      appStoreSalesInput.parse({ frequency: "MONTHLY", reportDate: "2026-08-30" }),
-      { fetchImpl, credentials: credentials(), vendorNumber: "123" },
-    )).rejects.toThrow(/MONTHLY report takes a reportDate like 2026-08/);
+    await expect(appStoreSales(appStoreSalesInput.parse({ frequency: "MONTHLY", reportDate: "2026-08-30" }), { fetchImpl, credentials: credentials(), vendorNumber: "123" })).rejects.toThrow(
+      /MONTHLY report takes a reportDate like 2026-08/,
+    );
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 

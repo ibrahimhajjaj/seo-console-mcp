@@ -22,10 +22,7 @@ interface TrafficGroup {
   conversionRate: number | null;
 }
 
-export async function playStoreStats(
-  params: PlayStoreStatsParams,
-  deps: { readReport?: (objectPath: string) => Promise<Buffer | null>; now?: Date } = {},
-): Promise<ToolResult> {
+export async function playStoreStats(params: PlayStoreStatsParams, deps: { readReport?: (objectPath: string) => Promise<Buffer | null>; now?: Date } = {}): Promise<ToolResult> {
   const readReport = deps.readReport ?? liveReader();
   // Defaulted here rather than relying on the schema: a caller that builds params
   // directly must not produce undefined lookups.
@@ -80,7 +77,9 @@ export async function playStoreStats(
   // Only fail when nothing at all was found: a caller asking for ratings alone
   // has a complete answer without installs or store performance.
   if (!installsBuffer && !trafficBuffer && !ratingsBuffers.length && !crashesBuffers.length && !reviewsBuffers.length) {
-    throw new Error(`Neither installs nor store performance report found for ${params.packageName} in ${month}. Check the package name, the month, and that SEO_MCP_PLAY_BUCKET names the right reporting bucket; the reports also lag by days, so a very recent month may not exist yet.`);
+    throw new Error(
+      `Neither installs nor store performance report found for ${params.packageName} in ${month}. Check the package name, the month, and that SEO_MCP_PLAY_BUCKET names the right reporting bucket; the reports also lag by days, so a very recent month may not exist yet.`,
+    );
   }
 
   const notes: string[] = [];
@@ -194,9 +193,7 @@ function readInstalls(buffers: Buffer[], window: DateWindow | null): InstallsRea
   }
 
   const last = dated[dated.length - 1];
-  const latest = last
-    ? Object.fromEntries(last.header.map((name, index) => [name, toNumber(last.cells[index]) ?? last.cells[index] ?? ""]))
-    : null;
+  const latest = last ? Object.fromEntries(last.header.map((name, index) => [name, toNumber(last.cells[index]) ?? last.cells[index] ?? ""])) : null;
   const activeIndex = last ? last.header.indexOf("Active Device Installs") : -1;
   return {
     activeDeviceInstalls: last && activeIndex >= 0 ? toNumber(last.cells[activeIndex]) : null,
@@ -219,8 +216,8 @@ function readRowsReport(buffers: Buffer[]): Array<Record<string, string>> {
     const rows = parseCsv(buffer);
     const header = rows[0]?.map((cell) => cell.trim()) ?? [];
     for (const row of rows.slice(1)) {
-      if (row.every((cell) => cell === '')) continue;
-      out.push(Object.fromEntries(header.map((name, index) => [name, row[index] ?? ''])));
+      if (row.every((cell) => cell === "")) continue;
+      out.push(Object.fromEntries(header.map((name, index) => [name, row[index] ?? ""])));
     }
   }
   return out;
@@ -233,25 +230,25 @@ function readDimensionReport(buffers: Buffer[], window: DateWindow | null): Dime
   for (const buffer of buffers) {
     const rows = parseCsv(buffer);
     const header = rows[0]?.map((cell) => cell.trim()) ?? [];
-    const dateIndex = header.indexOf('Date');
+    const dateIndex = header.indexOf("Date");
     if (header[2]) dimensionColumn = header[2];
     const valueIndex = 2;
     for (const row of rows.slice(1)) {
       const date = dateIndex >= 0 ? row[dateIndex] : undefined;
       if (!date || !withinWindow(date, window)) continue;
       if (!lastDate || date >= lastDate) lastDate = date;
-      const value = (valueIndex >= 0 ? row[valueIndex]?.trim() : '') || 'Unknown';
-      const entry = byValue.get(value) ?? { latestDate: '', latest: {}, totals: {} };
+      const value = (valueIndex >= 0 ? row[valueIndex]?.trim() : "") || "Unknown";
+      const entry = byValue.get(value) ?? { latestDate: "", latest: {}, totals: {} };
       header.forEach((name, index) => {
         const parsed = toNumber(row[index]);
         // Only daily columns are flows that can be summed across the window.
-        if (name.startsWith('Daily') && parsed !== null) {
+        if (name.startsWith("Daily") && parsed !== null) {
           entry.totals[name] = (entry.totals[name] ?? 0) + parsed;
         }
       });
       if (date >= entry.latestDate) {
         entry.latestDate = date;
-        entry.latest = Object.fromEntries(header.map((name, index) => [name, toNumber(row[index]) ?? row[index] ?? '']));
+        entry.latest = Object.fromEntries(header.map((name, index) => [name, toNumber(row[index]) ?? row[index] ?? ""]));
       }
       byValue.set(value, entry);
     }
@@ -259,9 +256,7 @@ function readDimensionReport(buffers: Buffer[], window: DateWindow | null): Dime
   return {
     dimension: dimensionColumn,
     lastDate,
-    rows: [...byValue.entries()]
-      .map(([value, entry]) => ({ value, latest: entry.latest, totals: entry.totals }))
-      .sort((left, right) => left.value.localeCompare(right.value)),
+    rows: [...byValue.entries()].map(([value, entry]) => ({ value, latest: entry.latest, totals: entry.totals })).sort((left, right) => left.value.localeCompare(right.value)),
   };
 }
 
@@ -270,35 +265,35 @@ function readTrafficSources(buffers: Buffer[], window: DateWindow | null): { gro
   let hasPlaySearchRows = false;
   let lastDate: string | null = null;
   for (const buffer of buffers) {
-  const rows = parseCsv(buffer);
-  const header = rows[0]?.map((cell) => cell.trim()) ?? [];
-  const dateIndex = header.indexOf("Date");
-  const sourceIndex = header.indexOf("Traffic source");
-  const searchIndex = header.indexOf("Search term");
-  const utmSourceIndex = header.indexOf("UTM source");
-  const utmCampaignIndex = header.indexOf("UTM campaign");
-  const visitorsIndex = firstIndex(header, ["Store listing visitors", "Visitors"]);
-  const acquisitionsIndex = firstIndex(header, ["Store listing acquisitions", "Acquisitions"]);
+    const rows = parseCsv(buffer);
+    const header = rows[0]?.map((cell) => cell.trim()) ?? [];
+    const dateIndex = header.indexOf("Date");
+    const sourceIndex = header.indexOf("Traffic source");
+    const searchIndex = header.indexOf("Search term");
+    const utmSourceIndex = header.indexOf("UTM source");
+    const utmCampaignIndex = header.indexOf("UTM campaign");
+    const visitorsIndex = firstIndex(header, ["Store listing visitors", "Visitors"]);
+    const acquisitionsIndex = firstIndex(header, ["Store listing acquisitions", "Acquisitions"]);
 
-  for (const row of rows.slice(1)) {
-    if (sourceIndex < 0 || sourceIndex >= row.length) continue;
-    const date = dateIndex >= 0 ? row[dateIndex] : undefined;
-    if (date && !withinWindow(date, window)) continue;
-    if (date && (!lastDate || date >= lastDate)) lastDate = date;
+    for (const row of rows.slice(1)) {
+      if (sourceIndex < 0 || sourceIndex >= row.length) continue;
+      const date = dateIndex >= 0 ? row[dateIndex] : undefined;
+      if (date && !withinWindow(date, window)) continue;
+      if (date && (!lastDate || date >= lastDate)) lastDate = date;
 
-    const source = row[sourceIndex]?.trim() || "Unknown";
-    if (isPlaySearchSource(source)) hasPlaySearchRows = true;
-    const searchTerm = (searchIndex >= 0 ? row[searchIndex]?.trim() : "") || null;
-    const utmSource = (utmSourceIndex >= 0 ? row[utmSourceIndex]?.trim() : "") || null;
-    const utmCampaign = (utmCampaignIndex >= 0 ? row[utmCampaignIndex]?.trim() : "") || null;
-    // A NUL separator cannot appear in report text, so it cannot merge two
-    // distinct (source, term) pairs the way a literal delimiter could.
-    const key = [source, searchTerm ?? "", utmSource ?? "", utmCampaign ?? ""].join("\u0000");
-    const group = groups.get(key) ?? { source, searchTerm, utmSource, utmCampaign, visitors: 0, acquisitions: 0, conversionRate: null };
-    group.visitors += visitorsIndex >= 0 ? (toNumber(row[visitorsIndex]) ?? 0) : 0;
-    group.acquisitions += acquisitionsIndex >= 0 ? (toNumber(row[acquisitionsIndex]) ?? 0) : 0;
-    groups.set(key, group);
-  }
+      const source = row[sourceIndex]?.trim() || "Unknown";
+      if (isPlaySearchSource(source)) hasPlaySearchRows = true;
+      const searchTerm = (searchIndex >= 0 ? row[searchIndex]?.trim() : "") || null;
+      const utmSource = (utmSourceIndex >= 0 ? row[utmSourceIndex]?.trim() : "") || null;
+      const utmCampaign = (utmCampaignIndex >= 0 ? row[utmCampaignIndex]?.trim() : "") || null;
+      // A NUL separator cannot appear in report text, so it cannot merge two
+      // distinct (source, term) pairs the way a literal delimiter could.
+      const key = [source, searchTerm ?? "", utmSource ?? "", utmCampaign ?? ""].join("\u0000");
+      const group = groups.get(key) ?? { source, searchTerm, utmSource, utmCampaign, visitors: 0, acquisitions: 0, conversionRate: null };
+      group.visitors += visitorsIndex >= 0 ? (toNumber(row[visitorsIndex]) ?? 0) : 0;
+      group.acquisitions += acquisitionsIndex >= 0 ? (toNumber(row[acquisitionsIndex]) ?? 0) : 0;
+      groups.set(key, group);
+    }
   }
   // The report carries a per-row conversion rate, but rates cannot be summed or
   // averaged across rows without weighting. Recomputing from the grouped totals
@@ -335,14 +330,18 @@ function parseCsv(buffer: Buffer): string[][] {
     const char = text[index];
     const next = text[index + 1];
     if (inQuotes) {
-      if (char === '"' && next === '"') { cell += '"'; index++; }
-      else if (char === '"') inQuotes = false;
+      if (char === '"' && next === '"') {
+        cell += '"';
+        index++;
+      } else if (char === '"') inQuotes = false;
       else cell += char;
       continue;
     }
     if (char === '"') inQuotes = true;
-    else if (char === ",") { cells.push(cell); cell = ""; }
-    else if (char === "\n" || (char === "\r" && next === "\n")) {
+    else if (char === ",") {
+      cells.push(cell);
+      cell = "";
+    } else if (char === "\n" || (char === "\r" && next === "\n")) {
       if (char === "\r") index++;
       cells.push(cell);
       rows.push(cells);
@@ -364,7 +363,10 @@ function parseCsv(buffer: Buffer): string[][] {
 // prefixed name would otherwise 404 and read as "the reports are not published
 // yet", which is a plausible and wrong explanation.
 export function normalizeBucket(value: string): string {
-  const bucket = value.trim().replace(/^gs:\/\//i, "").replace(/\/+$/, "");
+  const bucket = value
+    .trim()
+    .replace(/^gs:\/\//i, "")
+    .replace(/\/+$/, "");
   if (!bucket || bucket.includes("/")) {
     throw new Error(`SEO_MCP_PLAY_BUCKET must be a bucket name such as pubsite_prod_1234 or gs://pubsite_prod_1234, not "${value}".`);
   }
@@ -439,7 +441,10 @@ function toNumber(value: string | undefined): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-export interface DateWindow { startDate: string; endDate: string }
+export interface DateWindow {
+  startDate: string;
+  endDate: string;
+}
 
 function withinWindow(date: string, window: DateWindow | null): boolean {
   if (!window) return true;
@@ -462,13 +467,16 @@ function monthsInWindow(window: DateWindow): string[] {
   const months: string[] = [];
   let year = Number(window.startDate.slice(0, 4));
   let month = Number(window.startDate.slice(5, 7));
-  const endKey = window.endDate.slice(0, 7).replace('-', '');
+  const endKey = window.endDate.slice(0, 7).replace("-", "");
   for (let guard = 0; guard < MAX_WINDOW_MONTHS + 1; guard++) {
-    const key = `${year}${String(month).padStart(2, '0')}`;
+    const key = `${year}${String(month).padStart(2, "0")}`;
     months.push(key);
     if (key >= endKey) break;
     month += 1;
-    if (month > 12) { month = 1; year += 1; }
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
   }
   if (months.length > MAX_WINDOW_MONTHS) {
     throw new Error("The window spans more than 24 months; read it in smaller windows so one call does not fan out into hundreds of report files.");

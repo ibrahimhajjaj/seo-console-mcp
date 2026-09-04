@@ -1,33 +1,46 @@
 import { z } from "zod";
 import { normalizeSiteUrl } from "./site-url.js";
 
-const httpUrl = z.url().superRefine((value, context) => {
-  const url = new URL(value);
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    context.addIssue({ code: "custom", message: "URL must use http or https" });
-  }
-  if (url.username || url.password) {
-    context.addIssue({ code: "custom", message: "URL must not contain embedded credentials" });
-  }
-}).transform((value) => new URL(value).toString());
+const httpUrl = z
+  .url()
+  .superRefine((value, context) => {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      context.addIssue({ code: "custom", message: "URL must use http or https" });
+    }
+    if (url.username || url.password) {
+      context.addIssue({ code: "custom", message: "URL must not contain embedded credentials" });
+    }
+  })
+  .transform((value) => new URL(value).toString());
 
-const siteUrl = z.string().min(1).transform((value, context) => {
-  try {
-    return normalizeSiteUrl(value);
-  } catch (error) {
-    context.addIssue({ code: "custom", message: error instanceof Error ? error.message : "Invalid siteUrl" });
-    return z.NEVER;
-  }
-});
+const siteUrl = z
+  .string()
+  .min(1)
+  .transform((value, context) => {
+    try {
+      return normalizeSiteUrl(value);
+    } catch (error) {
+      context.addIssue({ code: "custom", message: error instanceof Error ? error.message : "Invalid siteUrl" });
+      return z.NEVER;
+    }
+  });
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD").refine((value) => {
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
-}, "Invalid calendar date");
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+  }, "Invalid calendar date");
 
 // Android package names are dotted Java identifiers. Anything else would be
 // spliced into a URL path on an authenticated host.
-const androidPackageName = z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/, "packageName must be an Android package name such as com.example.app").max(200);
+const androidPackageName = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/, "packageName must be an Android package name such as com.example.app")
+  .max(200);
 
 export const searchDimensions = ["query", "page", "country", "device", "date", "searchAppearance"] as const;
 const filterOperator = z.enum(["equals", "notEquals", "contains", "notContains", "includingRegex", "excludingRegex"]);
@@ -45,14 +58,22 @@ export const searchAnalyticsShape = {
   siteUrl: siteUrl.describe("Search Console property, such as https://example.com/ or sc-domain:example.com"),
   startDate: isoDate.optional().describe("Start date in YYYY-MM-DD; defaults to 28 days ago"),
   endDate: isoDate.optional().describe("End date in YYYY-MM-DD; defaults to today"),
-  dimensions: z.array(z.enum(searchDimensions)).min(1)
+  dimensions: z
+    .array(z.enum(searchDimensions))
+    .min(1)
     .refine((values) => new Set(values).size === values.length, "dimensions must be unique")
-    .default(["query"]).describe("Dimensions used to group results"),
+    .default(["query"])
+    .describe("Dimensions used to group results"),
   rowLimit: z.number().int().min(1).max(25_000).default(25).describe("Maximum rows to return"),
   startRow: z.number().int().min(0).default(0).describe("Zero-based row to start from, for paging through a large result"),
   maxTableRows: z.number().int().min(0).max(25_000).default(25).describe("Cap rows shown in the text table; structured rows are always complete. 0 = summary only."),
   dimensionFilterGroups: z.array(dimensionFilterGroup).optional().describe("Search Console dimension filters"),
-  type: z.enum(["web", "image", "video", "news", "discover", "googleNews"]).optional().describe("Result type. discover is the Discover feed and googleNews is the Google News app and news.google.com, not the News tab in Search. Both support fewer dimensions than web: neither reports a query dimension"),
+  type: z
+    .enum(["web", "image", "video", "news", "discover", "googleNews"])
+    .optional()
+    .describe(
+      "Result type. discover is the Discover feed and googleNews is the Google News app and news.google.com, not the News tab in Search. Both support fewer dimensions than web: neither reports a query dimension",
+    ),
   dataState: z.enum(["full", "all"]).optional().describe("full = finalized data (default, ~2-3 day lag); all = include recent partial data"),
   aggregationType: z.enum(["auto", "byProperty", "byPage"]).optional().describe("How Search Console aggregates rows"),
 };
@@ -65,14 +86,16 @@ export const searchAnalyticsOutput = z.object({
   rowCount: z.number(),
   startRow: z.number(),
   truncated: z.boolean().describe("More rows follow this page. False does not mean the result is complete: Search Console returns top rows subject to its own internal limits"),
-  rows: z.array(z.object({
-    rank: z.number(),
-    keys: z.record(z.string(), z.string()),
-    clicks: z.number(),
-    impressions: z.number(),
-    ctr: z.number(),
-    position: z.number(),
-  })),
+  rows: z.array(
+    z.object({
+      rank: z.number(),
+      keys: z.record(z.string(), z.string()),
+      clicks: z.number(),
+      impressions: z.number(),
+      ctr: z.number(),
+      position: z.number(),
+    }),
+  ),
   firstIncompleteDate: z.string().optional(),
 });
 
@@ -82,8 +105,15 @@ export const keywordIdeasShape = {
   seed: z.string().trim().min(1).max(100).describe("Seed keyword to expand"),
   siteUrl: siteUrl.optional().describe("Optional Search Console property used to identify queries already ranking"),
   language: z.string().default("en").describe("Autocomplete interface language passed as hl"),
-  country: z.string().regex(/^[a-z]{2}$/, "country must be a 2-letter lowercase code").optional().describe("Autocomplete country passed as gl"),
-  expansions: z.array(z.enum(keywordIdeaExpansions)).default([...keywordIdeaExpansions]).describe("Suggestion expansion families to run beyond the bare seed"),
+  country: z
+    .string()
+    .regex(/^[a-z]{2}$/, "country must be a 2-letter lowercase code")
+    .optional()
+    .describe("Autocomplete country passed as gl"),
+  expansions: z
+    .array(z.enum(keywordIdeaExpansions))
+    .default([...keywordIdeaExpansions])
+    .describe("Suggestion expansion families to run beyond the bare seed"),
   days: z.number().int().min(1).max(480).default(90).describe("Search Console lookback window in days"),
   limit: z.number().int().min(1).max(500).default(100).describe("Maximum keyword ideas to return"),
 };
@@ -95,15 +125,19 @@ export const keywordIdeasOutput = z.object({
   requestFailures: z.number(),
   gscMatched: z.number(),
   crossReferenced: z.boolean(),
-  ideas: z.array(z.object({
-    keyword: z.string(),
-    family: z.enum(keywordIdeaFamilies),
-    gsc: z.object({
-      position: z.number(),
-      clicks: z.number(),
-      impressions: z.number(),
-    }).nullable(),
-  })),
+  ideas: z.array(
+    z.object({
+      keyword: z.string(),
+      family: z.enum(keywordIdeaFamilies),
+      gsc: z
+        .object({
+          position: z.number(),
+          clicks: z.number(),
+          impressions: z.number(),
+        })
+        .nullable(),
+    }),
+  ),
 });
 
 const analysisWindowShape = {
@@ -129,14 +163,18 @@ export const searchOpportunitiesOutput = z.object({
   siteUrl: z.string().describe("Search Console property analyzed"),
   window: windowOutput.describe("Analysis window"),
   truncated: z.boolean().describe("Whether Search Console held more than 5000 rows for this window, so the list was computed from the top rows only"),
-  opportunities: z.array(z.object({
-    keys: insightKeys,
-    impressions: z.number().describe("Search impressions"),
-    clicks: z.number().describe("Search clicks"),
-    ctr: z.number().describe("Click-through rate as a fraction"),
-    position: z.number().describe("Average search position"),
-    opportunity: z.number().describe("Opportunity score based on impressions and position"),
-  })).describe("Highest-value striking-distance rows"),
+  opportunities: z
+    .array(
+      z.object({
+        keys: insightKeys,
+        impressions: z.number().describe("Search impressions"),
+        clicks: z.number().describe("Search clicks"),
+        ctr: z.number().describe("Click-through rate as a fraction"),
+        position: z.number().describe("Average search position"),
+        opportunity: z.number().describe("Opportunity score based on impressions and position"),
+      }),
+    )
+    .describe("Highest-value striking-distance rows"),
 });
 
 export const compareSearchPeriodsShape = {
@@ -175,14 +213,18 @@ export const ctrGapsOutput = z.object({
   siteUrl: z.string().describe("Search Console property analyzed"),
   window: windowOutput.describe("Analysis window"),
   truncated: z.boolean().describe("Whether Search Console held more than 5000 rows for this window, so the list was computed from the top rows only"),
-  gaps: z.array(z.object({
-    keys: insightKeys,
-    impressions: z.number().describe("Search impressions"),
-    ctr: z.number().describe("Actual click-through rate as a fraction"),
-    expectedCtr: z.number().describe("Peer average click-through rate at the rounded position"),
-    position: z.number().describe("Average search position"),
-    missedClicks: z.number().describe("Estimated clicks missed versus peer CTR"),
-  })).describe("Rows underperforming their position peers"),
+  gaps: z
+    .array(
+      z.object({
+        keys: insightKeys,
+        impressions: z.number().describe("Search impressions"),
+        ctr: z.number().describe("Actual click-through rate as a fraction"),
+        expectedCtr: z.number().describe("Peer average click-through rate at the rounded position"),
+        position: z.number().describe("Average search position"),
+        missedClicks: z.number().describe("Estimated clicks missed versus peer CTR"),
+      }),
+    )
+    .describe("Rows underperforming their position peers"),
 });
 
 export const queryCannibalizationShape = {
@@ -194,24 +236,34 @@ export const queryCannibalizationOutput = z.object({
   siteUrl: z.string().describe("Search Console property analyzed"),
   window: windowOutput.describe("Analysis window"),
   truncated: z.boolean().describe("Whether Search Console held more than 5000 rows for this window, so the list was computed from the top rows only"),
-  groups: z.array(z.object({
-    query: z.string().describe("Query served by multiple pages"),
-    pages: z.array(z.object({
-      page: z.string().describe("Competing page URL"),
-      impressions: z.number().describe("Search impressions"),
-      clicks: z.number().describe("Search clicks"),
-      position: z.number().describe("Average search position"),
-    })).describe("Pages ranking for the query"),
-  })).describe("Queries with multiple ranking pages"),
+  groups: z
+    .array(
+      z.object({
+        query: z.string().describe("Query served by multiple pages"),
+        pages: z
+          .array(
+            z.object({
+              page: z.string().describe("Competing page URL"),
+              impressions: z.number().describe("Search impressions"),
+              clicks: z.number().describe("Search clicks"),
+              position: z.number().describe("Average search position"),
+            }),
+          )
+          .describe("Pages ranking for the query"),
+      }),
+    )
+    .describe("Queries with multiple ranking pages"),
 });
 
 export const listPropertiesShape = {};
 export const listPropertiesOutput = z.object({
   count: z.number(),
-  properties: z.array(z.object({
-    siteUrl: z.string().nullable(),
-    permissionLevel: z.string().nullable(),
-  })),
+  properties: z.array(
+    z.object({
+      siteUrl: z.string().nullable(),
+      permissionLevel: z.string().nullable(),
+    }),
+  ),
 });
 
 const sitemapOutput = z.object({
@@ -222,11 +274,13 @@ const sitemapOutput = z.object({
   isSitemapsIndex: z.boolean(),
   warnings: z.number(),
   errors: z.number(),
-  contents: z.array(z.object({
-    type: z.string().nullable(),
-    submitted: z.number(),
-    indexed: z.number(),
-  })),
+  contents: z.array(
+    z.object({
+      type: z.string().nullable(),
+      submitted: z.number(),
+      indexed: z.number(),
+    }),
+  ),
 });
 
 export const listSitemapsShape = {
@@ -285,14 +339,18 @@ export const inspectUrlOutput = z.object({
     userCanonical: z.string().nullable(),
     pageFetchState: z.string().nullable(),
   }),
-  mobileUsability: z.object({
-    verdict: z.string().nullable(),
-    issues: z.array(z.record(z.string(), z.unknown())),
-  }).nullable(),
-  richResults: z.object({
-    verdict: z.string().nullable(),
-    detectedItems: z.array(z.record(z.string(), z.unknown())),
-  }).nullable(),
+  mobileUsability: z
+    .object({
+      verdict: z.string().nullable(),
+      issues: z.array(z.record(z.string(), z.unknown())),
+    })
+    .nullable(),
+  richResults: z
+    .object({
+      verdict: z.string().nullable(),
+      detectedItems: z.array(z.record(z.string(), z.unknown())),
+    })
+    .nullable(),
 });
 
 export const indexCoverageShape = {
@@ -350,18 +408,14 @@ export const requestRecrawlOutput = z.object({
   results: z.array(indexCoverageResult),
 });
 
-export const indexNowEndpoints = [
-  "api.indexnow.org",
-  "www.bing.com",
-  "yandex.com",
-  "searchadvisor.naver.com",
-  "search.seznam.cz",
-  "indexnow.yep.com",
-] as const;
+export const indexNowEndpoints = ["api.indexnow.org", "www.bing.com", "yandex.com", "searchadvisor.naver.com", "search.seznam.cz", "indexnow.yep.com"] as const;
 export const indexNowSubmitShape = {
   urls: z.array(httpUrl).min(1).max(10_000).describe("Changed page URLs; one submission covers one host"),
-  key: z.string().regex(/^[A-Za-z0-9-]{8,128}$/, "IndexNow keys are 8-128 characters of a-z, A-Z, 0-9, or dash")
-    .optional().describe("IndexNow key; defaults to SEO_MCP_INDEXNOW_KEY. The same key must be hosted on the site as a text file at https://<host>/<key>.txt (or at keyLocation) containing only the key"),
+  key: z
+    .string()
+    .regex(/^[A-Za-z0-9-]{8,128}$/, "IndexNow keys are 8-128 characters of a-z, A-Z, 0-9, or dash")
+    .optional()
+    .describe("IndexNow key; defaults to SEO_MCP_INDEXNOW_KEY. The same key must be hosted on the site as a text file at https://<host>/<key>.txt (or at keyLocation) containing only the key"),
   keyLocation: httpUrl.optional().describe("URL of the hosted key file when it is not https://<host>/<key>.txt"),
   endpoint: z.enum(indexNowEndpoints).default("api.indexnow.org").describe("IndexNow endpoint to notify; participating engines share submissions"),
   dryRun: z.boolean().default(false).describe("If true, report what would be submitted without notifying the endpoint"),
@@ -381,24 +435,33 @@ export const pageSpeedCategories = ["performance", "seo", "accessibility", "best
 export const pageSpeedShape = {
   url: httpUrl.describe("Public page URL to analyze"),
   strategy: z.enum(["mobile", "desktop"]).default("mobile").describe("Lighthouse device strategy"),
-  category: z.array(z.enum(pageSpeedCategories)).min(1).default([...pageSpeedCategories]).describe("Lighthouse categories to run"),
+  category: z
+    .array(z.enum(pageSpeedCategories))
+    .min(1)
+    .default([...pageSpeedCategories])
+    .describe("Lighthouse categories to run"),
   apiKey: z.string().min(1).optional().describe("Optional PageSpeed Insights API key; defaults to SEO_MCP_PAGESPEED_KEY"),
 };
 export const pageSpeedInput = z.object(pageSpeedShape);
 export const pageSpeedOutput = z.object({
   url: z.string(),
   strategy: z.string(),
-  fieldData: z.record(z.string(), z.object({
-    value: z.number().nullable(),
-    category: z.string().nullable(),
-  })),
+  fieldData: z.record(
+    z.string(),
+    z.object({
+      value: z.number().nullable(),
+      category: z.string().nullable(),
+    }),
+  ),
   scores: z.record(z.string(), z.number().nullable()),
-  opportunities: z.array(z.object({
-    id: z.string(),
-    title: z.string(),
-    description: z.string().nullable(),
-    savingsMs: z.number(),
-  })),
+  opportunities: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      description: z.string().nullable(),
+      savingsMs: z.number(),
+    }),
+  ),
 });
 
 export const seoAuditShape = {
@@ -440,14 +503,16 @@ export const auditSiteOutput = z.object({
   skipped: z.number(),
   childSitemapsSkipped: z.number(),
   childSitemapsFailed: z.number(),
-  pages: z.array(z.object({
-    url: z.string(),
-    issues: z.array(z.string()).optional(),
-    title: z.string().nullable().optional(),
-    metaDescription: z.string().nullable().optional(),
-    h1: z.array(z.string()).optional(),
-    error: z.string().optional(),
-  })),
+  pages: z.array(
+    z.object({
+      url: z.string(),
+      issues: z.array(z.string()).optional(),
+      title: z.string().nullable().optional(),
+      metaDescription: z.string().nullable().optional(),
+      h1: z.array(z.string()).optional(),
+      error: z.string().optional(),
+    }),
+  ),
   rollup: z.record(z.string(), z.number()),
 });
 
@@ -484,21 +549,35 @@ export const wporgPluginOutput = z.object({
   notes: z.array(z.string()),
 });
 
-const playDimensionReport = z.object({
-  dimension: z.string(),
-  lastDate: z.string().nullable(),
-  rows: z.array(z.object({
-    value: z.string(),
-    latest: z.record(z.string(), z.union([z.number(), z.string()])),
-    totals: z.record(z.string(), z.number()),
-  })),
-}).nullable();
+const playDimensionReport = z
+  .object({
+    dimension: z.string(),
+    lastDate: z.string().nullable(),
+    rows: z.array(
+      z.object({
+        value: z.string(),
+        latest: z.record(z.string(), z.union([z.number(), z.string()])),
+        totals: z.record(z.string(), z.number()),
+      }),
+    ),
+  })
+  .nullable();
 
 export const playStoreStatsShape = {
   packageName: androidPackageName.describe("Android package name, e.g. app.getpsst"),
-  month: z.string().regex(/^\d{6}$/, "month must be YYYYMM").optional().describe("Report month as YYYYMM; defaults to the current UTC month. Ignored when startDate and endDate are given"),
-  installsDimension: z.enum(["overview", "country", "language", "device", "os_version", "carrier", "app_version"]).default("overview").describe("Which installs report to read. overview is undocumented by Google but present in real buckets; the others are the documented breakdowns"),
-  include: z.array(z.enum(["ratings", "crashes", "reviews"])).default([]).describe("Extra report families to read. Missing files are normal: Google emits a report only when there is something to report"),
+  month: z
+    .string()
+    .regex(/^\d{6}$/, "month must be YYYYMM")
+    .optional()
+    .describe("Report month as YYYYMM; defaults to the current UTC month. Ignored when startDate and endDate are given"),
+  installsDimension: z
+    .enum(["overview", "country", "language", "device", "os_version", "carrier", "app_version"])
+    .default("overview")
+    .describe("Which installs report to read. overview is undocumented by Google but present in real buckets; the others are the documented breakdowns"),
+  include: z
+    .array(z.enum(["ratings", "crashes", "reviews"]))
+    .default([])
+    .describe("Extra report families to read. Missing files are normal: Google emits a report only when there is something to report"),
   storePerformanceDimension: z.enum(["traffic_source", "country"]).default("traffic_source").describe("Which store performance breakdown to read"),
   storePerformanceTotals: z.boolean().default(false).describe("Read the cheaper total_ variant, which carries only headline acquisitions"),
   ratingsDimension: z.enum(["country", "language", "device", "os_version", "carrier", "app_version"]).default("country").describe("Dimension for the ratings report"),
@@ -512,15 +591,17 @@ export const playStoreStatsOutput = z.object({
   month: z.string(),
   lastDatePresent: z.string().nullable(),
   activeDeviceInstalls: z.number().nullable(),
-  trafficSources: z.array(z.object({
-    source: z.string(),
-    searchTerm: z.string().nullable(),
-    utmSource: z.string().nullable(),
-    utmCampaign: z.string().nullable(),
-    visitors: z.number(),
-    acquisitions: z.number(),
-    conversionRate: z.number().nullable(),
-  })),
+  trafficSources: z.array(
+    z.object({
+      source: z.string(),
+      searchTerm: z.string().nullable(),
+      utmSource: z.string().nullable(),
+      utmCampaign: z.string().nullable(),
+      visitors: z.number(),
+      acquisitions: z.number(),
+      conversionRate: z.number().nullable(),
+    }),
+  ),
   hasPlaySearchRows: z.boolean(),
   window: z.object({ startDate: z.string(), endDate: z.string() }).nullable(),
   monthsRead: z.array(z.string()),
@@ -547,7 +628,12 @@ export const appStoreListingShape = {
   bundleId: z.string().trim().min(1).max(200).optional().describe("Bundle id, resolved to an app id when appId is not given; provide this or appId"),
   platform: z.enum(["IOS", "MAC_OS", "TV_OS", "VISION_OS"]).default("IOS").describe("App Store platform whose version is read"),
   state: z.enum(["live", "editable"]).default("live").describe("Read the live listing or the editable one being prepared for release"),
-  storefronts: z.array(z.string().regex(/^[a-z]{2}$/, "storefronts must be 2-letter lowercase country codes")).min(1).max(10).default(["us"]).describe("Storefront country codes for the public ratings lookup"),
+  storefronts: z
+    .array(z.string().regex(/^[a-z]{2}$/, "storefronts must be 2-letter lowercase country codes"))
+    .min(1)
+    .max(10)
+    .default(["us"])
+    .describe("Storefront country codes for the public ratings lookup"),
 };
 export const appStoreListingInput = z.object(appStoreListingShape);
 export const appStoreListingOutput = z.object({
@@ -565,22 +651,26 @@ export const appStoreListingOutput = z.object({
   versionState: z.string().nullable(),
   versionString: z.string().nullable(),
   localeCount: z.number(),
-  locales: z.array(z.object({
-    locale: z.string(),
-    indexed: z.object({ name: listingField, subtitle: listingField, keywords: listingField }),
-    promotionalText: listingField,
-    description: listingField,
-    whatsNew: listingField,
-    screenshotSets: z.array(z.string()),
-    previewSets: z.array(z.string()),
-    partial: z.boolean(),
-  })),
-  ratings: z.array(z.object({
-    storefront: z.string(),
-    source: z.string(),
-    averageUserRating: z.number().nullable(),
-    userRatingCount: z.number().nullable(),
-  })),
+  locales: z.array(
+    z.object({
+      locale: z.string(),
+      indexed: z.object({ name: listingField, subtitle: listingField, keywords: listingField }),
+      promotionalText: listingField,
+      description: listingField,
+      whatsNew: listingField,
+      screenshotSets: z.array(z.string()),
+      previewSets: z.array(z.string()),
+      partial: z.boolean(),
+    }),
+  ),
+  ratings: z.array(
+    z.object({
+      storefront: z.string(),
+      source: z.string(),
+      averageUserRating: z.number().nullable(),
+      userRatingCount: z.number().nullable(),
+    }),
+  ),
   overLimit: z.array(z.string()),
   notes: z.array(z.string()),
 });
@@ -595,13 +685,15 @@ const snapshotRow = z.object({
 });
 const snapshotRows = z.object({ rows: z.array(snapshotRow), truncated: z.boolean() });
 const snapshotWindow = z.object({ startDate: z.string(), endDate: z.string() });
-const snapshotRatings = z.array(z.object({
-  storefront: z.string(),
-  // Optional so a snapshot taken before the source was recorded still parses.
-  source: z.string().optional(),
-  averageUserRating: z.number().nullable(),
-  userRatingCount: z.number().nullable(),
-}));
+const snapshotRatings = z.array(
+  z.object({
+    storefront: z.string(),
+    // Optional so a snapshot taken before the source was recorded still parses.
+    source: z.string().optional(),
+    averageUserRating: z.number().nullable(),
+    userRatingCount: z.number().nullable(),
+  }),
+);
 
 // The shape compare_snapshots accepts. Anything that is not this is refused, so
 // the tool cannot be pointed at an unrelated file.
@@ -609,42 +701,58 @@ export const snapshotDocument = z.object({
   takenAt: z.string(),
   windowDays: z.number(),
   window: snapshotWindow,
-  properties: z.array(z.object({
-    siteUrl: z.string(),
-    error: z.string().optional(),
-    totals: z.object({
-      clicks: z.number(),
-      impressions: z.number(),
-      ctr: z.number().nullable(),
-      position: z.number().nullable(),
-      daysWithData: z.number(),
-      firstIncompleteDate: z.string().nullable(),
-    }).optional(),
-    topQueries: snapshotRows.optional(),
-    topPages: snapshotRows.optional(),
-  })),
-  apps: z.array(z.object({
-    app: z.string(),
-    error: z.string().optional(),
-    versionString: z.string().nullable().optional(),
-    localeCount: z.number().optional(),
-    hasEditableRecord: z.boolean().optional(),
-    ratings: snapshotRatings.optional(),
-  }).loose()),
-  packages: z.array(z.object({
-    package: z.string(),
-    error: z.string().optional(),
-    activeDeviceInstalls: z.number().nullable().optional(),
-    lastDatePresent: z.string().nullable().optional(),
-  }).loose()),
-  slugs: z.array(z.object({
-    slug: z.string(),
-    error: z.string().optional(),
-    activeInstalls: z.number().nullable().optional(),
-    downloaded: z.number().nullable().optional(),
-    rating: z.number().nullable().optional(),
-    numRatings: z.number().nullable().optional(),
-  }).loose()),
+  properties: z.array(
+    z.object({
+      siteUrl: z.string(),
+      error: z.string().optional(),
+      totals: z
+        .object({
+          clicks: z.number(),
+          impressions: z.number(),
+          ctr: z.number().nullable(),
+          position: z.number().nullable(),
+          daysWithData: z.number(),
+          firstIncompleteDate: z.string().nullable(),
+        })
+        .optional(),
+      topQueries: snapshotRows.optional(),
+      topPages: snapshotRows.optional(),
+    }),
+  ),
+  apps: z.array(
+    z
+      .object({
+        app: z.string(),
+        error: z.string().optional(),
+        versionString: z.string().nullable().optional(),
+        localeCount: z.number().optional(),
+        hasEditableRecord: z.boolean().optional(),
+        ratings: snapshotRatings.optional(),
+      })
+      .loose(),
+  ),
+  packages: z.array(
+    z
+      .object({
+        package: z.string(),
+        error: z.string().optional(),
+        activeDeviceInstalls: z.number().nullable().optional(),
+        lastDatePresent: z.string().nullable().optional(),
+      })
+      .loose(),
+  ),
+  slugs: z.array(
+    z
+      .object({
+        slug: z.string(),
+        error: z.string().optional(),
+        activeInstalls: z.number().nullable().optional(),
+        downloaded: z.number().nullable().optional(),
+        rating: z.number().nullable().optional(),
+        numRatings: z.number().nullable().optional(),
+      })
+      .loose(),
+  ),
   surfacesWithErrors: z.array(z.string()),
   writtenTo: z.string().optional(),
 });
@@ -657,16 +765,18 @@ export const listSnapshotsOutput = z.object({
   directory: z.string(),
   total: z.number(),
   truncated: z.boolean(),
-  snapshots: z.array(z.object({
-    name: z.string(),
-    path: z.string(),
-    // Null on a file that could not be parsed, which is listed with its error
-    // rather than hidden.
-    takenAt: z.string().nullable(),
-    windowDays: z.number().nullable(),
-    surfaces: z.object({ properties: z.number(), apps: z.number(), packages: z.number(), slugs: z.number() }),
-    error: z.string().optional(),
-  })),
+  snapshots: z.array(
+    z.object({
+      name: z.string(),
+      path: z.string(),
+      // Null on a file that could not be parsed, which is listed with its error
+      // rather than hidden.
+      takenAt: z.string().nullable(),
+      windowDays: z.number().nullable(),
+      surfaces: z.object({ properties: z.number(), apps: z.number(), packages: z.number(), slugs: z.number() }),
+      error: z.string().optional(),
+    }),
+  ),
 });
 
 export const snapshotShape = {
@@ -676,8 +786,20 @@ export const snapshotShape = {
   slugs: z.array(z.string().trim().min(1)).default([]).describe("WordPress.org plugin slugs"),
   windowDays: z.number().int().min(1).max(480).default(28).describe("Search Console window in days, ending today"),
   platform: z.enum(["IOS", "MAC_OS", "TV_OS", "VISION_OS"]).default("IOS").describe("App Store platform for the app surfaces"),
-  storefronts: z.array(z.string().regex(/^[a-z]{2}$/, "storefronts must be 2-letter lowercase country codes")).min(1).max(10).default(["us"]).describe("Storefront country codes for App Store ratings"),
-  outPath: z.string().trim().min(1).optional().describe("File name or path inside the snapshot directory (SEO_MCP_SNAPSHOT_DIR, default ~/.config/seo-mcp/snapshots); must end in .json, or pass auto to name the file after the moment it was taken. An existing file is not overwritten unless overwrite is true"),
+  storefronts: z
+    .array(z.string().regex(/^[a-z]{2}$/, "storefronts must be 2-letter lowercase country codes"))
+    .min(1)
+    .max(10)
+    .default(["us"])
+    .describe("Storefront country codes for App Store ratings"),
+  outPath: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      "File name or path inside the snapshot directory (SEO_MCP_SNAPSHOT_DIR, default ~/.config/seo-mcp/snapshots); must end in .json, or pass auto to name the file after the moment it was taken. An existing file is not overwritten unless overwrite is true",
+    ),
   overwrite: z.boolean().default(false).describe("Replace an existing file at outPath; without it an existing file is left alone and reported"),
 };
 export const snapshotInput = z.object(snapshotShape);
@@ -701,44 +823,64 @@ export const compareSnapshotsOutput = z.object({
   elapsedHours: z.number().nullable(),
   argumentsReversed: z.boolean(),
   minImpressions: z.number(),
-  properties: z.array(z.object({
-    siteUrl: z.string(),
-    comparable: z.boolean(),
-    // Absent on a property that could not be compared at all, which returns the
-    // pair name and nothing else.
-    queryMovers: z.array(comparedMover.extend({ query: z.string() })).optional(),
-    droppedOutOfTopQueries: z.array(z.string()).optional(),
-  }).loose()),
-  apps: z.array(z.object({
-    app: z.string(),
-    comparable: z.boolean(),
-    localesComparable: z.boolean(),
-    locales: z.array(z.object({
-      locale: z.string(),
-      name: comparedDelta,
-      subtitle: comparedDelta,
-      keywords: comparedDelta,
-      promotionalText: comparedDelta,
-      description: comparedDelta,
-    })),
-    overLimit: z.object({ added: z.array(z.string()), removed: z.array(z.string()) }),
-  }).loose()),
-  packages: z.array(z.object({
-    package: z.string(),
-    comparable: z.boolean(),
-    trafficSources: z.array(z.object({
-      source: z.string(),
-      visitors: comparedDelta,
-      acquisitions: comparedDelta,
-      conversionRate: comparedDelta,
-    })),
-    hasPlaySearchRows: z.object({ from: z.boolean().nullable(), to: z.boolean().nullable() }),
-  }).loose()),
-  slugs: z.array(z.object({
-    slug: z.string(),
-    comparable: z.boolean(),
-    ratingsHistogram: comparedHistogram,
-  }).loose()),
+  properties: z.array(
+    z
+      .object({
+        siteUrl: z.string(),
+        comparable: z.boolean(),
+        // Absent on a property that could not be compared at all, which returns the
+        // pair name and nothing else.
+        queryMovers: z.array(comparedMover.extend({ query: z.string() })).optional(),
+        droppedOutOfTopQueries: z.array(z.string()).optional(),
+      })
+      .loose(),
+  ),
+  apps: z.array(
+    z
+      .object({
+        app: z.string(),
+        comparable: z.boolean(),
+        localesComparable: z.boolean(),
+        locales: z.array(
+          z.object({
+            locale: z.string(),
+            name: comparedDelta,
+            subtitle: comparedDelta,
+            keywords: comparedDelta,
+            promotionalText: comparedDelta,
+            description: comparedDelta,
+          }),
+        ),
+        overLimit: z.object({ added: z.array(z.string()), removed: z.array(z.string()) }),
+      })
+      .loose(),
+  ),
+  packages: z.array(
+    z
+      .object({
+        package: z.string(),
+        comparable: z.boolean(),
+        trafficSources: z.array(
+          z.object({
+            source: z.string(),
+            visitors: comparedDelta,
+            acquisitions: comparedDelta,
+            conversionRate: comparedDelta,
+          }),
+        ),
+        hasPlaySearchRows: z.object({ from: z.boolean().nullable(), to: z.boolean().nullable() }),
+      })
+      .loose(),
+  ),
+  slugs: z.array(
+    z
+      .object({
+        slug: z.string(),
+        comparable: z.boolean(),
+        ratingsHistogram: comparedHistogram,
+      })
+      .loose(),
+  ),
   surfacesWithErrors: z.array(z.string()),
   notes: z.array(z.string()),
 });
@@ -761,10 +903,15 @@ export const cruxFieldDataOutput = z.object({
   source: z.string(),
   collectionPeriod: z.object({ firstDate: z.string().nullable(), lastDate: z.string().nullable() }).optional(),
   normalizedUrl: z.string().nullable().optional(),
-  metrics: z.record(z.string(), z.object({
-    p75: z.number().nullable(),
-    histogram: z.array(z.object({ start: z.number().nullable(), end: z.number().nullable(), density: z.number().nullable() })),
-  })).or(z.record(z.string(), z.never())),
+  metrics: z
+    .record(
+      z.string(),
+      z.object({
+        p75: z.number().nullable(),
+        histogram: z.array(z.object({ start: z.number().nullable(), end: z.number().nullable(), density: z.number().nullable() })),
+      }),
+    )
+    .or(z.record(z.string(), z.never())),
   notes: z.array(z.string()),
 });
 
@@ -790,7 +937,11 @@ export const appStoreReviewsShape = {
   appId: z.string().regex(/^\d+$/, "appId must be the numeric App Store app id").optional().describe("App Store Connect numeric app id; provide this or bundleId"),
   bundleId: z.string().trim().min(1).max(200).optional().describe("Bundle id; provide this or appId"),
   rating: z.array(z.number().int().min(1).max(5)).max(5).optional().describe("Only these star ratings"),
-  territory: z.string().regex(/^[A-Z]{3}$/, "territory must be a 3-letter uppercase code such as USA").optional().describe("Only reviews from this storefront"),
+  territory: z
+    .string()
+    .regex(/^[A-Z]{3}$/, "territory must be a 3-letter uppercase code such as USA")
+    .optional()
+    .describe("Only reviews from this storefront"),
   sort: z.enum(["-createdDate", "createdDate", "rating", "-rating"]).default("-createdDate").describe("Sort order; newest first by default"),
   limit: z.number().int().min(1).max(1000).default(100).describe("Maximum reviews to return across pages"),
   maxPages: z.number().int().min(1).max(20).default(5).describe("Maximum pages to follow"),
@@ -805,27 +956,32 @@ export const appStoreReviewsOutput = z.object({
   histogramOfFetched: z.record(z.string(), z.number()),
   withoutResponse: z.number(),
   filters: z.object({ rating: z.array(z.number()).nullable(), territory: z.string().nullable(), sort: z.string() }),
-  reviews: z.array(z.object({
-    id: z.string(),
-    rating: z.number().nullable(),
-    title: z.string().nullable(),
-    body: z.string().nullable(),
-    reviewerNickname: z.string().nullable(),
-    createdDate: z.string().nullable(),
-    territory: z.string().nullable(),
-    respondedAt: z.string().nullable(),
-    responseBody: z.string().nullable(),
-  })),
+  reviews: z.array(
+    z.object({
+      id: z.string(),
+      rating: z.number().nullable(),
+      title: z.string().nullable(),
+      body: z.string().nullable(),
+      reviewerNickname: z.string().nullable(),
+      createdDate: z.string().nullable(),
+      territory: z.string().nullable(),
+      respondedAt: z.string().nullable(),
+      responseBody: z.string().nullable(),
+    }),
+  ),
   notes: z.array(z.string()),
 });
 
 export const appStoreDiscoveryShape = {
   appId: z.string().regex(/^\d+$/, "appId must be the numeric App Store app id").optional().describe("App Store Connect numeric app id; provide this or bundleId"),
   bundleId: z.string().trim().min(1).max(200).optional().describe("Bundle id; provide this or appId"),
-  include: z.array(z.enum(["searchKeywords", "appTags", "experiments", "customProductPages", "appEvents", "availability", "reviewSummarizations"])).default([]).describe("Which discovery surfaces to read; empty reads all of them"),
+  include: z
+    .array(z.enum(["searchKeywords", "appTags", "experiments", "customProductPages", "appEvents", "availability", "reviewSummarizations"]))
+    .default([])
+    .describe("Which discovery surfaces to read; empty reads all of them"),
   limit: z.number().int().min(1).max(200).default(50).describe("Rows per resource"),
   locales: z.array(z.string().trim().min(2).max(10)).min(1).max(20).default(["en-US"]).describe("Locales for per-locale resources such as searchKeywords"),
-  platform: z.enum(["IOS","MAC_OS","TV_OS","VISION_OS"]).default("IOS").describe("Platform for resources that require one"),
+  platform: z.enum(["IOS", "MAC_OS", "TV_OS", "VISION_OS"]).default("IOS").describe("Platform for resources that require one"),
   includeRows: z.boolean().default(false).describe("Include every raw row as well as the counts; off by default so a summary call stays small"),
 };
 export const appStoreDiscoveryInput = z.object(appStoreDiscoveryShape);
@@ -833,22 +989,30 @@ export const appStoreDiscoveryOutput = z.object({
   appId: z.string(),
   bundleId: z.string().nullable(),
   locales: z.array(z.string()),
-  resources: z.record(z.string(), z.object({
-    available: z.boolean(),
-    count: z.number().nullable(),
-    rows: z.array(z.record(z.string(), z.unknown())),
-    error: z.string().optional(),
-  })),
+  resources: z.record(
+    z.string(),
+    z.object({
+      available: z.boolean(),
+      count: z.number().nullable(),
+      rows: z.array(z.record(z.string(), z.unknown())),
+      error: z.string().optional(),
+    }),
+  ),
   notes: z.array(z.string()),
 });
 
 export const playVitalsShape = {
   packageName: androidPackageName.describe("Android package name"),
-  metricSets: z.array(z.enum(['crashRate','anrRate','errorCount','slowStartRate','excessiveWakeupRate'])).min(1).max(5).default(['crashRate','anrRate']).describe('Which Android vitals metric sets to query'),
-  aggregationPeriod: z.enum(['DAILY','HOURLY']).default('DAILY').describe('DAILY is reported in America/Los_Angeles, HOURLY in UTC'),
-  days: z.number().int().min(1).max(90).default(28).describe('How many days back to query'),
-  dimensions: z.array(z.string().trim().min(1)).max(5).default([]).describe('Breakdown dimensions such as versionCode or countryCode'),
-  pageSize: z.number().int().min(1).max(100000).default(1000).describe('Rows per metric set'),
+  metricSets: z
+    .array(z.enum(["crashRate", "anrRate", "errorCount", "slowStartRate", "excessiveWakeupRate"]))
+    .min(1)
+    .max(5)
+    .default(["crashRate", "anrRate"])
+    .describe("Which Android vitals metric sets to query"),
+  aggregationPeriod: z.enum(["DAILY", "HOURLY"]).default("DAILY").describe("DAILY is reported in America/Los_Angeles, HOURLY in UTC"),
+  days: z.number().int().min(1).max(90).default(28).describe("How many days back to query"),
+  dimensions: z.array(z.string().trim().min(1)).max(5).default([]).describe("Breakdown dimensions such as versionCode or countryCode"),
+  pageSize: z.number().int().min(1).max(100000).default(1000).describe("Rows per metric set"),
   includeRows: z.boolean().default(false).describe("Include every raw row as well as the counts; off by default so a summary call stays small"),
 };
 export const playVitalsInput = z.object(playVitalsShape);
@@ -856,23 +1020,33 @@ export const playVitalsOutput = z.object({
   packageName: z.string(),
   aggregationPeriod: z.string(),
   days: z.number(),
-  metricSets: z.record(z.string(), z.object({
-    available: z.boolean(),
-    rowCount: z.number().nullable(),
-    latestDataAt: z.string().nullable(),
-    rows: z.array(z.record(z.string(), z.unknown())),
-    error: z.string().optional(),
-  })),
+  metricSets: z.record(
+    z.string(),
+    z.object({
+      available: z.boolean(),
+      rowCount: z.number().nullable(),
+      latestDataAt: z.string().nullable(),
+      rows: z.array(z.record(z.string(), z.unknown())),
+      error: z.string().optional(),
+    }),
+  ),
   notes: z.array(z.string()),
 });
 
 export const appStoreSalesShape = {
-  reportDate: z.string().trim().regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, "reportDate must be YYYY-MM-DD, YYYY-MM, or YYYY").optional().describe("Report date. DAILY and WEEKLY take YYYY-MM-DD (WEEKLY means the week's ending date), MONTHLY takes YYYY-MM, YEARLY takes YYYY. Defaults to the most recent complete period for the frequency"),
-  frequency: z.enum(['DAILY','WEEKLY','MONTHLY','YEARLY']).default('DAILY').describe('Report period'),
-  reportType: z.enum(['SALES','PRE_ORDER','SUBSCRIPTION','SUBSCRIPTION_EVENT','SUBSCRIBER','INSTALLS','FIRST_ANNUAL']).default('SALES').describe('Sales and Trends report type'),
-  reportSubType: z.enum(['SUMMARY','DETAILED','SUMMARY_INSTALL_TYPE','SUMMARY_TERRITORY','SUMMARY_CHANNEL']).default('SUMMARY').describe('Report sub type'),
-  version: z.string().trim().min(1).max(10).optional().describe('Report version, such as 1_0 or 1_3, when the default is not accepted'),
-  includeRows: z.boolean().default(false).describe('Include every raw report row as well as the per-SKU summary'),
+  reportDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, "reportDate must be YYYY-MM-DD, YYYY-MM, or YYYY")
+    .optional()
+    .describe(
+      "Report date. DAILY and WEEKLY take YYYY-MM-DD (WEEKLY means the week's ending date), MONTHLY takes YYYY-MM, YEARLY takes YYYY. Defaults to the most recent complete period for the frequency",
+    ),
+  frequency: z.enum(["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]).default("DAILY").describe("Report period"),
+  reportType: z.enum(["SALES", "PRE_ORDER", "SUBSCRIPTION", "SUBSCRIPTION_EVENT", "SUBSCRIBER", "INSTALLS", "FIRST_ANNUAL"]).default("SALES").describe("Sales and Trends report type"),
+  reportSubType: z.enum(["SUMMARY", "DETAILED", "SUMMARY_INSTALL_TYPE", "SUMMARY_TERRITORY", "SUMMARY_CHANNEL"]).default("SUMMARY").describe("Report sub type"),
+  version: z.string().trim().min(1).max(10).optional().describe("Report version, such as 1_0 or 1_3, when the default is not accepted"),
+  includeRows: z.boolean().default(false).describe("Include every raw report row as well as the per-SKU summary"),
 };
 export const appStoreSalesInput = z.object(appStoreSalesShape);
 export const appStoreSalesOutput = z.object({

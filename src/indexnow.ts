@@ -18,14 +18,13 @@ const STATUS_NOTES: Record<number, string> = {
   429: "Too many requests: slow down submissions.",
 };
 
-export async function submitIndexNow(
-  params: IndexNowParams,
-  deps: { fetchImpl?: typeof fetch } = {},
-): Promise<ToolResult> {
+export async function submitIndexNow(params: IndexNowParams, deps: { fetchImpl?: typeof fetch } = {}): Promise<ToolResult> {
   // The env fallback bypasses the schema, so the key format is re-checked here.
   const key = params.key ?? process.env.SEO_MCP_INDEXNOW_KEY;
   if (!key) {
-    throw new Error("An IndexNow key is required. Pass key or set SEO_MCP_INDEXNOW_KEY, and host the key at https://<host>/<key>.txt (a text file containing only the key). The key value is never logged.");
+    throw new Error(
+      "An IndexNow key is required. Pass key or set SEO_MCP_INDEXNOW_KEY, and host the key at https://<host>/<key>.txt (a text file containing only the key). The key value is never logged.",
+    );
   }
   if (!KEY_PATTERN.test(key)) {
     throw new Error("IndexNow keys are 8-128 characters of a-z, A-Z, 0-9, or dash.");
@@ -46,10 +45,13 @@ export async function submitIndexNow(
     urlCount: params.urls.length,
   };
   if (params.dryRun) {
-    return result(
-      `Dry run: would submit ${params.urls.length} URL(s) for ${host} to ${params.endpoint}. No notification sent.`,
-      { success: true, dryRun: true, statusCode: null, note: "Dry run.", ...shared },
-    );
+    return result(`Dry run: would submit ${params.urls.length} URL(s) for ${host} to ${params.endpoint}. No notification sent.`, {
+      success: true,
+      dryRun: true,
+      statusCode: null,
+      note: "Dry run.",
+      ...shared,
+    });
   }
   const response = await (deps.fetchImpl ?? fetch)(`https://${params.endpoint}/indexnow`, {
     method: "POST",

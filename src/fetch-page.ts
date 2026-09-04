@@ -42,9 +42,7 @@ function embeddedIpv4(host: string): string | null {
   // 6to4 holds the address in the two groups right after its prefix; the
   // v4-mapped, NAT64 and deprecated v4-compatible forms hold it in the low 32
   // bits, written either as two hex groups or dotted.
-  const [, first, second] = /^2002:([\da-f]{1,4}):([\da-f]{1,4})(?::|$)/.exec(normalized)
-    ?? /^(?:::ffff:|64:ff9b::|::)([\da-f]{1,4}):([\da-f]{1,4})$/.exec(normalized)
-    ?? [];
+  const [, first, second] = /^2002:([\da-f]{1,4}):([\da-f]{1,4})(?::|$)/.exec(normalized) ?? /^(?:::ffff:|64:ff9b::|::)([\da-f]{1,4}):([\da-f]{1,4})$/.exec(normalized) ?? [];
   if (first !== undefined && second !== undefined) {
     const high = parseInt(first, 16);
     const low = parseInt(second, 16);
@@ -69,35 +67,16 @@ function isNonPublicAddress(address: string): boolean {
   return inner !== null && nonPublic.check(inner, "ipv4");
 }
 
-export type DnsResolver = (
-  hostname: string,
-  options: { all: true },
-  callback: (
-    err: NodeJS.ErrnoException | null,
-    addresses: Array<{ address: string; family: number }>,
-  ) => void,
-) => void;
+export type DnsResolver = (hostname: string, options: { all: true }, callback: (err: NodeJS.ErrnoException | null, addresses: Array<{ address: string; family: number }>) => void) => void;
 
 // Every resolved address must be validated and passed unchanged to the socket.
 export function createPublicOnlyLookup(resolve: DnsResolver) {
-  return (
-    hostname: string,
-    options: unknown,
-    callback: (
-      err: Error | null,
-      address: string | Array<{ address: string; family: number }>,
-      family?: number,
-    ) => void,
-  ): void => {
+  return (hostname: string, options: unknown, callback: (err: Error | null, address: string | Array<{ address: string; family: number }>, family?: number) => void): void => {
     resolve(hostname, { ...(options as object), all: true }, (err, addresses) => {
       if (err) return callback(err, "", 0);
       const bad = addresses.find((address) => isNonPublicAddress(address.address));
       if (bad) {
-        return callback(
-          new Error(`Refusing to connect to ${hostname}: resolves to a non-public address (${bad.address}).`),
-          "",
-          0,
-        );
+        return callback(new Error(`Refusing to connect to ${hostname}: resolves to a non-public address (${bad.address}).`), "", 0);
       }
       callback(null, addresses);
     });
@@ -134,16 +113,8 @@ export interface FetchHtmlOptions {
   connectResolver?: DnsResolver;
 }
 
-export async function fetchHtml(
-  url: string,
-  options: FetchHtmlOptions = {},
-): Promise<{ html: string; finalUrl: string; status: number }> {
-  const {
-    fetchImpl = fetch,
-    lookupHost = (hostname: string) => lookup(hostname, { all: true }),
-    allowPrivateHosts = process.env.SEO_MCP_ALLOW_PRIVATE_HOSTS === "1",
-    connectResolver,
-  } = options;
+export async function fetchHtml(url: string, options: FetchHtmlOptions = {}): Promise<{ html: string; finalUrl: string; status: number }> {
+  const { fetchImpl = fetch, lookupHost = (hostname: string) => lookup(hostname, { all: true }), allowPrivateHosts = process.env.SEO_MCP_ALLOW_PRIVATE_HOSTS === "1", connectResolver } = options;
   const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   let currentUrl = new URL(url);
   let redirects = 0;
@@ -236,8 +207,7 @@ function detectCharset(contentType: string | null, bytes: Uint8Array): string {
   const headerCharset = contentType ? /charset=["']?([\w-]+)/i.exec(contentType)?.[1] : undefined;
   if (headerCharset) return headerCharset;
   const head = new TextDecoder("latin1").decode(bytes.subarray(0, 1024));
-  const metaCharset = /<meta[^>]+charset=["']?\s*([\w-]+)/i.exec(head)?.[1]
-    ?? /<meta[^>]+content=["'][^"']*charset=([\w-]+)/i.exec(head)?.[1];
+  const metaCharset = /<meta[^>]+charset=["']?\s*([\w-]+)/i.exec(head)?.[1] ?? /<meta[^>]+content=["'][^"']*charset=([\w-]+)/i.exec(head)?.[1];
   return metaCharset ?? "utf-8";
 }
 

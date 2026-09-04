@@ -33,12 +33,8 @@ describe("MCP server tool registration", () => {
   it("lists and reads the live Search Console properties resource", async () => {
     const clients = fakeClients();
     const list = vi.mocked(clients.searchConsole.sites.list);
-    list.mockResolvedValueOnce({ data: { siteEntry: [
-      { siteUrl: "sc-domain:example.com", permissionLevel: "siteOwner" },
-    ] } });
-    list.mockResolvedValueOnce({ data: { siteEntry: [
-      { siteUrl: "https://blog.example.com/", permissionLevel: "siteFullUser" },
-    ] } });
+    list.mockResolvedValueOnce({ data: { siteEntry: [{ siteUrl: "sc-domain:example.com", permissionLevel: "siteOwner" }] } });
+    list.mockResolvedValueOnce({ data: { siteEntry: [{ siteUrl: "https://blog.example.com/", permissionLevel: "siteFullUser" }] } });
     const client = await connectedClient({ clients });
 
     const { resources } = await client.listResources();
@@ -113,11 +109,7 @@ describe("MCP server tool registration", () => {
 
     const { prompts } = await client.listPrompts();
 
-    expect(prompts.map((prompt) => prompt.name)).toEqual([
-      "seo_triage",
-      "content_opportunities",
-      "launch_seo_check",
-    ]);
+    expect(prompts.map((prompt) => prompt.name)).toEqual(["seo_triage", "content_opportunities", "launch_seo_check"]);
     expect(prompts.every((prompt) => prompt.arguments?.some((argument) => argument.name === "siteUrl" && argument.required))).toBe(true);
   });
 
@@ -144,10 +136,14 @@ describe("MCP server tool registration", () => {
     ["query_cannibalization", { siteUrl: "https://example.com/" }],
   ])("validates %s structured output", async (name, args) => {
     const clients = fakeClients();
-    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: { rows: [
-      { keys: ["seo", "https://example.com/a"], clicks: 5, impressions: 200, ctr: 0.025, position: 8 },
-      { keys: ["seo", "https://example.com/b"], clicks: 3, impressions: 150, ctr: 0.02, position: 8 },
-    ] } });
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({
+      data: {
+        rows: [
+          { keys: ["seo", "https://example.com/a"], clicks: 5, impressions: 200, ctr: 0.025, position: 8 },
+          { keys: ["seo", "https://example.com/b"], clicks: 3, impressions: 150, ctr: 0.02, position: 8 },
+        ],
+      },
+    });
     const client = await connectedClient({ clients });
 
     const output = await client.callTool({ name, arguments: args });
@@ -158,10 +154,12 @@ describe("MCP server tool registration", () => {
 
   it("validates search analytics structured output", async () => {
     const clients = fakeClients();
-    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({ data: {
-      metadata: { firstIncompleteDate: "2026-07-10" },
-      rows: [{ keys: ["seo mcp"], clicks: 12, impressions: 100, ctr: 0.12, position: 3.456 }],
-    } });
+    vi.mocked(clients.searchConsole.searchanalytics.query).mockResolvedValue({
+      data: {
+        metadata: { firstIncompleteDate: "2026-07-10" },
+        rows: [{ keys: ["seo mcp"], clicks: 12, impressions: 100, ctr: 0.12, position: 3.456 }],
+      },
+    });
     const client = await connectedClient({ clients });
 
     const result = await client.callTool({
@@ -179,14 +177,20 @@ describe("MCP server tool registration", () => {
 
   it("validates sitemap list structured output", async () => {
     const clients = fakeClients();
-    vi.mocked(clients.searchConsole.sitemaps.list).mockResolvedValue({ data: { sitemap: [{
-      path: "https://example.com/sitemap.xml",
-      lastSubmitted: "2026-07-01T00:00:00Z",
-      isPending: false,
-      warnings: "1",
-      errors: "0",
-      contents: [{ type: "web", submitted: "42", indexed: "40" }],
-    }] } });
+    vi.mocked(clients.searchConsole.sitemaps.list).mockResolvedValue({
+      data: {
+        sitemap: [
+          {
+            path: "https://example.com/sitemap.xml",
+            lastSubmitted: "2026-07-01T00:00:00Z",
+            isPending: false,
+            warnings: "1",
+            errors: "0",
+            contents: [{ type: "web", submitted: "42", indexed: "40" }],
+          },
+        ],
+      },
+    });
     const client = await connectedClient({ clients });
 
     const result = await client.callTool({
@@ -246,9 +250,13 @@ describe("MCP server tool registration", () => {
       status: 200,
       headers: {},
     });
-    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({ data: { inspectionResult: {
-      indexStatusResult: { verdict: "PASS", coverageState: "Submitted and indexed" },
-    } } });
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({
+      data: {
+        inspectionResult: {
+          indexStatusResult: { verdict: "PASS", coverageState: "Submitted and indexed" },
+        },
+      },
+    });
     const client = await connectedClient({ clients });
 
     const result = await client.callTool({
@@ -262,9 +270,11 @@ describe("MCP server tool registration", () => {
 
   it("validates URL inspection output with nullable index fields", async () => {
     const clients = fakeClients();
-    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({ data: {
-      inspectionResult: { indexStatusResult: { verdict: "PASS" } },
-    } });
+    vi.mocked(clients.searchConsole.urlInspection.index.inspect).mockResolvedValue({
+      data: {
+        inspectionResult: { indexStatusResult: { verdict: "PASS" } },
+      },
+    });
     const client = await connectedClient({ clients });
 
     const result = await client.callTool({
@@ -291,15 +301,19 @@ describe("MCP server tool registration", () => {
 
   it("validates PageSpeed output with a nullable category score", async () => {
     const clients = fakeClients();
-    vi.mocked(clients.pageSpeed.pagespeedapi.runpagespeed).mockResolvedValue({ data: {
-      loadingExperience: { metrics: {
-        LARGEST_CONTENTFUL_PAINT_MS: { percentile: 2400, category: "AVERAGE" },
-      } },
-      lighthouseResult: {
-        categories: { performance: { score: null } },
-        audits: { unused: { title: "Unused JavaScript", score: 0, details: { overallSavingsMs: 250 } } },
+    vi.mocked(clients.pageSpeed.pagespeedapi.runpagespeed).mockResolvedValue({
+      data: {
+        loadingExperience: {
+          metrics: {
+            LARGEST_CONTENTFUL_PAINT_MS: { percentile: 2400, category: "AVERAGE" },
+          },
+        },
+        lighthouseResult: {
+          categories: { performance: { score: null } },
+          audits: { unused: { title: "Unused JavaScript", score: 0, details: { overallSavingsMs: 250 } } },
+        },
       },
-    } });
+    });
     const client = await connectedClient({ clients });
 
     const result = await client.callTool({

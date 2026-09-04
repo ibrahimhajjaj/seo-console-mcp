@@ -50,9 +50,12 @@ describe("keywordIdeas", () => {
       "best SEO": ["best seo software"],
     });
 
-    const output = await keywordIdeas(params({
-      expansions: ["alphabet", "questions", "prepositions", "comparisons"],
-    }), { fetchImpl });
+    const output = await keywordIdeas(
+      params({
+        expansions: ["alphabet", "questions", "prepositions", "comparisons"],
+      }),
+      { fetchImpl },
+    );
 
     expect(fetchImpl).toHaveBeenCalledTimes(47);
     expect(output.structuredContent.ideas).toEqual([
@@ -145,9 +148,7 @@ describe("keywordIdeas", () => {
 
   it("promotes a late-discovered ranking idea past the limit window", async () => {
     const fetchImpl = autocomplete({ SEO: ["net one", "net two", "net three", "ranked late"] });
-    const fetchGscRows = vi.fn().mockResolvedValue([
-      { keys: ["ranked late"], position: 4, clicks: 9, impressions: 210 },
-    ]);
+    const fetchGscRows = vi.fn().mockResolvedValue([{ keys: ["ranked late"], position: 4, clicks: 9, impressions: 210 }]);
 
     const output = await keywordIdeas(params({ siteUrl: "https://example.com/", limit: 2 }), {
       fetchImpl,

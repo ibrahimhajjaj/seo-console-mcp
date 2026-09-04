@@ -24,5 +24,6 @@ jobs:
       # fix for the error. The committed lockfile is kept for local reproducibility.
       - run: rm -f package-lock.json && npm install --no-audit --no-fund
       - run: npm run lint
+      - run: npm run format:check
       - run: npm test
       - run: npm run build

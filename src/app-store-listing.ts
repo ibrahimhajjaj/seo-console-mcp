@@ -159,10 +159,7 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
       const entries = Array.isArray(linked) ? linked : linked ? [linked] : [];
       return entries.map((entry) => {
         const set = entry.id ? includedById.get(entry.id) : undefined;
-        return (set?.attributes?.screenshotDisplayType as string | undefined)
-          ?? (set?.attributes?.previewType as string | undefined)
-          ?? entry.id
-          ?? "unknown";
+        return (set?.attributes?.screenshotDisplayType as string | undefined) ?? (set?.attributes?.previewType as string | undefined) ?? entry.id ?? "unknown";
       });
     };
     assetsByLocale.set(locale, { screenshotSets: displayTypes("appScreenshotSets"), previewSets: displayTypes("appPreviewSets") });
@@ -201,7 +198,9 @@ export async function appStoreListing(params: AppStoreListingParams, deps: AscDe
 
   const ratings = await lookupRatings(appId, params.storefronts, fetchImpl, notes);
   if (ratings.length) {
-    notes.push("Ratings come from the public App Store storefront lookup, not from App Store Connect, whose API exposes no aggregate rating at all. Every other field here is read from App Store Connect, so the two sit side by side from different sources.");
+    notes.push(
+      "Ratings come from the public App Store storefront lookup, not from App Store Connect, whose API exposes no aggregate rating at all. Every other field here is read from App Store Connect, so the two sit side by side from different sources.",
+    );
   }
   const overLimit = locales.flatMap((entry) => [
     ...(entry.indexed.name.overLimit ? [`${entry.locale} name`] : []),
@@ -268,7 +267,9 @@ export function readCredentialsFromEnv(): AscCredentials {
   const keyId = process.env.SEO_MCP_ASC_KEY_ID;
   const issuerId = process.env.SEO_MCP_ASC_ISSUER_ID;
   if (!keyPath || !keyId) {
-    throw new Error("App Store Connect credentials are required. Set SEO_MCP_ASC_KEY_PATH to the .p8 private key and SEO_MCP_ASC_KEY_ID to its key id, plus SEO_MCP_ASC_ISSUER_ID for a team key (individual keys have no issuer id). A team key reaches every app on the team; what limits it is its role, and a role cannot be changed after the key is created.");
+    throw new Error(
+      "App Store Connect credentials are required. Set SEO_MCP_ASC_KEY_PATH to the .p8 private key and SEO_MCP_ASC_KEY_ID to its key id, plus SEO_MCP_ASC_ISSUER_ID for a team key (individual keys have no issuer id). A team key reaches every app on the team; what limits it is its role, and a role cannot be changed after the key is created.",
+    );
   }
   let privateKey: string;
   try {
@@ -284,10 +285,7 @@ export function readCredentialsFromEnv(): AscCredentials {
   return { keyId, privateKey, ...(issuerId ? { issuerId } : {}) };
 }
 
-function pickByState(
-  resources: JsonApiResource[],
-  want: "live" | "editable",
-): { resource: JsonApiResource; state: string | undefined; fellBack: boolean } | undefined {
+function pickByState(resources: JsonApiResource[], want: "live" | "editable"): { resource: JsonApiResource; state: string | undefined; fellBack: boolean } | undefined {
   if (resources.length === 0) return undefined;
   const described = resources.map((resource) => ({ resource, state: stateOf(resource) }));
   const live = described.find((entry) => isLiveState(entry.state));
@@ -381,31 +379,33 @@ async function lookupRatings(
   // public storefront lookup instead. That is a different pipeline reporting a
   // number that looks identical, and a caller holding both a listing and a
   // rating would otherwise have no way to tell they were read from two places.
-  return Promise.all(storefronts.map(async (storefront) => {
-    const empty = { storefront, source: RATINGS_SOURCE, averageUserRating: null, userRatingCount: null };
-    try {
-      const response = await fetchImpl(`https://itunes.apple.com/lookup?id=${encodeURIComponent(appId)}&country=${encodeURIComponent(storefront)}`, {
-        headers: { "user-agent": USER_AGENT },
-        signal: AbortSignal.timeout(PUBLIC_TIMEOUT_MS),
-      });
-      if (!response.ok) {
-        notes.push(`The ratings lookup for ${storefront} failed with HTTP ${response.status}, so its ratings are unknown rather than absent.`);
+  return Promise.all(
+    storefronts.map(async (storefront) => {
+      const empty = { storefront, source: RATINGS_SOURCE, averageUserRating: null, userRatingCount: null };
+      try {
+        const response = await fetchImpl(`https://itunes.apple.com/lookup?id=${encodeURIComponent(appId)}&country=${encodeURIComponent(storefront)}`, {
+          headers: { "user-agent": USER_AGENT },
+          signal: AbortSignal.timeout(PUBLIC_TIMEOUT_MS),
+        });
+        if (!response.ok) {
+          notes.push(`The ratings lookup for ${storefront} failed with HTTP ${response.status}, so its ratings are unknown rather than absent.`);
+          return empty;
+        }
+        const body = (await response.json()) as { results?: Array<Record<string, unknown>> };
+        const entry = body.results?.[0];
+        if (!entry) return empty;
+        return {
+          storefront,
+          source: RATINGS_SOURCE,
+          averageUserRating: typeof entry.averageUserRating === "number" ? entry.averageUserRating : null,
+          userRatingCount: typeof entry.userRatingCount === "number" ? entry.userRatingCount : null,
+        };
+      } catch {
+        notes.push(`The ratings lookup for ${storefront} could not be completed, so its ratings are unknown rather than absent.`);
         return empty;
       }
-      const body = (await response.json()) as { results?: Array<Record<string, unknown>> };
-      const entry = body.results?.[0];
-      if (!entry) return empty;
-      return {
-        storefront,
-        source: RATINGS_SOURCE,
-        averageUserRating: typeof entry.averageUserRating === "number" ? entry.averageUserRating : null,
-        userRatingCount: typeof entry.userRatingCount === "number" ? entry.userRatingCount : null,
-      };
-    } catch {
-      notes.push(`The ratings lookup for ${storefront} could not be completed, so its ratings are unknown rather than absent.`);
-      return empty;
-    }
-  }));
+    }),
+  );
 }
 
 function measure(text: string | undefined, limit: number) {
@@ -449,9 +449,7 @@ function formatListing(listing: {
     );
   }
   if (listing.locales.length > 10) lines.push(`- ...and ${listing.locales.length - 10} more locale(s)`);
-  lines.push(listing.overLimit.length
-    ? `Over limit (Apple drops these silently): ${listing.overLimit.join(", ")}`
-    : "No field is over its character limit.");
+  lines.push(listing.overLimit.length ? `Over limit (Apple drops these silently): ${listing.overLimit.join(", ")}` : "No field is over its character limit.");
   lines.push("promotionalText is the only field above that can be changed on a live version without a review.");
   for (const rating of listing.ratings) {
     lines.push(`Ratings (${rating.storefront}, via ${rating.source}): ${rating.averageUserRating ?? "none"} from ${rating.userRatingCount ?? 0} rating(s)`);

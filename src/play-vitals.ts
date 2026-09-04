@@ -73,10 +73,15 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
         ...(params.dimensions.length ? { dimensions: [...params.dimensions] } : {}),
         pageSize: params.pageSize,
       };
-      const queried = await request(`${API}/apps/${encodeURIComponent(params.packageName)}/${set.path}:query`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      }, token, fetchImpl);
+      const queried = await request(
+        `${API}/apps/${encodeURIComponent(params.packageName)}/${set.path}:query`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        },
+        token,
+        fetchImpl,
+      );
 
       const rows = ((queried as { rows?: Array<Record<string, unknown>> }).rows ?? []).map((row) => ({
         startTime: row.startTime ?? null,
@@ -129,9 +134,7 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
   const lines = [`Android vitals for ${params.packageName} over the last ${params.days} day(s), ${params.aggregationPeriod}`];
   for (const name of params.metricSets) {
     const entry = results[name] as { available: boolean; rowCount: number | null; latestDataAt: string | null };
-    lines.push(entry.available
-      ? `- ${name}: ${entry.rowCount} row(s), data through ${entry.latestDataAt ?? "unknown"}`
-      : `- ${name}: unavailable`);
+    lines.push(entry.available ? `- ${name}: ${entry.rowCount} row(s), data through ${entry.latestDataAt ?? "unknown"}` : `- ${name}: unavailable`);
   }
   return { content: [{ type: "text", text: lines.join("\n") }], structuredContent };
 }
@@ -160,7 +163,13 @@ async function request(url: string, init: RequestInit, token: string, fetchImpl:
     // Carry the API's own message through: it names the actual problem, and
     // hiding it turns a fixable request into an opaque failure.
     const detail = await response.text().then(
-      (body) => { try { return (JSON.parse(body).error?.message as string) ?? ""; } catch { return body.slice(0, 200); } },
+      (body) => {
+        try {
+          return (JSON.parse(body).error?.message as string) ?? "";
+        } catch {
+          return body.slice(0, 200);
+        }
+      },
       () => "",
     );
     throw new Error(`Play Developer Reporting returned HTTP ${response.status} for ${url.split("?")[0]?.replace(API, "")}${detail ? `: ${detail}` : "."}`);

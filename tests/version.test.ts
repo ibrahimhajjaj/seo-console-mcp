@@ -3,9 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { PACKAGE_NAME, PACKAGE_VERSION, USER_AGENT } from "../src/version.js";
 
-const pkg = JSON.parse(
-  readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
-) as { name: string; version: string };
+const pkg = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as { name: string; version: string };
 
 describe("version", () => {
   it("derives name and version from package.json", () => {

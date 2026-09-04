@@ -49,9 +49,8 @@ describe("auditSite", () => {
   it("audits pages and rolls up shared issues", async () => {
     const sitemapUrl = "https://example.com/sitemap.xml";
     const urls = ["https://example.com/one", "https://example.com/two"];
-    const fetchImpl: typeof fetchHtml = async (url) => url === sitemapUrl
-      ? page(`<urlset>${urls.map((entry) => `<url><loc>${entry}</loc></url>`).join("")}</urlset>`, url)
-      : page("<html><body><h1>Page</h1></body></html>", url);
+    const fetchImpl: typeof fetchHtml = async (url) =>
+      url === sitemapUrl ? page(`<urlset>${urls.map((entry) => `<url><loc>${entry}</loc></url>`).join("")}</urlset>`, url) : page("<html><body><h1>Page</h1></body></html>", url);
 
     const result = await auditSite(sitemapUrl, { fetchImpl });
 
@@ -117,9 +116,8 @@ describe("auditSite", () => {
   it("reports truncation and skipped URLs", async () => {
     const sitemapUrl = "https://example.com/sitemap.xml";
     const urls = ["https://example.com/one", "https://example.com/two", "https://example.com/three"];
-    const fetchImpl: typeof fetchHtml = async (url) => url === sitemapUrl
-      ? page(`<urlset>${urls.map((entry) => `<url><loc>${entry}</loc></url>`).join("")}</urlset>`, url)
-      : page(completeHtml(url), url);
+    const fetchImpl: typeof fetchHtml = async (url) =>
+      url === sitemapUrl ? page(`<urlset>${urls.map((entry) => `<url><loc>${entry}</loc></url>`).join("")}</urlset>`, url) : page(completeHtml(url), url);
 
     const result = await auditSite(sitemapUrl, { maxPages: 2, fetchImpl });
 

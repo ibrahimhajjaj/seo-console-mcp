@@ -83,9 +83,14 @@ describe("submitIndexNow", () => {
   it("rejects URLs spanning multiple hosts", async () => {
     const fetchImpl = vi.fn();
 
-    await expect(submitIndexNow(params({
-      urls: ["https://example.com/a", "https://other.example/b"],
-    }), { fetchImpl })).rejects.toThrow("one host");
+    await expect(
+      submitIndexNow(
+        params({
+          urls: ["https://example.com/a", "https://other.example/b"],
+        }),
+        { fetchImpl },
+      ),
+    ).rejects.toThrow("one host");
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 

@@ -173,15 +173,18 @@ export const toolDefinitions: ToolDefinition[] = [
     description: "Expand a seed with free Google Autocomplete suggestions and optionally cross-reference Search Console rankings; no extra API key needed",
     inputShape: keywordIdeasShape,
     outputSchema: keywordIdeasOutput,
-    run: (ctx, params) => keywordIdeas(params, {
-      ...(ctx.keywordIdeasFetchImpl ? { fetchImpl: ctx.keywordIdeasFetchImpl } : {}),
-      ...(params.siteUrl ? {
-        fetchGscRows: async (request) => {
-          const response = await ctx.getAuthenticatedClients().searchConsole.searchanalytics.query(request);
-          return response.data.rows ?? [];
-        },
-      } : {}),
-    }),
+    run: (ctx, params) =>
+      keywordIdeas(params, {
+        ...(ctx.keywordIdeasFetchImpl ? { fetchImpl: ctx.keywordIdeasFetchImpl } : {}),
+        ...(params.siteUrl
+          ? {
+              fetchGscRows: async (request) => {
+                const response = await ctx.getAuthenticatedClients().searchConsole.searchanalytics.query(request);
+                return response.data.rows ?? [];
+              },
+            }
+          : {}),
+      }),
   }),
   defineTool({
     name: "search_opportunities",
@@ -266,7 +269,8 @@ export const toolDefinitions: ToolDefinition[] = [
   defineTool({
     name: "indexnow_submit",
     write: true,
-    description: "Submit changed URLs in bulk to IndexNow search engines: Bing, Yandex, Naver, Seznam, Yep; not Google. Needs an IndexNow key hosted on the site at https://<host>/<key>.txt (write; supports dryRun)",
+    description:
+      "Submit changed URLs in bulk to IndexNow search engines: Bing, Yandex, Naver, Seznam, Yep; not Google. Needs an IndexNow key hosted on the site at https://<host>/<key>.txt (write; supports dryRun)",
     inputShape: indexNowSubmitShape,
     outputSchema: indexNowSubmitOutput,
     run: (_ctx, params) => submitIndexNow(params),
@@ -291,7 +295,8 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "audit_site",
-    description: "Audit the on-page SEO of up to N pages from a sitemap and roll up the most common issues across the site. Takes a sitemap URL rather than a Search Console property, and needs no Google credentials",
+    description:
+      "Audit the on-page SEO of up to N pages from a sitemap and roll up the most common issues across the site. Takes a sitemap URL rather than a Search Console property, and needs no Google credentials",
     inputShape: auditSiteShape,
     outputSchema: auditSiteOutput,
     run: async (_ctx, params) => {
@@ -308,77 +313,88 @@ export const toolDefinitions: ToolDefinition[] = [
   }),
   defineTool({
     name: "play_store_stats",
-    description: "Read Google Play bulk reports for an app: active device installs and store-listing visitors and acquisitions by traffic source. installsDimension picks which installs breakdown is read (overview, country, language, device, os_version, carrier or app_version), include adds the ratings, crashes and reviews report families, and startDate with endDate reads every month the window touches instead of the single month in month. Reads the reporting bucket named by SEO_MCP_PLAY_BUCKET; read-only",
+    description:
+      "Read Google Play bulk reports for an app: active device installs and store-listing visitors and acquisitions by traffic source. installsDimension picks which installs breakdown is read (overview, country, language, device, os_version, carrier or app_version), include adds the ratings, crashes and reviews report families, and startDate with endDate reads every month the window touches instead of the single month in month. Reads the reporting bucket named by SEO_MCP_PLAY_BUCKET; read-only",
     inputShape: playStoreStatsShape,
     outputSchema: playStoreStatsOutput,
     run: (_ctx, params) => playStoreStats(params),
   }),
   defineTool({
     name: "app_store_listing",
-    description: "Read an App Store listing's indexed fields per locale (name, subtitle, keywords) against Apple's character limits, plus promotional text, version state and star ratings. The ratings come from the public storefront lookup because App Store Connect exposes no aggregate rating; each entry names its source. Needs SEO_MCP_ASC_KEY_PATH, SEO_MCP_ASC_KEY_ID and SEO_MCP_ASC_ISSUER_ID; read-only",
+    description:
+      "Read an App Store listing's indexed fields per locale (name, subtitle, keywords) against Apple's character limits, plus promotional text, version state and star ratings. The ratings come from the public storefront lookup because App Store Connect exposes no aggregate rating; each entry names its source. Needs SEO_MCP_ASC_KEY_PATH, SEO_MCP_ASC_KEY_ID and SEO_MCP_ASC_ISSUER_ID; read-only",
     inputShape: appStoreListingShape,
     outputSchema: appStoreListingOutput,
     run: (_ctx, params) => appStoreListing(params),
   }),
   defineTool({
     name: "app_store_sales",
-    description: "Read App Store Sales and Trends: units downloaded per day per territory per app, summarized by SKU. Needs SEO_MCP_ASC_VENDOR_NUMBER and a team key with Admin, Finance or Sales and Reports. A period with no sales is reported as an absence rather than an error. Read-only",
+    description:
+      "Read App Store Sales and Trends: units downloaded per day per territory per app, summarized by SKU. Needs SEO_MCP_ASC_VENDOR_NUMBER and a team key with Admin, Finance or Sales and Reports. A period with no sales is reported as an absence rather than an error. Read-only",
     inputShape: appStoreSalesShape,
     outputSchema: appStoreSalesOutput,
     run: (_ctx, params) => appStoreSales(params),
   }),
   defineTool({
     name: "play_vitals",
-    description: "Read Android vitals from the Play Developer Reporting API: crash rate, ANR rate, error counts and startup metrics, daily or hourly, with optional breakdowns. Reports how fresh the data actually is. Carries no acquisition or conversion data; use play_store_stats for that. Read-only",
+    description:
+      "Read Android vitals from the Play Developer Reporting API: crash rate, ANR rate, error counts and startup metrics, daily or hourly, with optional breakdowns. Reports how fresh the data actually is. Carries no acquisition or conversion data; use play_store_stats for that. Read-only",
     inputShape: playVitalsShape,
     outputSchema: playVitalsOutput,
     run: (_ctx, params) => playVitals(params),
   }),
   defineTool({
     name: "app_store_discovery",
-    description: "Read the App Store surfaces beyond the listing text: search keywords, app tags, product page optimization experiments, custom product pages, in-app events, territory availability and review summarizations. A resource this key cannot read is reported as unavailable rather than as empty. Read-only",
+    description:
+      "Read the App Store surfaces beyond the listing text: search keywords, app tags, product page optimization experiments, custom product pages, in-app events, territory availability and review summarizations. A resource this key cannot read is reported as unavailable rather than as empty. Read-only",
     inputShape: appStoreDiscoveryShape,
     outputSchema: appStoreDiscoveryOutput,
     run: (_ctx, params) => appStoreDiscovery(params),
   }),
   defineTool({
     name: "app_store_reviews",
-    description: "Read App Store customer reviews and your responses, filtered by rating or storefront. Reports the mean and star split of the reviews actually fetched, which is not the app's lifetime rating; App Store Connect exposes no aggregate rating resource. Read-only",
+    description:
+      "Read App Store customer reviews and your responses, filtered by rating or storefront. Reports the mean and star split of the reviews actually fetched, which is not the app's lifetime rating; App Store Connect exposes no aggregate rating resource. Read-only",
     inputShape: appStoreReviewsShape,
     outputSchema: appStoreReviewsOutput,
     run: (_ctx, params) => appStoreReviews(params),
   }),
   defineTool({
     name: "crux_field_data",
-    description: "Read real-user Core Web Vitals for an origin or URL from the Chrome UX Report: the current 28-day field record with p75s and histograms. Field data, not a lab test; PageSpeed's own field block is being discontinued. Needs SEO_MCP_CRUX_KEY or a PageSpeed key allowed to call the Chrome UX Report API; read-only",
+    description:
+      "Read real-user Core Web Vitals for an origin or URL from the Chrome UX Report: the current 28-day field record with p75s and histograms. Field data, not a lab test; PageSpeed's own field block is being discontinued. Needs SEO_MCP_CRUX_KEY or a PageSpeed key allowed to call the Chrome UX Report API; read-only",
     inputShape: cruxFieldDataShape,
     outputSchema: cruxFieldDataOutput,
     run: (_ctx, params) => cruxFieldData(params),
   }),
   defineTool({
     name: "crux_history",
-    description: "Read the Chrome UX Report weekly history for an origin or URL, roughly six months of 28-day rolling windows, so a field metric can be seen trending rather than as one point. Read-only",
+    description:
+      "Read the Chrome UX Report weekly history for an origin or URL, roughly six months of 28-day rolling windows, so a field metric can be seen trending rather than as one point. Read-only",
     inputShape: cruxHistoryShape,
     outputSchema: cruxHistoryOutput,
     run: (_ctx, params) => cruxHistory(params),
   }),
   defineTool({
     name: "list_snapshots",
-    description: "List the snapshot documents already in the snapshot directory, newest first: when each was taken, the window it covers, and how many properties, apps, packages and plugins it holds. This is what says whether there is an earlier snapshot to compare against and what to name as from and to; a file that does not parse is listed with its error rather than hidden; read-only",
+    description:
+      "List the snapshot documents already in the snapshot directory, newest first: when each was taken, the window it covers, and how many properties, apps, packages and plugins it holds. This is what says whether there is an earlier snapshot to compare against and what to name as from and to; a file that does not parse is listed with its error rather than hidden; read-only",
     inputShape: listSnapshotsShape,
     outputSchema: listSnapshotsOutput,
     run: (_ctx, params) => listSnapshotsTool(params),
   }),
   defineTool({
     name: "snapshot",
-    description: "Capture four surfaces in one timestamped document: Search Console totals and top rows per property, App Store listings, Google Play installs and traffic, and WordPress.org stats. Core Web Vitals field data, Android vitals, App Store sales and App Store reviews are not captured. A surface that cannot be read is recorded as an error in place rather than omitted; list_snapshots names the documents already on disk to compare an earlier one against; read-only",
+    description:
+      "Capture four surfaces in one timestamped document: Search Console totals and top rows per property, App Store listings, Google Play installs and traffic, and WordPress.org stats. Core Web Vitals field data, Android vitals, App Store sales and App Store reviews are not captured. A surface that cannot be read is recorded as an error in place rather than omitted; list_snapshots names the documents already on disk to compare an earlier one against; read-only",
     inputShape: snapshotShape,
     outputSchema: snapshotOutput,
     run: (ctx, params) => snapshot(ctx, params),
   }),
   defineTool({
     name: "compare_snapshots",
-    description: "Compare two snapshot documents and return the differences between them: clicks, impressions, positions, installs, ratings and locale counts. Reports arithmetic only, never whether a change was good or what caused it; read-only",
+    description:
+      "Compare two snapshot documents and return the differences between them: clicks, impressions, positions, installs, ratings and locale counts. Reports arithmetic only, never whether a change was good or what caused it; read-only",
     inputShape: compareSnapshotsShape,
     outputSchema: compareSnapshotsOutput,
     run: (_ctx, params) => compareSnapshots(params),
@@ -403,9 +419,7 @@ function formatAudit(audit: ReturnType<typeof parseSeoHtml>): string {
 
 function formatSiteAudit(audit: Awaited<ReturnType<typeof auditSite>>): string {
   const summary = `Audited ${audit.audited} of ${audit.totalDiscovered} discovered pages; ${audit.failed} failed`;
-  const truncation = audit.truncated
-    ? `Truncated: ${audit.skipped} discovered page(s) and ${audit.childSitemapsSkipped} child sitemap(s) skipped`
-    : "Truncated: no";
+  const truncation = audit.truncated ? `Truncated: ${audit.skipped} discovered page(s) and ${audit.childSitemapsSkipped} child sitemap(s) skipped` : "Truncated: no";
   const issues = Object.entries(audit.rollup)
     .sort((left, right) => right[1] - left[1])
     .map(([issue, count]) => `- ${issue}: ${count}`);

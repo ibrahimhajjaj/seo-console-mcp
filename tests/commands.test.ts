@@ -33,7 +33,9 @@ const toolNames = new Set(toolDefinitions.map((tool) => tool.name));
 const placeholders = new Set(["$ARGUMENTS", "outPath", "siteUrl"]);
 
 const commandsDir = fileURLToPath(new URL("../commands", import.meta.url));
-const commandFiles = readdirSync(commandsDir).filter((name) => name.endsWith(".md")).sort();
+const commandFiles = readdirSync(commandsDir)
+  .filter((name) => name.endsWith(".md"))
+  .sort();
 
 // A plugin command and an MCP prompt are two copies of the same workflow, so a
 // tool named in either has to reach the other.
@@ -70,10 +72,7 @@ describe("plugin command playbooks", () => {
     expect(tokens.length).toBeGreaterThan(0);
     for (const token of tokens) {
       if (placeholders.has(token)) continue;
-      expect(
-        toolNames.has(token),
-        `${file} names \`${token}\`, which is neither a registered tool nor a known placeholder`,
-      ).toBe(true);
+      expect(toolNames.has(token), `${file} names \`${token}\`, which is neither a registered tool nor a known placeholder`).toBe(true);
     }
   });
 

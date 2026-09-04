@@ -44,13 +44,12 @@ describe("appStoreReviews", () => {
   });
 
   it("attaches a developer response and counts the unanswered ones", async () => {
-    const fetchImpl = respondingWith([{
-      data: [
-        review("1", 2, { relationships: { response: { data: { id: "r1" } } } }),
-        review("2", 4),
-      ],
-      included: [{ type: "customerReviewResponses", id: "r1", attributes: { responseBody: "sorry", lastModifiedDate: "2026-09-02T00:00:00Z" } }],
-    }]);
+    const fetchImpl = respondingWith([
+      {
+        data: [review("1", 2, { relationships: { response: { data: { id: "r1" } } } }), review("2", 4)],
+        included: [{ type: "customerReviewResponses", id: "r1", attributes: { responseBody: "sorry", lastModifiedDate: "2026-09-02T00:00:00Z" } }],
+      },
+    ]);
 
     const result = await appStoreReviews(appStoreReviewsInput.parse({ appId: "123" }), { fetchImpl, credentials: credentials() });
     const content = result.structuredContent as Record<string, any>;
@@ -83,7 +82,6 @@ describe("appStoreReviews", () => {
   });
 
   it("requires an appId or a bundleId", async () => {
-    await expect(appStoreReviews(appStoreReviewsInput.parse({}), { fetchImpl: respondingWith([{ data: [] }]), credentials: credentials() }))
-      .rejects.toThrow(/appId or bundleId/);
+    await expect(appStoreReviews(appStoreReviewsInput.parse({}), { fetchImpl: respondingWith([{ data: [] }]), credentials: credentials() })).rejects.toThrow(/appId or bundleId/);
   });
 });

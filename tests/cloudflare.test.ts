@@ -46,7 +46,7 @@ describe("cloudflare client", () => {
   it("skips creation when a matching TXT record already exists", async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.includes("/dns_records?")) {
-        return jsonResponse({ success: true, errors: [], result: [{ id: "rec1", content: "\"google-site-verification=abc\"" }] });
+        return jsonResponse({ success: true, errors: [], result: [{ id: "rec1", content: '"google-site-verification=abc"' }] });
       }
       return jsonResponse({ success: true, errors: [], result: [] });
     });

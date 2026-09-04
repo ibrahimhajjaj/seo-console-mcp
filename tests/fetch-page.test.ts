@@ -70,10 +70,13 @@ describe("createPublicOnlyLookup", () => {
 
 describe("fetchHtml", () => {
   it("returns decoded HTML, final URL, and status", async () => {
-    const fetchImpl = vi.fn(async () => new Response("<title>Example</title>", {
-      status: 200,
-      headers: { "content-length": "22" },
-    }));
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response("<title>Example</title>", {
+          status: 200,
+          headers: { "content-length": "22" },
+        }),
+    );
 
     const result = await fetchHtml("https://example.com/", {
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -89,34 +92,43 @@ describe("fetchHtml", () => {
   });
 
   it("throws for a non-OK response", async () => {
-    const fetchImpl = vi.fn(async () => new Response("Missing", {
-      status: 404,
-      statusText: "Not Found",
-    }));
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response("Missing", {
+          status: 404,
+          statusText: "Not Found",
+        }),
+    );
 
-    await expect(fetchHtml("https://example.com/missing", {
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
-    })).rejects.toThrow("Page fetch failed with HTTP 404 Not Found");
+    await expect(
+      fetchHtml("https://example.com/missing", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
+      }),
+    ).rejects.toThrow("Page fetch failed with HTTP 404 Not Found");
   });
 
   it("refuses a hostname that resolves to a private address", async () => {
     const fetchImpl = vi.fn();
 
-    await expect(fetchHtml("https://internal.example/", {
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      lookupHost: async () => [{ address: "192.168.1.7", family: 4 }],
-    })).rejects.toThrow("Refusing to fetch internal.example: resolves to a non-public address");
+    await expect(
+      fetchHtml("https://internal.example/", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        lookupHost: async () => [{ address: "192.168.1.7", family: 4 }],
+      }),
+    ).rejects.toThrow("Refusing to fetch internal.example: resolves to a non-public address");
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("refuses a hostname that resolves to a NAT64 address wrapping a private one", async () => {
     const fetchImpl = vi.fn();
 
-    await expect(fetchHtml("http://host.example/", {
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      lookupHost: async () => [{ address: "64:ff9b::10.0.0.5", family: 6 }],
-    })).rejects.toThrow(/non-public address/);
+    await expect(
+      fetchHtml("http://host.example/", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        lookupHost: async () => [{ address: "64:ff9b::10.0.0.5", family: 6 }],
+      }),
+    ).rejects.toThrow(/non-public address/);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -124,10 +136,12 @@ describe("fetchHtml", () => {
     const fetchImpl = vi.fn();
     const lookupHost = vi.fn();
 
-    await expect(fetchHtml("http://169.254.169.254/", {
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      lookupHost,
-    })).rejects.toThrow("Refusing to fetch 169.254.169.254: resolves to a non-public address");
+    await expect(
+      fetchHtml("http://169.254.169.254/", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        lookupHost,
+      }),
+    ).rejects.toThrow("Refusing to fetch 169.254.169.254: resolves to a non-public address");
     expect(lookupHost).not.toHaveBeenCalled();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -135,10 +149,12 @@ describe("fetchHtml", () => {
   it("refuses an IPv4-mapped loopback IPv6 literal", async () => {
     const fetchImpl = vi.fn();
 
-    await expect(fetchHtml("http://[::ffff:127.0.0.1]/", {
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      lookupHost: vi.fn(),
-    })).rejects.toThrow(/resolves to a non-public address/);
+    await expect(
+      fetchHtml("http://[::ffff:127.0.0.1]/", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        lookupHost: vi.fn(),
+      }),
+    ).rejects.toThrow(/resolves to a non-public address/);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -163,19 +179,26 @@ describe("fetchHtml", () => {
   });
 
   it("refuses a redirect target that resolves to a private address", async () => {
-    const fetchImpl = vi.fn(async () => new Response(null, {
-      status: 302,
-      headers: { location: "http://private.example/secret" },
-    }));
-    const lookupHost = vi.fn(async (hostname: string) => [{
-      address: hostname === "private.example" ? "10.0.0.4" : "93.184.216.34",
-      family: 4,
-    }]);
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "http://private.example/secret" },
+        }),
+    );
+    const lookupHost = vi.fn(async (hostname: string) => [
+      {
+        address: hostname === "private.example" ? "10.0.0.4" : "93.184.216.34",
+        family: 4,
+      },
+    ]);
 
-    await expect(fetchHtml("https://public.example/", {
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      lookupHost,
-    })).rejects.toThrow("Refusing to fetch private.example: resolves to a non-public address");
+    await expect(
+      fetchHtml("https://public.example/", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        lookupHost,
+      }),
+    ).rejects.toThrow("Refusing to fetch private.example: resolves to a non-public address");
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
@@ -186,10 +209,12 @@ describe("fetchHtml", () => {
       return new Response(null, { status: 302, headers: { location: `/hop-${redirect}` } });
     });
 
-    await expect(fetchHtml("https://example.com/", {
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
-    })).rejects.toThrow("Too many redirects (>5)");
+    await expect(
+      fetchHtml("https://example.com/", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
+      }),
+    ).rejects.toThrow("Too many redirects (>5)");
     expect(fetchImpl).toHaveBeenCalledTimes(6);
   });
 
@@ -197,24 +222,33 @@ describe("fetchHtml", () => {
     let cancelled = false;
     const oneMb = new Uint8Array(1024 * 1024);
     const stream = new ReadableStream<Uint8Array>({
-      pull(controller) { controller.enqueue(oneMb); },
-      cancel() { cancelled = true; },
+      pull(controller) {
+        controller.enqueue(oneMb);
+      },
+      cancel() {
+        cancelled = true;
+      },
     });
     const fetchImpl = vi.fn(async () => new Response(stream, { status: 200 }));
 
-    await expect(fetchHtml("https://big.example/", {
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
-    })).rejects.toThrow("Page HTML exceeds the 10 MB audit limit");
+    await expect(
+      fetchHtml("https://big.example/", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
+      }),
+    ).rejects.toThrow("Page HTML exceeds the 10 MB audit limit");
     expect(cancelled).toBe(true);
   });
 
   it("decodes a non-UTF-8 body using the Content-Type charset", async () => {
     const body = new Uint8Array([0x63, 0x61, 0x66, 0xe9]); // "café" in windows-1252 (é = 0xE9)
-    const fetchImpl = vi.fn(async () => new Response(body, {
-      status: 200,
-      headers: { "content-type": "text/html; charset=windows-1252" },
-    }));
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(body, {
+          status: 200,
+          headers: { "content-type": "text/html; charset=windows-1252" },
+        }),
+    );
 
     const result = await fetchHtml("https://fr.example/", {
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -237,10 +271,13 @@ describe("fetchHtml", () => {
 
   it("decompresses a gzipped sitemap body", async () => {
     const body = gzipSync(Buffer.from("<urlset><url><loc>https://e.com/</loc></url></urlset>"));
-    const fetchImpl = vi.fn(async () => new Response(body, {
-      status: 200,
-      headers: { "content-type": "application/gzip" },
-    }));
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(body, {
+          status: 200,
+          headers: { "content-type": "application/gzip" },
+        }),
+    );
 
     const result = await fetchHtml("https://e.com/sitemap.xml.gz", {
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -254,10 +291,12 @@ describe("fetchHtml", () => {
     const body = new Uint8Array([0x1f, 0x8b, 0x00, 0x01, 0x02]);
     const fetchImpl = vi.fn(async () => new Response(body, { status: 200 }));
 
-    await expect(fetchHtml("https://e.com/sitemap.xml.gz", {
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
-    })).rejects.toThrow(/could not be decompressed/);
+    await expect(
+      fetchHtml("https://e.com/sitemap.xml.gz", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        lookupHost: async () => [{ address: "93.184.216.34", family: 4 }],
+      }),
+    ).rejects.toThrow(/could not be decompressed/);
   });
 
   it("allows private targets when explicitly enabled", async () => {

@@ -43,9 +43,7 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    const credentialsPath = resolveCredentialsPath(
-      command.credentials ?? process.env.SEO_MCP_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    );
+    const credentialsPath = resolveCredentialsPath(command.credentials ?? process.env.SEO_MCP_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS);
     const ok = await runVerify(command.domains, {
       ...(credentialsPath ? { credentialsPath } : {}),
       ...(command.cfToken ? { cloudflareToken: command.cfToken } : {}),
@@ -57,9 +55,7 @@ async function main(): Promise<void> {
     process.exitCode = await runQuery(command);
     return;
   }
-  const credentialsPath = resolveCredentialsPath(
-    command.credentials ?? process.env.SEO_MCP_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS,
-  );
+  const credentialsPath = resolveCredentialsPath(command.credentials ?? process.env.SEO_MCP_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS);
   await startServer(credentialsPath);
 }
 

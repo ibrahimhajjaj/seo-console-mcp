@@ -1,13 +1,10 @@
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
-import {
-  keywordIdeaExpansions,
-  type keywordIdeasInput,
-} from "./schemas.js";
+import { keywordIdeaExpansions, type keywordIdeasInput } from "./schemas.js";
 import { USER_AGENT } from "./version.js";
 
 type KeywordIdeasParams = z.output<typeof keywordIdeasInput>;
-type Expansion = typeof keywordIdeaExpansions[number];
+type Expansion = (typeof keywordIdeaExpansions)[number];
 type Family = "seed" | Expansion;
 
 export interface KeywordIdeasGscRow {
@@ -50,10 +47,7 @@ const AUTOCOMPLETE_TIMEOUT_MS = 15_000;
 const QUESTION_PREFIXES = ["how", "what", "why", "when", "where", "which", "who", "can", "is", "does"];
 const PREPOSITIONS = ["for", "with", "without", "vs", "near", "to", "like"];
 
-export async function keywordIdeas(
-  params: KeywordIdeasParams,
-  deps: KeywordIdeasDependencies = {},
-): Promise<ToolResult> {
+export async function keywordIdeas(params: KeywordIdeasParams, deps: KeywordIdeasDependencies = {}): Promise<ToolResult> {
   const requests = autocompleteRequests(params.seed, params.expansions);
   const responses = await fetchAutocomplete(requests, params, deps.fetchImpl ?? fetch);
   const requestFailures = responses.filter((response) => response === null).length;
@@ -130,20 +124,12 @@ function autocompleteRequests(seed: string, expansions: Expansion[]): Autocomple
     requests.push(...PREPOSITIONS.map((preposition) => ({ query: `${seed} ${preposition}`, family: "prepositions" as const })));
   }
   if (enabled.has("comparisons")) {
-    requests.push(
-      { query: `${seed} vs`, family: "comparisons" },
-      { query: `best ${seed}`, family: "comparisons" },
-      { query: `${seed} alternative`, family: "comparisons" },
-    );
+    requests.push({ query: `${seed} vs`, family: "comparisons" }, { query: `best ${seed}`, family: "comparisons" }, { query: `${seed} alternative`, family: "comparisons" });
   }
   return requests;
 }
 
-async function fetchAutocomplete(
-  requests: AutocompleteRequest[],
-  params: KeywordIdeasParams,
-  fetchImpl: typeof fetch,
-): Promise<Array<string[] | null>> {
+async function fetchAutocomplete(requests: AutocompleteRequest[], params: KeywordIdeasParams, fetchImpl: typeof fetch): Promise<Array<string[] | null>> {
   const responses: Array<string[] | null> = Array.from({ length: requests.length }, () => null);
   let nextIndex = 0;
   const worker = async (): Promise<void> => {
@@ -195,12 +181,15 @@ function normalizeKeyword(value: string): string {
 }
 
 function formatSummary(seed: string, allIdeas: Idea[], returnedIdeas: Array<Omit<Idea, "discoveryIndex">>, requestFailures: number): string {
-  const counts = ["seed", ...keywordIdeaExpansions].map((family) =>
-    `${family}: ${allIdeas.filter((idea) => idea.family === family).length}`,
-  );
-  const ranking = returnedIdeas.filter((idea) => idea.gsc).slice(0, 5)
+  const counts = ["seed", ...keywordIdeaExpansions].map((family) => `${family}: ${allIdeas.filter((idea) => idea.family === family).length}`);
+  const ranking = returnedIdeas
+    .filter((idea) => idea.gsc)
+    .slice(0, 5)
     .map((idea) => `- ${idea.keyword} (position ${idea.gsc?.position.toFixed(2)})`);
-  const netNew = returnedIdeas.filter((idea) => !idea.gsc).slice(0, 10).map((idea) => `- ${idea.keyword}`);
+  const netNew = returnedIdeas
+    .filter((idea) => !idea.gsc)
+    .slice(0, 10)
+    .map((idea) => `- ${idea.keyword}`);
   return [
     `Keyword ideas for ${seed}: ${allIdeas.length} found, ${returnedIdeas.length} returned; ${requestFailures} autocomplete request(s) failed.`,
     `Families: ${counts.join(", ")}`,

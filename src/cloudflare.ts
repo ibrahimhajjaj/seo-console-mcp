@@ -56,9 +56,7 @@ export function createCloudflareClient(token: string, fetchImpl: FetchLike = fet
     },
 
     async ensureTxtRecord(zoneId, name, content) {
-      const existing = await call<Array<{ id: string; content: string }>>(
-        `/zones/${zoneId}/dns_records?type=TXT&name=${encodeURIComponent(name)}`,
-      );
+      const existing = await call<Array<{ id: string; content: string }>>(`/zones/${zoneId}/dns_records?type=TXT&name=${encodeURIComponent(name)}`);
       // Cloudflare may return TXT content wrapped in quotes; strip before comparing.
       const alreadyPresent = existing.some((record) => record.content.replace(/^"|"$/g, "") === content);
       if (alreadyPresent) return "exists";

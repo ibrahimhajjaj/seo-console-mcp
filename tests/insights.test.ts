@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  cannibalization,
-  comparePeriods,
-  ctrGaps,
-  strikingDistance,
-  type InsightRow,
-} from "../src/insights.js";
+import { cannibalization, comparePeriods, ctrGaps, strikingDistance, type InsightRow } from "../src/insights.js";
 
 function row(keys: string[], impressions: number, clicks: number, ctr: number, position: number): InsightRow {
   return { keys, impressions, clicks, ctr, position };
@@ -13,12 +7,7 @@ function row(keys: string[], impressions: number, clicks: number, ctr: number, p
 
 describe("strikingDistance", () => {
   it("returns eligible rows ordered by opportunity", () => {
-    const rows = [
-      row(["top"], 1_000, 300, 0.3, 3),
-      row(["near"], 200, 20, 0.1, 8),
-      row(["far"], 150, 8, 0.05, 15),
-      row(["beyond"], 2_000, 20, 0.01, 25),
-    ];
+    const rows = [row(["top"], 1_000, 300, 0.3, 3), row(["near"], 200, 20, 0.1, 8), row(["far"], 150, 8, 0.05, 15), row(["beyond"], 2_000, 20, 0.01, 25)];
 
     expect(strikingDistance(rows).map(({ keys, opportunity }) => ({ keys, opportunity }))).toEqual([
       { keys: ["far"], opportunity: 2_250 },
@@ -35,16 +24,8 @@ describe("strikingDistance", () => {
 
 describe("comparePeriods", () => {
   it("returns overlapping and period-only keys with correct deltas", () => {
-    const current = [
-      row(["growing"], 150, 20, 0.13, 4),
-      row(["new"], 60, 6, 0.1, 8),
-      row(["falling"], 100, 3, 0.03, 12),
-    ];
-    const previous = [
-      row(["growing"], 100, 10, 0.1, 6),
-      row(["falling"], 180, 12, 0.07, 9),
-      row(["lost"], 80, 5, 0.06, 7),
-    ];
+    const current = [row(["growing"], 150, 20, 0.13, 4), row(["new"], 60, 6, 0.1, 8), row(["falling"], 100, 3, 0.03, 12)];
+    const previous = [row(["growing"], 100, 10, 0.1, 6), row(["falling"], 180, 12, 0.07, 9), row(["lost"], 80, 5, 0.06, 7)];
 
     expect(comparePeriods(current, previous)).toEqual({
       gainers: [
@@ -82,10 +63,7 @@ describe("comparePeriods", () => {
 
 describe("ctrGaps", () => {
   it("flags a below-baseline row using the impression-weighted, leave-one-out bucket CTR", () => {
-    const rows = [
-      row(["low"], 1_000, 20, 0.02, 5.1),
-      row(["high"], 1_000, 180, 0.18, 4.8),
-    ];
+    const rows = [row(["low"], 1_000, 20, 0.02, 5.1), row(["high"], 1_000, 180, 0.18, 4.8)];
 
     const gaps = ctrGaps(rows);
     expect(gaps).toHaveLength(1);
@@ -95,11 +73,7 @@ describe("ctrGaps", () => {
   });
 
   it("weights the expected CTR by impressions, not by row count", () => {
-    const rows = [
-      row(["target"], 200, 4, 0.02, 5),
-      row(["big-peer"], 100_000, 10_000, 0.10, 5),
-      row(["tiny-peer"], 100, 50, 0.50, 5),
-    ];
+    const rows = [row(["target"], 200, 4, 0.02, 5), row(["big-peer"], 100_000, 10_000, 0.1, 5), row(["tiny-peer"], 100, 50, 0.5, 5)];
 
     // target's peers aggregate to (10000+50)/(100000+100) ~= 0.1004, anchored by
     // big-peer; an unweighted row-mean would be (0.10+0.50)/2 = 0.30.
@@ -112,10 +86,7 @@ describe("ctrGaps", () => {
   });
 
   it("respects minimum impressions", () => {
-    const rows = [
-      row(["small-low"], 99, 1, 0.01, 5),
-      row(["large-high"], 1_000, 190, 0.19, 5),
-    ];
+    const rows = [row(["small-low"], 99, 1, 0.01, 5), row(["large-high"], 1_000, 190, 0.19, 5)];
 
     expect(ctrGaps(rows, { minImpressions: 100 })).toEqual([]);
   });

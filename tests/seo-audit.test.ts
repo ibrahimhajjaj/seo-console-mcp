@@ -39,13 +39,7 @@ describe("parseSeoHtml", () => {
 
   it("flags missing and duplicate fundamentals", () => {
     const result = parseSeoHtml("<html><head><title>One</title><title>Two</title></head><body><h1>A</h1><h1>B</h1></body></html>", "https://example.com");
-    expect(result.issues).toEqual(expect.arrayContaining([
-      "Multiple title elements (2)",
-      "Missing meta description",
-      "Multiple H1 headings (2)",
-      "Missing canonical URL",
-      "No JSON-LD schema found",
-    ]));
+    expect(result.issues).toEqual(expect.arrayContaining(["Multiple title elements (2)", "Missing meta description", "Multiple H1 headings (2)", "Missing canonical URL", "No JSON-LD schema found"]));
   });
 
   it("handles invalid JSON-LD without failing the audit", () => {
@@ -57,7 +51,7 @@ describe("parseSeoHtml", () => {
   it("ignores SVG <title> elements", () => {
     const result = parseSeoHtml("<html><head><title>Real</title></head><body><svg><title>Icon label</title></svg></body></html>", "https://example.com");
     expect(result.title).toEqual({ text: "Real", count: 1, length: 4 });
-    const multipleTitlesIssue = result.issues.find(i => i.startsWith("Multiple title elements"));
+    const multipleTitlesIssue = result.issues.find((i) => i.startsWith("Multiple title elements"));
     expect(multipleTitlesIssue).toBeUndefined();
   });
 
