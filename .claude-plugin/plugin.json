@@ -1,7 +1,7 @@
 {
   "name": "seo-console",
   "displayName": "SEO Console",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Turn Claude Code into a senior product-marketing manager across every place a product gets discovered: Google Search Console, the App Store, Google Play, WordPress.org and real-user Core Web Vitals. Search analytics, striking-distance keywords, CTR gaps, cannibalization, store listings and conversion, App Store keywords and sales, Android vitals, on-page and whole-site audits, indexing coverage, PageSpeed, and timestamped snapshots you can diff.",
   "author": {
     "name": "Ibrahim Hajjaj"
@@ -29,7 +29,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "seo-console-mcp@^0.8.0"
+        "seo-console-mcp@^0.9.0"
       ]
     }
   }
