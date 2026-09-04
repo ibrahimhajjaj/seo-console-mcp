@@ -240,7 +240,23 @@ describe("playStoreStats", () => {
     );
 
     expect((result.structuredContent as { notes: string[] }).notes.join(" "))
-      .toMatch(/covers 7 days but only 1 have install rows/);
+      .toMatch(/covers 7 days but only 1 of them has install rows/);
+  });
+
+  it("matches the verb to the count rather than always saying have", async () => {
+    const csv =
+      "Date,Package Name,Active Device Installs\r\n" +
+      "2023-10-01,app.getpsst,100\r\n" +
+      "2023-10-02,app.getpsst,110\r\n";
+    const { readReport } = reader({ "installs_app.getpsst_202310": csv });
+
+    const result = await playStoreStats(
+      { packageName: "app.getpsst", startDate: "2023-10-01", endDate: "2023-10-07" },
+      { readReport },
+    );
+
+    expect((result.structuredContent as { notes: string[] }).notes.join(" "))
+      .toMatch(/covers 7 days but only 2 of them have install rows/);
   });
 
   it("accepts a bucket with or without the gs:// prefix", () => {

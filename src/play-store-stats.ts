@@ -95,7 +95,9 @@ export async function playStoreStats(
   const traffic = trafficBuffer ? readTrafficSources(trafficBuffer, window) : null;
   if (!trafficBuffer) notes.push("Traffic source report is missing.");
   if (window && installs && installs.datesPresent.length < daysBetween(window)) {
-    notes.push(`The window covers ${daysBetween(window)} days but only ${installs.datesPresent.length} have install rows; the reports lag by days.`);
+    const windowDays = daysBetween(window);
+    const daysWithRows = installs.datesPresent.length;
+    notes.push(`The window covers ${windowDays} days but only ${daysWithRows} of them ${daysWithRows === 1 ? "has" : "have"} install rows; the reports lag by days.`);
   }
 
   const ratingsReading = ratingsBuffers.length ? readDimensionReport(ratingsBuffers, window) : null;
