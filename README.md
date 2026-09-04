@@ -571,7 +571,7 @@ Pass `outPath` to write the document where `compare_snapshots` can read it later
 
 ### `compare_snapshots`
 
-Reads two snapshot documents and reports what changed between them: clicks, impressions and position per property, page-level movers above an impressions floor, install and rating deltas, App Store version and locale-count changes.
+Reads two snapshot documents and reports what changed between them: clicks, impressions and position per property, page-level and query-level movers above an impressions floor, install and rating deltas, App Store version and locale-count changes, the per-locale name, subtitle, keyword, promotional-text and description lengths plus which fields crossed a character limit, Google Play traffic sources by visitors and acquisitions, and the WordPress.org five-star histogram.
 
 ```json
 { "from": "2026-08-06.json", "to": "2026-09-03.json", "minImpressions": 100 }
@@ -580,6 +580,8 @@ Reads two snapshot documents and reports what changed between them: clicks, impr
 `from` and `to` resolve inside the same snapshot directory as `snapshot`'s `outPath`, so this tool reads snapshots and nothing else.
 
 It does arithmetic, never judgement. It will not tell you whether a change was good or what caused it, because a diff cannot support that claim. A surface that failed or is missing on either side is marked not comparable and named, so a collection failure is never read as a change, and a file that is not a snapshot document is refused rather than half-parsed.
+
+Snapshots taken before a field was captured still compare. A field one side does not carry comes back as a `null` delta rather than as a change, and an app pair with no per-locale lengths on either side reports `localesComparable: false` instead of a listing emptied to zero characters.
 
 ### `app_store_reviews`
 

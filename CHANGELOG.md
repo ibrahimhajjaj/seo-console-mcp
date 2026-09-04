@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- `compare_snapshots` now diffs four things the snapshot documents already held
+  and the comparison threw away: top queries alongside top pages, the per-locale
+  name, subtitle, keyword, promotional-text and description lengths together
+  with the fields that crossed a character limit, Google Play traffic sources by
+  visitors, acquisitions and conversion rate, and the WordPress.org five-star
+  histogram. "Did changing the keyword field move anything" was answerable from
+  two files already on disk, and this is retroactive: any pair of snapshots ever
+  taken compares on the new fields, and a document from before a field existed
+  reports it as a null delta rather than as a change.
+
 ### Changed
 
 - `play_vitals` and `app_store_discovery` no longer return their raw rows unless

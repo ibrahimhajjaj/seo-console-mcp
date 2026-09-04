@@ -669,16 +669,56 @@ export const compareSnapshotsShape = {
   minImpressions: z.number().int().min(0).default(100).describe("Ignore page position moves below this many impressions on both sides"),
 };
 export const compareSnapshotsInput = z.object(compareSnapshotsShape);
+// A side that was never captured is null rather than zero, and the change is
+// null with it: subtracting from an absence is arithmetic on a number nobody
+// measured.
+const comparedDelta = z.object({ from: z.number().nullable(), to: z.number().nullable(), change: z.number().nullable() });
+const comparedHistogram = z.object({ 5: comparedDelta, 4: comparedDelta, 3: comparedDelta, 2: comparedDelta, 1: comparedDelta });
+const comparedMover = z.object({ positionFrom: z.number(), positionTo: z.number(), change: z.number(), impressions: z.number() });
 export const compareSnapshotsOutput = z.object({
   from: z.object({ takenAt: z.string(), window: snapshotWindow }),
   to: z.object({ takenAt: z.string(), window: snapshotWindow }),
   elapsedHours: z.number().nullable(),
   argumentsReversed: z.boolean(),
   minImpressions: z.number(),
-  properties: z.array(z.object({ siteUrl: z.string(), comparable: z.boolean() }).loose()),
-  apps: z.array(z.object({ app: z.string(), comparable: z.boolean() }).loose()),
-  packages: z.array(z.object({ package: z.string(), comparable: z.boolean() }).loose()),
-  slugs: z.array(z.object({ slug: z.string(), comparable: z.boolean() }).loose()),
+  properties: z.array(z.object({
+    siteUrl: z.string(),
+    comparable: z.boolean(),
+    // Absent on a property that could not be compared at all, which returns the
+    // pair name and nothing else.
+    queryMovers: z.array(comparedMover.extend({ query: z.string() })).optional(),
+    droppedOutOfTopQueries: z.array(z.string()).optional(),
+  }).loose()),
+  apps: z.array(z.object({
+    app: z.string(),
+    comparable: z.boolean(),
+    localesComparable: z.boolean(),
+    locales: z.array(z.object({
+      locale: z.string(),
+      name: comparedDelta,
+      subtitle: comparedDelta,
+      keywords: comparedDelta,
+      promotionalText: comparedDelta,
+      description: comparedDelta,
+    })),
+    overLimit: z.object({ added: z.array(z.string()), removed: z.array(z.string()) }),
+  }).loose()),
+  packages: z.array(z.object({
+    package: z.string(),
+    comparable: z.boolean(),
+    trafficSources: z.array(z.object({
+      source: z.string(),
+      visitors: comparedDelta,
+      acquisitions: comparedDelta,
+      conversionRate: comparedDelta,
+    })),
+    hasPlaySearchRows: z.object({ from: z.boolean().nullable(), to: z.boolean().nullable() }),
+  }).loose()),
+  slugs: z.array(z.object({
+    slug: z.string(),
+    comparable: z.boolean(),
+    ratingsHistogram: comparedHistogram,
+  }).loose()),
   surfacesWithErrors: z.array(z.string()),
   notes: z.array(z.string()),
 });

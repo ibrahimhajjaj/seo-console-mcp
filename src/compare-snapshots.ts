@@ -6,6 +6,17 @@ import { resolveSnapshotPath } from "./snapshot-paths.js";
 
 type CompareParams = z.output<typeof compareSnapshotsInput>;
 type SnapshotDocument = z.output<typeof snapshotDocument>;
+type SnapshotRow = NonNullable<SnapshotDocument["properties"][number]["topPages"]>["rows"][number];
+type LocaleLengths = { locale: string; name: number | null; subtitle: number | null; keywords: number | null; promotionalText: number | null; description: number | null };
+type TrafficSourceTotals = { source: string; visitors: number | null; acquisitions: number | null; conversionRate: number | null };
+
+// Every list here is a tail of a long-tailed distribution, so past the first
+// couple of dozen entries the reader is paying context for rows that carry no
+// weight. A caller that needs the rest reads the snapshot documents directly.
+const MAX_LIST_ENTRIES = 25;
+
+// wp.org reports the histogram five stars down to one.
+const STARS = ["5", "4", "3", "2", "1"] as const;
 
 export interface CompareDeps {
   readDocument?: (path: string) => string;
@@ -30,6 +41,10 @@ export async function compareSnapshots(params: CompareParams, deps: CompareDeps 
 
   const properties = pairBy(from.properties, to.properties, (entry) => String(entry.siteUrl)).map(([siteUrl, before, after]) => {
     if (!before?.totals || !after?.totals) return { siteUrl, comparable: false as const };
+    const pages = rowMovement(before.topPages?.rows ?? [], after.topPages?.rows ?? [], (row) => row.keys.page ?? "", params.minImpressions);
+    // Queries are captured on every property and were never read back, yet they
+    // are the side of the pair a ranking question is actually about.
+    const queries = rowMovement(before.topQueries?.rows ?? [], after.topQueries?.rows ?? [], (row) => row.keys.query ?? "", params.minImpressions);
     return {
       siteUrl,
       comparable: true as const,
@@ -40,26 +55,68 @@ export async function compareSnapshots(params: CompareParams, deps: CompareDeps 
       // must be comparable before a clicks delta means anything.
       daysWithData: delta(before.totals.daysWithData, after.totals.daysWithData),
       stillFillingIn: { from: before.totals.firstIncompleteDate ?? null, to: after.totals.firstIncompleteDate ?? null },
-      ...pageMovement(before, after, params.minImpressions),
+      movers: pages.movers.map(({ key, ...rest }) => ({ page: key, ...rest })),
+      droppedOutOfTopPages: pages.droppedOutOfTop,
+      queryMovers: queries.movers.map(({ key, ...rest }) => ({ query: key, ...rest })),
+      droppedOutOfTopQueries: queries.droppedOutOfTop,
       // The top-row lists are what truncate, not the date-dimension totals.
       truncatedEitherSide: Boolean(before.topPages?.truncated || after.topPages?.truncated || before.topQueries?.truncated || after.topQueries?.truncated),
     };
   });
 
-  const apps = pairBy(from.apps, to.apps, (entry) => String(entry.app)).map(([app, before, after]) => ({
-    app,
-    comparable: Boolean(before && after && !before.error && !after.error),
-    localeCount: delta(before?.localeCount, after?.localeCount),
-    versionString: { from: before?.versionString ?? null, to: after?.versionString ?? null },
-    ratings: compareRatings(before?.ratings, after?.ratings),
-    hasEditableRecord: { from: before?.hasEditableRecord ?? null, to: after?.hasEditableRecord ?? null },
-  }));
+  const apps = pairBy(from.apps, to.apps, (entry) => String(entry.app)).map(([app, before, after]) => {
+    const beforeLocales = localeLengths(before);
+    const afterLocales = localeLengths(after);
+    // A document taken before the lengths were captured, or one whose listing
+    // surface errored, holds no locales at all. Treating that as a listing
+    // emptied to zero characters would report an edit nobody made.
+    const localesComparable = beforeLocales !== null && afterLocales !== null;
+    const beforeOverLimit = stringList(before?.overLimit);
+    const afterOverLimit = stringList(after?.overLimit);
+    return {
+      app,
+      comparable: Boolean(before && after && !before.error && !after.error),
+      localeCount: delta(before?.localeCount, after?.localeCount),
+      versionString: { from: before?.versionString ?? null, to: after?.versionString ?? null },
+      ratings: compareRatings(before?.ratings, after?.ratings),
+      hasEditableRecord: { from: before?.hasEditableRecord ?? null, to: after?.hasEditableRecord ?? null },
+      localesComparable,
+      locales: localesComparable
+        ? pairBy(beforeLocales, afterLocales, (entry) => entry.locale).map(([locale, left, right]) => ({
+          locale,
+          name: delta(left?.name, right?.name),
+          subtitle: delta(left?.subtitle, right?.subtitle),
+          keywords: delta(left?.keywords, right?.keywords),
+          promotionalText: delta(left?.promotionalText, right?.promotionalText),
+          description: delta(left?.description, right?.description),
+        }))
+        : [],
+      overLimit: localesComparable
+        ? {
+          added: afterOverLimit.filter((entry) => !beforeOverLimit.includes(entry)),
+          removed: beforeOverLimit.filter((entry) => !afterOverLimit.includes(entry)),
+        }
+        : { added: [], removed: [] },
+    };
+  });
 
   const packages = pairBy(from.packages, to.packages, (entry) => String(entry.package)).map(([name, before, after]) => ({
     package: name,
     comparable: Boolean(before && after && !before.error && !after.error),
     activeDeviceInstalls: delta(before?.activeDeviceInstalls, after?.activeDeviceInstalls),
     lastDatePresent: { from: before?.lastDatePresent ?? null, to: after?.lastDatePresent ?? null },
+    trafficSources: pairBy(trafficSourceTotals(before), trafficSourceTotals(after), (entry) => entry.source)
+      .map(([source, left, right]) => ({
+        source,
+        visitors: delta(left?.visitors, right?.visitors),
+        acquisitions: delta(left?.acquisitions, right?.acquisitions),
+        conversionRate: delta(left?.conversionRate, right?.conversionRate),
+      }))
+      // A source that appears on one side only has no change to sort on, so it
+      // sorts as if it moved nothing rather than as if it moved the most.
+      .sort((left, right) => Math.abs(right.acquisitions.change ?? 0) - Math.abs(left.acquisitions.change ?? 0))
+      .slice(0, MAX_LIST_ENTRIES),
+    hasPlaySearchRows: { from: booleanOrNull(before?.hasPlaySearchRows), to: booleanOrNull(after?.hasPlaySearchRows) },
   }));
 
   const slugs = pairBy(from.slugs, to.slugs, (entry) => String(entry.slug)).map(([slug, before, after]) => ({
@@ -69,6 +126,9 @@ export async function compareSnapshots(params: CompareParams, deps: CompareDeps 
     downloaded: delta(before?.downloaded, after?.downloaded),
     rating: delta(before?.rating, after?.rating),
     numRatings: delta(before?.numRatings, after?.numRatings),
+    // The average holds still while one-star reviews replace five-star ones, so
+    // the histogram is the only place that movement is visible at all.
+    ratingsHistogram: histogramDeltas(before?.ratings, after?.ratings),
   }));
 
   // The CLI emits structuredContent alone, so every caveat that matters has to
@@ -150,35 +210,85 @@ function delta(before: number | null | undefined, after: number | null | undefin
 
 // A position move on a handful of impressions is noise, so the floor keeps the
 // list to rows that carry enough weight to mean something.
-function pageMovement(
-  before: SnapshotDocument["properties"][number],
-  after: SnapshotDocument["properties"][number],
+function rowMovement(
+  beforeRows: SnapshotRow[],
+  afterRows: SnapshotRow[],
+  keyOf: (row: SnapshotRow) => string,
   minImpressions: number,
 ) {
-  const beforeRows = new Map((before.topPages?.rows ?? []).map((row) => [pageKey(row), row]));
-  const afterKeys = new Set((after.topPages?.rows ?? []).map((row) => pageKey(row)));
-  const movers: Array<{ page: string; positionFrom: number; positionTo: number; change: number; impressions: number }> = [];
-  for (const row of after.topPages?.rows ?? []) {
-    const previous = beforeRows.get(pageKey(row));
+  const before = new Map(beforeRows.map((row) => [keyOf(row), row]));
+  const afterKeys = new Set(afterRows.map(keyOf));
+  const movers: Array<{ key: string; positionFrom: number; positionTo: number; change: number; impressions: number }> = [];
+  for (const row of afterRows) {
+    const previous = before.get(keyOf(row));
     if (!previous) continue;
     // Both sides must clear the floor. A position measured on two impressions
     // is not a ranking, so pairing it against a busy week invents a move.
     if (row.impressions < minImpressions || previous.impressions < minImpressions) continue;
     const change = round(row.position - previous.position);
     if (change === 0) continue;
-    movers.push({ page: pageKey(row), positionFrom: previous.position, positionTo: row.position, change, impressions: row.impressions });
+    movers.push({ key: keyOf(row), positionFrom: previous.position, positionTo: row.position, change, impressions: row.impressions });
   }
-  // A page that fell out of the captured top rows has not necessarily fallen in
+  // A row that fell out of the captured top list has not necessarily fallen in
   // the rankings; it left the window we recorded. Say so rather than omit it.
-  const droppedOutOfTopPages = [...beforeRows.keys()].filter((page) => !afterKeys.has(page));
   return {
-    movers: movers.sort((left, right) => Math.abs(right.change) - Math.abs(left.change)),
-    droppedOutOfTopPages,
+    movers: movers.sort((left, right) => Math.abs(right.change) - Math.abs(left.change)).slice(0, MAX_LIST_ENTRIES),
+    droppedOutOfTop: [...before.keys()].filter((key) => !afterKeys.has(key)).slice(0, MAX_LIST_ENTRIES),
   };
 }
 
-function pageKey(row: { keys: Record<string, string> }): string {
-  return row.keys.page ?? row.keys.query ?? "";
+// The app, package and slug entries are loose, so a snapshot taken before a
+// field existed still parses and reaches here as undefined rather than as a
+// wrong number. Everything read out of one is narrowed before it is compared.
+function localeLengths(entry: SnapshotDocument["apps"][number] | undefined): LocaleLengths[] | null {
+  const locales = entry?.locales;
+  if (!Array.isArray(locales)) return null;
+  return locales.filter(isRecord).filter((locale) => typeof locale.locale === "string").map((locale) => ({
+    locale: String(locale.locale),
+    name: numberOrNull(locale.name),
+    subtitle: numberOrNull(locale.subtitle),
+    keywords: numberOrNull(locale.keywords),
+    promotionalText: numberOrNull(locale.promotionalText),
+    description: numberOrNull(locale.description),
+  }));
+}
+
+function trafficSourceTotals(entry: SnapshotDocument["packages"][number] | undefined): TrafficSourceTotals[] {
+  const rows = entry?.trafficSources;
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .filter(isRecord)
+    // Search-term and campaign rows split one source across many entries, so a
+    // union keyed by source alone would pair rows measuring different things.
+    .filter((row) => typeof row.source === "string" && !row.searchTerm && !row.utmSource && !row.utmCampaign)
+    .map((row) => ({
+      source: String(row.source),
+      visitors: numberOrNull(row.visitors),
+      acquisitions: numberOrNull(row.acquisitions),
+      conversionRate: numberOrNull(row.conversionRate),
+    }));
+}
+
+function histogramDeltas(before: unknown, after: unknown) {
+  const left = isRecord(before) ? before : undefined;
+  const right = isRecord(after) ? after : undefined;
+  return Object.fromEntries(STARS.map((star) => [star, delta(numberOrNull(left?.[star]), numberOrNull(right?.[star]))]));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" ? value : null;
+}
+
+function booleanOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
 function compareRatings(
