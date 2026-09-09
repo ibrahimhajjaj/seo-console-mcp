@@ -40,6 +40,10 @@ const TRAFFIC_202310_COARSE =
   "2023-10-01,app.getpsst,Other,,,,120,40\r\n" +
   "2023-10-02,app.getpsst,Other,,,,80,20\r\n";
 
+// The total_ report family: a different report, not a rollup. It names its
+// acquisition column differently and carries no visitor count at all.
+const TRAFFIC_TOTALS_202310 = "Date,Package name,Traffic source,Total store acquisitions\r\n" + "2023-10-03,app.getpsst,Other,40\r\n" + "2023-10-07,app.getpsst,Other,73\r\n";
+
 function utf16le(text: string): Buffer {
   return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, "utf16le")]);
 }
@@ -299,6 +303,29 @@ describe("playStoreStats", () => {
 
     expect(notes).toMatch(/No traffic rows matched a Play Store search source\./);
     expect(notes).not.toMatch(/acquisitions to Play Store search/);
+  });
+
+  it("reads the total_ family's own acquisition column instead of reporting zero", async () => {
+    const { readReport } = reader({ "total_store_performance_app.getpsst_202310": TRAFFIC_TOTALS_202310 });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310", storePerformanceTotals: true }, { readReport });
+    const groups = traffic(result);
+
+    // Matching only the store-listing spelling made every row contribute zero.
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ source: "Other", acquisitions: 113 });
+  });
+
+  it("returns null, not zero, for a count the report family does not carry", async () => {
+    const { readReport } = reader({ "total_store_performance_app.getpsst_202310": TRAFFIC_TOTALS_202310 });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310", storePerformanceTotals: true }, { readReport });
+    const groups = traffic(result);
+    const notes = (result.structuredContent as { notes: string[] }).notes.join(" ");
+
+    expect(groups[0]?.visitors).toBeNull();
+    expect(groups[0]?.conversionRate).toBeNull();
+    expect(notes).toMatch(/carries no visitors column, so those come back as null rather than zero/);
   });
 
   it("accepts a bucket with or without the gs:// prefix", () => {

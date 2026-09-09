@@ -36,8 +36,8 @@ interface TrafficGroup {
   searchTerm: string | null;
   utmSource: string | null;
   utmCampaign: string | null;
-  visitors: number;
-  acquisitions: number;
+  visitors: number | null;
+  acquisitions: number | null;
   conversionRate: number | null;
 }
 
@@ -154,7 +154,13 @@ export async function playStoreStats(params: PlayStoreStatsParams, deps: { readR
     );
   }
 
-  const acquisitions = trafficSources.reduce((total, group) => total + group.acquisitions, 0);
+  const acquisitions = trafficSources.reduce((total, group) => total + (group.acquisitions ?? 0), 0);
+  const missingColumns = traffic?.missing ?? [];
+  if (missingColumns.length) {
+    notes.push(
+      `This store performance report carries no ${missingColumns.join(" or ")} column, so those come back as null rather than zero. The total_ family reports acquisitions only; the per-listing family is the one with visitors and a conversion rate.`,
+    );
+  }
   const coarseOnly = trafficSources.length > 0 && trafficSources.every((group) => COARSE_SOURCES.has(group.source));
   if (traffic && !hasPlaySearchRows) {
     notes.push(
@@ -331,10 +337,13 @@ function readDimensionReport(buffers: Buffer[], window: DateWindow | null): Dime
   };
 }
 
-function readTrafficSources(buffers: Buffer[], window: DateWindow | null): { groups: TrafficGroup[]; hasPlaySearchRows: boolean; lastDate: string | null } {
+function readTrafficSources(buffers: Buffer[], window: DateWindow | null): { groups: TrafficGroup[]; hasPlaySearchRows: boolean; lastDate: string | null; missing: string[] } {
   const groups = new Map<string, TrafficGroup>();
   let hasPlaySearchRows = false;
   let lastDate: string | null = null;
+  // Counts this report family does not carry. A column that is not in the file
+  // is not a zero, and the difference decides whether a caller can quote it.
+  const missing = new Set<string>();
   for (const buffer of buffers) {
     const rows = parseCsv(buffer);
     const header = rows[0]?.map((cell) => cell.trim()) ?? [];
@@ -344,7 +353,12 @@ function readTrafficSources(buffers: Buffer[], window: DateWindow | null): { gro
     const utmSourceIndex = header.indexOf("UTM source");
     const utmCampaignIndex = header.indexOf("UTM campaign");
     const visitorsIndex = firstIndex(header, ["Store listing visitors", "Visitors"]);
-    const acquisitionsIndex = firstIndex(header, ["Store listing acquisitions", "Acquisitions"]);
+    // The total_ report family names this column differently and carries no
+    // visitor count at all. Matching only the store-listing spelling meant every
+    // row of that family contributed zero, so the whole report read as empty.
+    const acquisitionsIndex = firstIndex(header, ["Store listing acquisitions", "Acquisitions", "Total store acquisitions"]);
+    if (visitorsIndex < 0) missing.add("visitors");
+    if (acquisitionsIndex < 0) missing.add("acquisitions");
 
     for (const row of rows.slice(1)) {
       if (sourceIndex < 0 || sourceIndex >= row.length) continue;
@@ -360,9 +374,9 @@ function readTrafficSources(buffers: Buffer[], window: DateWindow | null): { gro
       // A NUL separator cannot appear in report text, so it cannot merge two
       // distinct (source, term) pairs the way a literal delimiter could.
       const key = [source, searchTerm ?? "", utmSource ?? "", utmCampaign ?? ""].join("\u0000");
-      const group = groups.get(key) ?? { source, searchTerm, utmSource, utmCampaign, visitors: 0, acquisitions: 0, conversionRate: null };
-      group.visitors += visitorsIndex >= 0 ? (toNumber(row[visitorsIndex]) ?? 0) : 0;
-      group.acquisitions += acquisitionsIndex >= 0 ? (toNumber(row[acquisitionsIndex]) ?? 0) : 0;
+      const group = groups.get(key) ?? { source, searchTerm, utmSource, utmCampaign, visitors: null, acquisitions: null, conversionRate: null };
+      if (visitorsIndex >= 0) group.visitors = (group.visitors ?? 0) + (toNumber(row[visitorsIndex]) ?? 0);
+      if (acquisitionsIndex >= 0) group.acquisitions = (group.acquisitions ?? 0) + (toNumber(row[acquisitionsIndex]) ?? 0);
       groups.set(key, group);
     }
   }
@@ -370,12 +384,13 @@ function readTrafficSources(buffers: Buffer[], window: DateWindow | null): { gro
   // averaged across rows without weighting. Recomputing from the grouped totals
   // is the only rate that is true of the group.
   for (const group of groups.values()) {
-    group.conversionRate = group.visitors > 0 ? group.acquisitions / group.visitors : null;
+    group.conversionRate = group.visitors && group.acquisitions !== null ? group.acquisitions / group.visitors : null;
   }
   return {
-    groups: [...groups.values()].sort((left, right) => right.visitors - left.visitors),
+    groups: [...groups.values()].sort((left, right) => (right.visitors ?? 0) - (left.visitors ?? 0)),
     hasPlaySearchRows,
     lastDate,
+    missing: [...missing].sort(),
   };
 }
 

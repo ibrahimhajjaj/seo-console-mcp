@@ -579,7 +579,12 @@ export const playStoreStatsShape = {
     .default([])
     .describe("Extra report families to read. Missing files are normal: Google emits a report only when there is something to report"),
   storePerformanceDimension: z.enum(["traffic_source", "country"]).default("traffic_source").describe("Which store performance breakdown to read"),
-  storePerformanceTotals: z.boolean().default(false).describe("Read the cheaper total_ variant, which carries only headline acquisitions"),
+  storePerformanceTotals: z
+    .boolean()
+    .default(false)
+    .describe(
+      "Read the total_ variant instead. It is a different report, not a rollup of the same one: it carries acquisitions only, with no visitors and no conversion rate, and for some apps it covers far fewer dates and attributes every acquisition to a placeholder source",
+    ),
   ratingsDimension: z.enum(["country", "language", "device", "os_version", "carrier", "app_version"]).default("country").describe("Dimension for the ratings report"),
   crashesDimension: z.enum(["device", "os_version", "app_version"]).default("app_version").describe("Dimension for the crashes report"),
   startDate: isoDate.optional().describe("Window start in YYYY-MM-DD. With endDate, reads every month the window touches and filters rows to it"),
@@ -597,8 +602,8 @@ export const playStoreStatsOutput = z.object({
       searchTerm: z.string().nullable(),
       utmSource: z.string().nullable(),
       utmCampaign: z.string().nullable(),
-      visitors: z.number(),
-      acquisitions: z.number(),
+      visitors: z.number().nullable(),
+      acquisitions: z.number().nullable(),
       conversionRate: z.number().nullable(),
     }),
   ),

@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.10.0
+
+The total_ store performance report, read properly.
+
+### Fixed
+
+- `play_store_stats` with `storePerformanceTotals` returned zero acquisitions for
+  every source, whatever the file said. The two store performance report families
+  name their acquisition column differently, and only the per-listing spelling was
+  matched, so every row of the total_ family contributed nothing and six months of
+  real data came back as 306 acquisitions worth of zeros. The total_ column name is
+  recognised now.
+
+### Changed
+
+- `visitors` and `acquisitions` on a traffic source can be `null`. The total_
+  family carries no visitor column at all, and reporting an absent column as 0
+  is the same failure as reporting an unpopulated one as 0: it invents a
+  measurement. A count the report does not carry now comes back as null, with a
+  note naming which column is missing and which family carries it.
+- `storePerformanceTotals` says what it actually selects. It is a different
+  report, not a rollup of the same one: acquisitions only, no visitors, no
+  conversion rate, and for some apps far fewer dates with every acquisition
+  attributed to a placeholder source. For one real app the two families cover
+  the same six months and disagree, 406 against 306, because they are not
+  measuring the same thing.
+
 ## 0.9.1
 
 A zero the Play reports could not stand behind.

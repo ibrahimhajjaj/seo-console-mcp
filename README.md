@@ -726,7 +726,7 @@ Reads the Google Play bulk reports for an app and returns Active Device Installs
 | `installsDimension` | one of overview, country, language, device, os_version, carrier, app_version | no | `"overview"` | Which installs report to read. overview is undocumented by Google but present in real buckets; the others are the documented breakdowns |
 | `include` | list of one of ratings, crashes, reviews | no | `[]` | Extra report families to read. Missing files are normal: Google emits a report only when there is something to report |
 | `storePerformanceDimension` | one of traffic_source, country | no | `"traffic_source"` | Which store performance breakdown to read |
-| `storePerformanceTotals` | boolean | no | `false` | Read the cheaper total_ variant, which carries only headline acquisitions |
+| `storePerformanceTotals` | boolean | no | `false` | Read the total_ variant instead. It is a different report, not a rollup of the same one: it carries acquisitions only, with no visitors and no conversion rate, and for some apps it covers far fewer dates and attributes every acquisition to a placeholder source |
 | `ratingsDimension` | one of country, language, device, os_version, carrier, app_version | no | `"country"` | Dimension for the ratings report |
 | `crashesDimension` | one of device, os_version, app_version | no | `"app_version"` | Dimension for the crashes report |
 | `startDate` | string | no |  | Window start in YYYY-MM-DD. With endDate, reads every month the window touches and filters rows to it |
