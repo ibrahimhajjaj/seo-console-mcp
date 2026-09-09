@@ -608,6 +608,7 @@ export const playStoreStatsOutput = z.object({
   datesPresent: z.array(z.string()),
   installsLatest: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
   installsWindowTotals: z.record(z.string(), z.number()),
+  installsZeroThroughout: z.array(z.string()),
   installsDimension: z.string(),
   storePerformanceDimension: z.string(),
   storePerformanceTotals: z.boolean(),

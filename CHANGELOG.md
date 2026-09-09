@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `play_store_stats` no longer hands back a zero it cannot stand behind. Google
+  leaves some installs columns unpopulated per app, and an unpopulated column is
+  byte-identical to a measured zero: one real app reports Daily Device
+  Uninstalls as 0 on every row of a month in which Uninstall events is 123. Any
+  column that is zero on every row of a window with activity elsewhere is now
+  named in `installsZeroThroughout` and in a note, alongside the sibling column
+  that contradicts it, so it reads as unknown rather than as none.
+- The installs window totals were summing only columns whose name starts with
+  Daily, which silently dropped Install events, Update events and Uninstall
+  events, and those are the columns that survive when the device counters do
+  not. Every per-day column is summed now; the two running totals, Active Device
+  Installs and Total User Installs, are still reported only at their last date,
+  because adding a stock across days produces a number true of nothing.
+- A traffic file with acquisitions but no Play search row no longer reads as
+  proof that store search sent nobody. Play collapses sources it does not break
+  down into coarse buckets, so the tool now says the count is unattributed, and
+  says separately when every row is a placeholder source and the breakdown
+  carries no attribution at all.
+- The missing-bucket error says that a server reads its environment once at
+  startup, so a variable set after the server started needs a restart.
+
 ## 0.9.0
 
 Confident wrong answers turned into honest ones, and a snapshot series you can

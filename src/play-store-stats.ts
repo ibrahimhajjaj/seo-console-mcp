@@ -9,6 +9,25 @@ const OBJECT_TIMEOUT_MS = 30_000;
 const MAX_WINDOW_MONTHS = 24;
 // A ceiling for politeness towards the reporting bucket, not a throughput knob.
 const MONTH_CONCURRENCY = 3;
+// Running totals at a point in time rather than daily flows. Adding one up over
+// a window produces a number that is true of nothing. Every other numeric column
+// in the installs report is a per-day count and can be summed.
+const STOCK_COLUMNS = new Set(["Active Device Installs", "Total User Installs"]);
+// Values Play writes when it has nothing more specific to attribute a visit to.
+// A report made only of these has not measured no search traffic; it has
+// declined to break the traffic down at all.
+const COARSE_SOURCES = new Set(["Other", "Unknown", "Organic"]);
+// The column that proves a zero is a gap rather than a measurement. Device and
+// user counts measure the same events two ways, so one of them reading zero
+// while its partner does not is the report contradicting itself.
+const SIBLING_EVIDENCE: Record<string, string> = {
+  "Daily Device Uninstalls": "Uninstall events",
+  "Daily Device Installs": "Install events",
+  "Daily Device Upgrades": "Update events",
+  "Daily User Uninstalls": "Uninstall events",
+  "Daily User Installs": "Install events",
+  "Total User Installs": "Daily User Installs",
+};
 
 type PlayStoreStatsParams = z.output<typeof playStoreStatsInput>;
 
@@ -118,7 +137,35 @@ export async function playStoreStats(params: PlayStoreStatsParams, deps: { readR
   const activeDeviceInstalls = installs?.activeDeviceInstalls ?? null;
   const trafficSources = traffic?.groups ?? [];
   const hasPlaySearchRows = traffic?.hasPlaySearchRows ?? false;
-  if (traffic && !hasPlaySearchRows) notes.push("No traffic rows matched a Play Store search source.");
+
+  // A column that never moves off zero while the rest of the report is busy is
+  // not evidence of zero. Google leaves some columns unpopulated per app, and
+  // the file gives no way to tell that apart from a real measurement, so the
+  // only honest answer is to name the columns and refuse to vouch for them.
+  const zeroThroughout = installs?.zeroThroughout ?? [];
+  if (zeroThroughout.length) {
+    const paired = zeroThroughout.map((name) => {
+      const sibling = SIBLING_EVIDENCE[name];
+      const value = sibling ? installs?.windowTotals[sibling] : undefined;
+      return sibling && value ? `${name} (0 while ${sibling} is ${value})` : name;
+    });
+    notes.push(`Zero on every row of this window, which is what an unpopulated column also looks like, so read these as unknown rather than as zero: ${paired.join(", ")}.`);
+  }
+
+  const acquisitions = trafficSources.reduce((total, group) => total + group.acquisitions, 0);
+  const coarseOnly = trafficSources.length > 0 && trafficSources.every((group) => COARSE_SOURCES.has(group.source));
+  if (traffic && !hasPlaySearchRows) {
+    notes.push(
+      acquisitions > 0
+        ? `No traffic row attributes any of the ${acquisitions} acquisitions to Play Store search or explore. Play Console can still report organic acquisitions for the same period, because this file collapses sources it does not break down into coarse buckets, so this is not evidence that store search sent nobody.`
+        : "No traffic rows matched a Play Store search source.",
+    );
+  }
+  if (coarseOnly) {
+    notes.push(
+      `Every traffic row is a placeholder source (${[...new Set(trafficSources.map((group) => group.source))].join(", ")}), so the traffic source breakdown for this period carries no attribution and should not be quoted as one.`,
+    );
+  }
 
   const text = [
     `Play Store stats for ${params.packageName} (${window ? `${window.startDate} to ${window.endDate}` : month})`,
@@ -142,6 +189,7 @@ export async function playStoreStats(params: PlayStoreStatsParams, deps: { readR
       datesPresent: installs?.datesPresent ?? [],
       installsLatest: installs?.latest ?? null,
       installsWindowTotals: installs?.windowTotals ?? {},
+      installsZeroThroughout: zeroThroughout,
       installsDimension,
       storePerformanceDimension,
       storePerformanceTotals: Boolean(params.storePerformanceTotals),
@@ -157,11 +205,15 @@ interface InstallsReading {
   activeDeviceInstalls: number | null;
   lastDate: string | null;
   datesPresent: string[];
-  // Every column at the last date, and every daily flow column summed over the
+  // Every column at the last date, and every flow column summed over the
   // window. Keeping all of them means a column we do not use today is still
   // captured, rather than discarded because this adapter had no name for it.
   latest: Record<string, number | string> | null;
   windowTotals: Record<string, number>;
+  // Columns that read 0 on every single row while the rest of the report shows
+  // activity. Google leaves some columns unpopulated per app, and an
+  // unpopulated column is byte-identical to a measured zero.
+  zeroThroughout: string[];
 }
 
 function readInstalls(buffers: Buffer[], window: DateWindow | null): InstallsReading {
@@ -181,16 +233,28 @@ function readInstalls(buffers: Buffer[], window: DateWindow | null): InstallsRea
   dated.sort((left, right) => left.date.localeCompare(right.date));
 
   const windowTotals: Record<string, number> = {};
+  const seenNumeric = new Map<string, boolean>();
   for (const entry of dated) {
     entry.header.forEach((name, index) => {
-      // Only "Daily" columns are flows that can be summed; the rest are stock
-      // readings where a sum would be meaningless.
-      if (!name.startsWith("Daily")) return;
       const value = toNumber(entry.cells[index]);
       if (value === null) return;
+      // Whether any row of this column carried a non-zero value, tracked for
+      // every numeric column including the stocks, because that is what tells
+      // an unpopulated column apart from a genuinely quiet one.
+      seenNumeric.set(name, (seenNumeric.get(name) ?? false) || value !== 0);
+      if (STOCK_COLUMNS.has(name)) return;
       windowTotals[name] = (windowTotals[name] ?? 0) + value;
     });
   }
+  // Only worth saying when the report as a whole has activity. On a genuinely
+  // dead month every column is zero and none of them is suspicious.
+  const anyActivity = [...seenNumeric.values()].some(Boolean);
+  const zeroThroughout = anyActivity
+    ? [...seenNumeric]
+        .filter(([, nonZero]) => !nonZero)
+        .map(([name]) => name)
+        .sort()
+    : [];
 
   const last = dated[dated.length - 1];
   const latest = last ? Object.fromEntries(last.header.map((name, index) => [name, toNumber(last.cells[index]) ?? last.cells[index] ?? ""])) : null;
@@ -201,6 +265,7 @@ function readInstalls(buffers: Buffer[], window: DateWindow | null): InstallsRea
     datesPresent: [...new Set(dated.map((entry) => entry.date))],
     latest,
     windowTotals,
+    zeroThroughout,
   };
 }
 
@@ -376,7 +441,9 @@ export function normalizeBucket(value: string): string {
 function liveReader(): (objectPath: string) => Promise<Buffer | null> {
   const configured = process.env.SEO_MCP_PLAY_BUCKET;
   if (!configured) {
-    throw new Error("A Google Play bulk-reports bucket is required. Set SEO_MCP_PLAY_BUCKET to the reporting bucket (for example pubsite_prod_...).");
+    throw new Error(
+      "A Google Play bulk-reports bucket is required. Set SEO_MCP_PLAY_BUCKET to the reporting bucket (for example pubsite_prod_...). A server reads its environment once at startup, so if you have just set it, restart the MCP server before trying again.",
+    );
   }
   const bucket = normalizeBucket(configured);
   const credentials = process.env.SEO_MCP_PLAY_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS;

@@ -24,6 +24,22 @@ const TRAFFIC_202311_NO_SEARCH =
   "2023-11-01,app.getpsst,Other,,,,50,1\r\n" +
   "2023-11-02,app.getpsst,Third-party referrers,,,,10,0\r\n";
 
+// Shaped after a real overview file: device columns Google leaves at zero for
+// this app, alongside the user and event columns that did record the same
+// activity, plus a stock column and a genuinely quiet month.
+const OVERVIEW_UNPOPULATED =
+  "Date,Package Name,Daily Device Installs,Daily Device Uninstalls,Total User Installs,Daily User Installs,Daily User Uninstalls,Active Device Installs,Install events,Uninstall events\r\n" +
+  "2023-10-01,app.getpsst,12,0,0,11,7,100,13,6\r\n" +
+  "2023-10-02,app.getpsst,9,0,0,8,5,105,10,5\r\n";
+
+const OVERVIEW_QUIET =
+  "Date,Package Name,Daily Device Installs,Daily Device Uninstalls,Active Device Installs,Install events\r\n" + "2023-10-01,app.getpsst,0,0,0,0\r\n" + "2023-10-02,app.getpsst,0,0,0,0\r\n";
+
+const TRAFFIC_202310_COARSE =
+  "Date,Package Name,Traffic source,Search term,UTM source,UTM campaign,Store listing visitors,Store listing acquisitions\r\n" +
+  "2023-10-01,app.getpsst,Other,,,,120,40\r\n" +
+  "2023-10-02,app.getpsst,Other,,,,80,20\r\n";
+
 function utf16le(text: string): Buffer {
   return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, "utf16le")]);
 }
@@ -95,7 +111,7 @@ describe("playStoreStats", () => {
     expect(groups[1]).toMatchObject({ utmCampaign: "retarget", visitors: 10, conversionRate: 0.5 });
   });
 
-  it("flags when no Play search rows are present", async () => {
+  it("flags when no Play search rows are present, and says an acquisition count is not attribution", async () => {
     const { readReport } = reader({
       "installs_app.getpsst_202311": "Date,Active Device Installs\r\n2023-11-01,115\r\n",
       "store_performance_app.getpsst_202311": TRAFFIC_202311_NO_SEARCH,
@@ -104,7 +120,9 @@ describe("playStoreStats", () => {
     const result = await playStoreStats({ packageName: "app.getpsst", month: "202311" }, { readReport });
 
     expect(result.structuredContent).toMatchObject({ hasPlaySearchRows: false });
-    expect(result.content[0]?.text).toContain("No traffic rows matched");
+    // This fixture has an acquisition, so the absence of a search row is a gap
+    // in attribution rather than a measurement of no search traffic.
+    expect(result.content[0]?.text).toContain("No traffic row attributes any of the 1 acquisitions");
   });
 
   it("returns null installs, not zero, when only the traffic report exists", async () => {
@@ -218,6 +236,64 @@ describe("playStoreStats", () => {
     const result = await playStoreStats({ packageName: "app.getpsst", startDate: "2023-10-01", endDate: "2023-10-07" }, { readReport });
 
     expect((result.structuredContent as { notes: string[] }).notes.join(" ")).toMatch(/covers 7 days but only 2 of them have install rows/);
+  });
+
+  it("sums every per-day flow column, including the ones not named Daily", async () => {
+    const { readReport } = reader({ "installs_app.getpsst_202310": OVERVIEW_UNPOPULATED });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310" }, { readReport });
+    const totals = (result.structuredContent as { installsWindowTotals: Record<string, number> }).installsWindowTotals;
+
+    expect(totals["Install events"]).toBe(23);
+    expect(totals["Uninstall events"]).toBe(11);
+    expect(totals["Daily User Uninstalls"]).toBe(12);
+    // A running total is true of a moment, so adding it across days would
+    // report 205 devices where there are 105.
+    expect(totals["Active Device Installs"]).toBeUndefined();
+    expect(totals["Total User Installs"]).toBeUndefined();
+  });
+
+  it("names a column that is zero on every row rather than letting it read as a measurement", async () => {
+    const { readReport } = reader({ "installs_app.getpsst_202310": OVERVIEW_UNPOPULATED });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310" }, { readReport });
+    const content = result.structuredContent as { installsZeroThroughout: string[]; notes: string[] };
+
+    expect(content.installsZeroThroughout).toEqual(["Daily Device Uninstalls", "Total User Installs"]);
+    // The sibling is the evidence: the same events counted another way.
+    expect(content.notes.join(" ")).toMatch(/Daily Device Uninstalls \(0 while Uninstall events is 11\)/);
+    expect(content.notes.join(" ")).toMatch(/unknown rather than as zero/);
+  });
+
+  it("says nothing about zero columns when the whole month is zero", async () => {
+    const { readReport } = reader({ "installs_app.getpsst_202310": OVERVIEW_QUIET });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310" }, { readReport });
+    const content = result.structuredContent as { installsZeroThroughout: string[]; notes: string[] };
+
+    expect(content.installsZeroThroughout).toEqual([]);
+    expect(content.notes.join(" ")).not.toMatch(/unknown rather than as zero/);
+  });
+
+  it("refuses to let an unattributed traffic file read as proof that search sent nobody", async () => {
+    const { readReport } = reader({ "store_performance_app.getpsst_202310": TRAFFIC_202310_COARSE });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310" }, { readReport });
+    const notes = (result.structuredContent as { notes: string[] }).notes.join(" ");
+
+    expect(notes).toMatch(/No traffic row attributes any of the 60 acquisitions to Play Store search or explore/);
+    expect(notes).toMatch(/not evidence that store search sent nobody/);
+    expect(notes).toMatch(/Every traffic row is a placeholder source \(Other\)/);
+  });
+
+  it("keeps the plain no-search note when there were no acquisitions to explain", async () => {
+    const { readReport } = reader({ "store_performance_app.getpsst_202311": TRAFFIC_202311_NO_SEARCH.replace(/,1\r\n/, ",0\r\n") });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202311" }, { readReport });
+    const notes = (result.structuredContent as { notes: string[] }).notes.join(" ");
+
+    expect(notes).toMatch(/No traffic rows matched a Play Store search source\./);
+    expect(notes).not.toMatch(/acquisitions to Play Store search/);
   });
 
   it("accepts a bucket with or without the gs:// prefix", () => {
