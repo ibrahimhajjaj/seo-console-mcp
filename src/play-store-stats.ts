@@ -149,7 +149,9 @@ export async function playStoreStats(params: PlayStoreStatsParams, deps: { readR
       const value = sibling ? installs?.windowTotals[sibling] : undefined;
       return sibling && value ? `${name} (0 while ${sibling} is ${value})` : name;
     });
-    notes.push(`Zero on every row of this window, which is what an unpopulated column also looks like, so read these as unknown rather than as zero: ${paired.join(", ")}.`);
+    notes.push(
+      `Left out of the window totals because they are zero on every row, which is also what a column Google does not populate for this app looks like: ${paired.join(", ")}. Their raw values are still in installsLatest for the last date; treat them as unknown, not as none.`,
+    );
   }
 
   const acquisitions = trafficSources.reduce((total, group) => total + group.acquisitions, 0);
@@ -255,6 +257,10 @@ function readInstalls(buffers: Buffer[], window: DateWindow | null): InstallsRea
         .map(([name]) => name)
         .sort()
     : [];
+  // Taken out of the totals rather than left there with a warning beside them.
+  // A note is easy to skim and a zero is easy to quote, and a caller reading
+  // this map is asking what the window measured. It did not measure these.
+  for (const name of zeroThroughout) delete windowTotals[name];
 
   const last = dated[dated.length - 1];
   const latest = last ? Object.fromEntries(last.header.map((name, index) => [name, toNumber(last.cells[index]) ?? last.cells[index] ?? ""])) : null;

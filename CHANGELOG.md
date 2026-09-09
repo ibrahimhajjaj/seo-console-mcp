@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.9.1
+
+A zero the Play reports could not stand behind.
 
 ### Fixed
 
@@ -9,8 +11,12 @@
   byte-identical to a measured zero: one real app reports Daily Device
   Uninstalls as 0 on every row of a month in which Uninstall events is 123. Any
   column that is zero on every row of a window with activity elsewhere is now
-  named in `installsZeroThroughout` and in a note, alongside the sibling column
-  that contradicts it, so it reads as unknown rather than as none.
+  left out of `installsWindowTotals` entirely, named in `installsZeroThroughout`,
+  and called out in a note beside the sibling column that contradicts it. Taking
+  it out of the totals rather than annotating it there is deliberate: a note is
+  easy to skim and a zero is easy to quote. The raw value is still in
+  `installsLatest` for the last date, so nothing is lost, only moved out of the
+  place that reads as a measurement.
 - The installs window totals were summing only columns whose name starts with
   Daily, which silently dropped Install events, Update events and Uninstall
   events, and those are the columns that survive when the device counters do

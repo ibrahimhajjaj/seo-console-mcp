@@ -262,7 +262,12 @@ describe("playStoreStats", () => {
     expect(content.installsZeroThroughout).toEqual(["Daily Device Uninstalls", "Total User Installs"]);
     // The sibling is the evidence: the same events counted another way.
     expect(content.notes.join(" ")).toMatch(/Daily Device Uninstalls \(0 while Uninstall events is 11\)/);
-    expect(content.notes.join(" ")).toMatch(/unknown rather than as zero/);
+    expect(content.notes.join(" ")).toMatch(/treat them as unknown, not as none/);
+    // The number is gone from the place a caller reads totals, so it cannot be
+    // quoted as a measurement by someone who skipped the note.
+    const totals = (result.structuredContent as { installsWindowTotals: Record<string, number> }).installsWindowTotals;
+    expect(totals["Daily Device Uninstalls"]).toBeUndefined();
+    expect(totals["Daily Device Installs"]).toBe(21);
   });
 
   it("says nothing about zero columns when the whole month is zero", async () => {
@@ -272,7 +277,7 @@ describe("playStoreStats", () => {
     const content = result.structuredContent as { installsZeroThroughout: string[]; notes: string[] };
 
     expect(content.installsZeroThroughout).toEqual([]);
-    expect(content.notes.join(" ")).not.toMatch(/unknown rather than as zero/);
+    expect(content.notes.join(" ")).not.toMatch(/treat them as unknown/);
   });
 
   it("refuses to let an unattributed traffic file read as proof that search sent nobody", async () => {
