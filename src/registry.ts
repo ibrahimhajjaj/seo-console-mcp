@@ -82,6 +82,8 @@ import {
   submitSitemapShape,
   wporgPluginOutput,
   wporgPluginShape,
+  serverVersionOutput,
+  serverVersionShape,
 } from "./schemas.js";
 import {
   compareSearchPeriods,
@@ -122,6 +124,7 @@ import {
   adsAdCopyTool,
   adsAssetsTool,
 } from "./google-ads-tools.js";
+import { serverVersion } from "./server-version.js";
 import { listSnapshotsTool } from "./list-snapshots.js";
 import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
@@ -347,6 +350,14 @@ export const toolDefinitions: ToolDefinition[] = [
       const result = await auditSite(params.sitemapUrl, params);
       return { content: [{ type: "text", text: formatSiteAudit(result) }], structuredContent: { ...result } };
     },
+  }),
+  defineTool({
+    name: "server_version",
+    description:
+      "Report which build of this server is answering, where it is running from, and whether it came out of an npx cache. Four values look like this one and are not: what npm calls latest, what the version range resolves to, what the plugin manifest declares, and what is actually running. Checking the command-line tool is not a substitute, since it is a separate process resolved separately. No credentials needed; read-only",
+    inputShape: serverVersionShape,
+    outputSchema: serverVersionOutput,
+    run: (_ctx, params) => serverVersion(params),
   }),
   defineTool({
     name: "wporg_plugin",

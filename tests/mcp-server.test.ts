@@ -87,6 +87,7 @@ describe("MCP server tool registration", () => {
       "pagespeed",
       "seo_audit",
       "audit_site",
+      "server_version",
       "wporg_plugin",
       "play_store_stats",
       "app_store_listing",

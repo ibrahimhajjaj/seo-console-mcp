@@ -692,6 +692,20 @@ Fetches a sitemap and audits up to 50 of its page URLs with bounded concurrency.
 
 `maxPages` defaults to 20 and `concurrency` defaults to 5. Their maximum values are 50 and 10, respectively.
 
+### `server_version`
+
+Which build of the server is answering, where it is running from, and whether it came out of an npx cache. No credentials.
+
+<!-- params:server_version -->
+
+This tool takes no parameters.
+
+<!-- /params:server_version -->
+
+**Four values look like this one and are not**: what npm calls latest, what the version range resolves to, what the plugin manifest declares, and what is actually running. The first three are all readable and none of them answers the question. Checking the command-line tool is not a substitute either, since it is a separate process resolved separately and can be a different build on the same machine.
+
+The install path is the tell. `npx` reuses a cached build without re-resolving the range and without erroring, so a server can trail the published release while every other signal reads current; a path under `_npx` is what shows it.
+
 ### `wporg_plugin`
 
 Looks up a WordPress.org plugin by slug and returns active installs, downloads, ratings, support threads, and version dates. It uses the public wp.org API and needs no credentials or API key. A plugin published within the last few days is reported with `possiblyLagging: true` when a field looks empty, because the wp.org API under-reports fresh plugins; the field may be live on the page already.
