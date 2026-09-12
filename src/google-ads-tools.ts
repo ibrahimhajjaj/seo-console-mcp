@@ -11,9 +11,11 @@ import type {
   adsNegativesInput,
   adsNegativesUpdateInput,
   adsUpdateBatchInput,
+  adsAdCopyInput,
 } from "./schemas.js";
 import { adsNegativesUpdate } from "./google-ads-negatives.js";
 import { adsUpdateBatch } from "./google-ads-batch.js";
+import { adsAdCopy } from "./google-ads-copy.js";
 import { createAdsClient, resolveAdsCredentials, quoteGaql, duringWindow, dateRange, money, toMicros, type AdsClient, type AdsDeps } from "./google-ads.js";
 
 type CampaignsParams = z.output<typeof adsCampaignsInput>;
@@ -26,6 +28,7 @@ type ChangesParams = z.output<typeof adsChangesInput>;
 type NegativesParams = z.output<typeof adsNegativesInput>;
 type NegativesUpdateParams = z.output<typeof adsNegativesUpdateInput>;
 type UpdateBatchParams = z.output<typeof adsUpdateBatchInput>;
+type AdCopyParams = z.output<typeof adsAdCopyInput>;
 
 // Deliberately low, because they are a fraction of the account they guard rather
 // than a round number. A ceiling that is large next to the budget it protects
@@ -483,4 +486,8 @@ export async function adsNegativesUpdateTool(params: NegativesUpdateParams, deps
 
 export async function adsUpdateBatchTool(params: UpdateBatchParams, deps: AdsDeps = {}): Promise<ToolResult> {
   return adsUpdateBatch(client(deps), params);
+}
+
+export async function adsAdCopyTool(params: AdCopyParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  return adsAdCopy(client(deps), params);
 }

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `ads_ad_copy` reads what an ad actually says. `ads_ads` returns the id,
+  strength, approval and status but not the text, so every creative question
+  ended in the browser: what does this ad say, why is its strength Poor, is that
+  headline duplicated across two ads, did the copy that was supposed to ship
+  actually ship. This returns every headline and description with its pinning
+  and Google's performance label, the display path, the final URLs, and the
+  policy topics behind a limited or disapproved status. The approval word says
+  something is wrong; the topic says what. It counts the copy against what
+  Google wants, names text repeated inside one ad, and lists headline text used
+  by more than one ad, since two ads in an ad group sharing their headlines are
+  not two variants being tested against each other. Assets such as sitelinks and
+  promotions are not read, and that is said in the output rather than left to be
+  inferred from an ad that looks thin.
+
 ## 0.11.0
 
 Google Ads: seven reads and three guarded writes.

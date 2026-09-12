@@ -26,6 +26,8 @@ import {
   adsUpdateShape,
   adsUpdateBatchOutput,
   adsUpdateBatchShape,
+  adsAdCopyOutput,
+  adsAdCopyShape,
   adsSearchTermsOutput,
   adsSearchTermsShape,
   adsChangesOutput,
@@ -104,7 +106,7 @@ import { appStoreDiscovery } from "./app-store-discovery.js";
 import { appStoreSales } from "./app-store-sales.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
-import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate, adsSearchTerms, adsChanges, adsNegatives, adsNegativesUpdateTool, adsUpdateBatchTool } from "./google-ads-tools.js";
+import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate, adsSearchTerms, adsChanges, adsNegatives, adsNegativesUpdateTool, adsUpdateBatchTool, adsAdCopyTool } from "./google-ads-tools.js";
 import { listSnapshotsTool } from "./list-snapshots.js";
 import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
@@ -424,6 +426,14 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: adsAdsShape,
     outputSchema: adsAdsOutput,
     run: (_ctx, params) => adsAds(params),
+  }),
+  defineTool({
+    name: "ads_ad_copy",
+    description:
+      "Read what a Google Ads ad actually says: every headline and description with its pinning and Google's performance label, the display path, the final URLs, and the policy topics behind a limited or disapproved status rather than only the status word. Also reports headline text shared by more than one ad, since two ads in an ad group with the same headlines are not testing anything against each other. Assets such as sitelinks and promotions are not read here; read-only",
+    inputShape: adsAdCopyShape,
+    outputSchema: adsAdCopyOutput,
+    run: (_ctx, params) => adsAdCopyTool(params),
   }),
   defineTool({
     name: "ads_query",

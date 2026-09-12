@@ -1054,6 +1054,33 @@ Every ad with its ad strength, policy approval status, serving status and metric
 
 <!-- /params:ads_ads -->
 
+### `ads_ad_copy`
+
+Reads what an ad actually says. `ads_ads` gives the id, strength, approval and status; this gives the text, which is the thing every creative question needs and the reason that question otherwise ends in the browser.
+
+```json
+{ "adGroup": "brand-exact" }
+```
+
+<!-- params:ads_ad_copy -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `adGroup` | string | no |  | Limit to one ad group by name. Omitted, every ad in the account is read, which is what answers whether a headline is repeated across ad groups |
+| `adId` | string | no |  | Limit to one ad by its numeric id, for reading back the copy that was supposed to ship |
+| `includeRemoved` | boolean | no | `false` | Include removed ads. Off by default: a removed ad's copy is history, and it crowds out the ads that are serving |
+
+<!-- /params:ads_ad_copy -->
+
+Every headline and description comes back with its pinning and Google's own performance label, plus the display path, the final URLs, and the policy topics behind a limited or disapproved status. **The approval word says something is wrong; the topic says what.** `APPROVED_LIMITED` beside `TRADEMARKS_IN_AD_TEXT` is a fix; `APPROVED_LIMITED` on its own is a trip to the console.
+
+It also answers the two questions a per-ad view cannot:
+
+- **Why is strength Poor.** The count against what Google wants, `3 of 15 headlines, 2 of 4 descriptions`, and how many assets are pinned. Pinning is usually deliberate, usually invisible in the strength word, and a common reason strength reads lower than the copy deserves. Text repeated inside one ad is named too, since a repeated asset takes a slot without adding a variation.
+- **Is a headline duplicated across ads.** Headline text appearing in more than one ad is listed with the ads and ad groups carrying it. Two ads in one ad group that share their headlines are not two variants being tested against each other, and nothing in the console says so at a glance.
+
+Removed ads are excluded unless `includeRemoved` is set, and only a responsive search ad carries text in these fields: any other ad type is listed with its type and no copy, rather than as an ad with nothing to say. Assets attached to the ad, campaign or account, such as sitelinks, promotions and prices, are **not** read here, so an ad that looks thin in this output may still be serving with assets alongside it.
+
 ### `ads_query`
 
 An arbitrary GAQL `SELECT` for a question the shaped reads do not cover. GAQL has no statement other than `SELECT`, so this cannot change anything, and a query that does not start with `SELECT` is refused.

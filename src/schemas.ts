@@ -741,6 +741,63 @@ export const adsAdsOutput = z.object({
   notes: z.array(z.string()),
 });
 
+export const adsAdCopyShape = {
+  adGroup: z
+    .string()
+    .trim()
+    .min(1)
+    .max(400)
+    .optional()
+    .describe("Limit to one ad group by name. Omitted, every ad in the account is read, which is what answers whether a headline is repeated across ad groups"),
+  adId: z.string().trim().regex(/^\d+$/, "adId is the numeric ad id").max(40).optional().describe("Limit to one ad by its numeric id, for reading back the copy that was supposed to ship"),
+  includeRemoved: z.boolean().default(false).describe("Include removed ads. Off by default: a removed ad's copy is history, and it crowds out the ads that are serving"),
+};
+export const adsAdCopyInput = z.object(adsAdCopyShape);
+
+const adTextAsset = z.object({
+  text: z.string(),
+  pinned: z
+    .string()
+    .nullable()
+    .describe(
+      "The position this asset is pinned to, or null when Google is free to place it. Pinning cuts the combinations Google can build, which is a common reason strength is rated lower than the copy deserves",
+    ),
+  performance: z.string().nullable().describe("Google's own label for the asset, when it has served enough to have one"),
+});
+
+export const adsAdCopyOutput = z.object({
+  rowCount: z.number(),
+  ads: z.array(
+    z.object({
+      adId: z.string(),
+      adGroup: z.string(),
+      campaign: z.string(),
+      type: z
+        .string()
+        .describe(
+          "The ad type as Google names it. Only a responsive search ad carries headlines and descriptions in this shape; anything else is reported with its type and empty copy rather than as an ad with no text",
+        ),
+      status: z.string(),
+      adStrength: z.string(),
+      approvalStatus: z.string(),
+      headlines: z.array(adTextAsset),
+      descriptions: z.array(adTextAsset),
+      paths: z.array(z.string()).describe("The display-URL path segments, which are part of what the reader sees and are not in the headlines"),
+      finalUrls: z.array(z.string()),
+      policyTopics: z
+        .array(z.object({ topic: z.string(), type: z.string() }))
+        .describe("Why approval is limited or refused, named. The approval status word alone says something is wrong without saying what"),
+      observations: z
+        .array(z.string())
+        .describe("What is true of this ad's copy that bears on its strength: how many headlines and descriptions it has, how many are pinned, and text repeated inside the ad"),
+    }),
+  ),
+  duplicateHeadlines: z
+    .array(z.object({ text: z.string(), ads: z.array(z.string()), adGroups: z.array(z.string()) }))
+    .describe("Headline text appearing in more than one ad, with the ads carrying it. Two ads in one ad group sharing headlines test nothing against each other"),
+  notes: z.array(z.string()),
+});
+
 export const adsQueryShape = {
   query: z.string().trim().min(1).max(4000).describe("A GAQL SELECT statement. GAQL has no other statement, so this cannot change anything"),
 };
