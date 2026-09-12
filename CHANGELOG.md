@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.16.0
+
+### Added
+
+- Every CLI run names its own version on stderr, `seo-console-mcp 0.15.1 running
+  ads_keywords`, before the tool runs so it is there when the tool throws as
+  well as when it returns. stdout stays parseable and an `--out` file stays pure
+  JSON. A result does not otherwise say which binary produced it, and reading
+  one from a stale version looks exactly like reading one from a current one.
+  Two real cases this week: an install that failed with `ETARGET` left the
+  previous version in place and the CLI ran happily against it, reporting a
+  keyword count with no status field that read as a regression; and after a
+  successful publish, `npx` reused its cache and went on running the previous
+  release while npm, the version range and every other signal said current. What
+  is running, what the range resolves to, and what npm calls latest are three
+  values that usually agree and independently do not have to.
+
 ## 0.15.1
 
 ### Fixed
