@@ -17,12 +17,27 @@ describe("plugin manifest", () => {
     expect(plugin.version).toBe(pkg.version);
   });
 
-  it("asks npm for a range that actually includes this version", () => {
-    // The range this replaced was ^0.10.0, which sounds like "0.10 and up" and
-    // is not: a caret on a 0.x version pins the minor, so ^0.10.0 stops at
-    // 0.11.0 and would never have installed 0.13.1. Bumping the version field
-    // alone would have left every ads tool unreachable and looked fixed.
-    expect(plugin.mcpServers?.["seo-console"]?.args).toEqual(["-y", `seo-console-mcp@>=${pkg.version} <1.0.0`]);
+  it("asks npm for an upper bound only, never a floor at the version being released", () => {
+    // Two bugs live here, in opposite directions, and only the second is
+    // obvious.
+    //
+    // The first range was ^0.10.0, which sounds like "0.10 and up" and is not:
+    // a caret on a 0.x version pins the minor, so it stopped below 0.11.0 and
+    // silently installed an old build for months.
+    //
+    // Replacing it with >=<current> <1.0.0 broke it the other way. The manifest
+    // is committed before the package is published, so between those two
+    // moments the range names a version npm does not have, npx fails with
+    // ETARGET, and the whole server fails to start. A repo-only test cannot see
+    // that: it compares the repo to itself and passes, while the registry, a
+    // separate system, has not caught up.
+    //
+    // A floor never earned its place anyway. npm resolves a range to the
+    // HIGHEST matching version, so <1.0.0 installs exactly what >=<current>
+    // <1.0.0 would whenever that version exists, and still installs a working
+    // one when it does not. The upper bound is the only part doing work: it
+    // keeps a future 1.0 with breaking changes from being picked up silently.
+    expect(plugin.mcpServers?.["seo-console"]?.args).toEqual(["-y", `${pkg.name}@<1.0.0`]);
   });
 
   it("installs the package this repo publishes", () => {
