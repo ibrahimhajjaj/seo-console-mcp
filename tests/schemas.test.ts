@@ -23,6 +23,16 @@ describe("normalizeSiteUrl", () => {
   });
 
   it.each(["example.com", "ftp://example.com", "sc-domain:https://example.com", "javascript:alert(1)"])("rejects invalid property %s", (value) => expect(() => normalizeSiteUrl(value)).toThrow());
+
+  it("refuses a property carrying embedded credentials", () => {
+    // The other URL parameter in this package already refused these and this one
+    // did not, so a password pasted into a property was preserved, echoed back
+    // in the result and written into snapshot files on disk. Search Console has
+    // no property of that form either, so it was never going to match anything.
+    expect(() => normalizeSiteUrl("https://user:secret@example.com/")).toThrow(/must not contain embedded credentials/);
+    expect(() => normalizeSiteUrl("https://user@example.com/")).toThrow(/must not contain embedded credentials/);
+    expect(normalizeSiteUrl("https://example.com/")).toBe("https://example.com/");
+  });
 });
 
 describe("tool input schemas", () => {
