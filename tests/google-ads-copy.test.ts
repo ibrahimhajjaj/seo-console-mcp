@@ -3,12 +3,14 @@ import { adsAdCopy } from "../src/google-ads-copy.js";
 import { adsAdCopyInput, adsAdCopyOutput } from "../src/schemas.js";
 import type { AdsClient } from "../src/google-ads.js";
 
-function fakeApi(handler: (query: string) => unknown[]): { api: AdsClient; queries: string[] } {
+function fakeApi(handler: (query: string) => unknown[], adGroupExists = true): { api: AdsClient; queries: string[] } {
   const queries: string[] = [];
   const api: AdsClient = {
     customerId: "1234567890",
     gaql: async (query: string) => {
       queries.push(query);
+      // A named ad group is resolved first, so that lookup answers by default.
+      if (/FROM ad_group\s+WHERE/.test(query)) return adGroupExists ? [{ adGroup: { name: "brand-exact" } }] : [];
       return handler(query) as Array<Record<string, unknown>>;
     },
     mutate: vi.fn() as unknown as AdsClient["mutate"],
@@ -118,6 +120,19 @@ describe("adsAdCopy", () => {
     expect(content.ads[0]?.observations[0]).toContain("its text is not in the responsive search ad fields");
   });
 
+  it("refuses an ad group name that matches nothing instead of answering it empty", async () => {
+    // Same shape as the ads_assets bug, in the sibling tool written beside it.
+    // The empty result came with a note suggesting a plausible wrong reason.
+    const { api } = fakeApi(() => [], false);
+    await expect(adsAdCopy(api, parse({ adGroup: "typo-here" }))).rejects.toThrow(/No ad group named "typo-here" exists in this account/);
+  });
+
+  it("does not resolve an ad group when none was named", async () => {
+    const { api, queries } = fakeApi(() => []);
+    await adsAdCopy(api, parse());
+    expect(queries.some((query) => /FROM ad_group\s+WHERE/.test(query))).toBe(false);
+  });
+
   it("excludes removed ads by default and filters by ad group and id when asked", async () => {
     const { api, queries } = fakeApi(() => []);
     await adsAdCopy(api, parse());
@@ -125,15 +140,17 @@ describe("adsAdCopy", () => {
 
     const filtered = fakeApi(() => []);
     await adsAdCopy(filtered.api, parse({ adGroup: "brand-exact", adId: "111", includeRemoved: true }));
-    expect(filtered.queries[0]).toContain("ad_group.name = 'brand-exact'");
-    expect(filtered.queries[0]).toContain("ad_group_ad.ad.id = 111");
-    expect(filtered.queries[0]).not.toContain("!= 'REMOVED'");
+    // queries[0] is now the ad group existence check, so read the copy query.
+    const copyQuery = filtered.queries.find((query) => query.includes("FROM ad_group_ad")) ?? "";
+    expect(copyQuery).toContain("ad_group.name = 'brand-exact'");
+    expect(copyQuery).toContain("ad_group_ad.ad.id = 111");
+    expect(copyQuery).not.toContain("!= 'REMOVED'");
   });
 
   it("escapes an ad group name carrying an apostrophe instead of matching the wrong thing", async () => {
     const { api, queries } = fakeApi(() => []);
     await adsAdCopy(api, parse({ adGroup: "ibrahim's group" }));
-    expect(queries[0]).toContain("ad_group.name = 'ibrahim\\'s group'");
+    expect(queries.join(" ")).toContain("ad_group.name = 'ibrahim\\'s group'");
   });
 
   it("says why an empty result can be empty", async () => {

@@ -63,6 +63,20 @@ function observe(type: string, headlines: TextAsset[], descriptions: TextAsset[]
 }
 
 export async function adsAdCopy(api: AdsClient, params: Params): Promise<ToolResult> {
+  // The same rail ads_assets carries, for the same reason. Without it a typo in
+  // an ad group name returns zero ads beside a note offering a plausible wrong
+  // explanation ("an ad group whose ads were all replaced reads as empty"), and
+  // the reader concludes the ad group has no ads rather than that it does not
+  // exist. An absence has to be told apart from a name that matches nothing.
+  if (params.adGroup) {
+    const found = await api.gaql(`SELECT ad_group.name FROM ad_group WHERE ad_group.name = ${quoteGaql(params.adGroup)}`);
+    if (!found.length) {
+      throw new Error(
+        `No ad group named "${params.adGroup}" exists in this account, so nothing was read. This is not the same as that ad group having no ads; check the name against ads_keywords or ads_ads.`,
+      );
+    }
+  }
+
   const conditions: string[] = [];
   if (!params.includeRemoved) conditions.push("ad_group_ad.status != 'REMOVED'");
   if (params.adGroup) conditions.push(`ad_group.name = ${quoteGaql(params.adGroup)}`);
