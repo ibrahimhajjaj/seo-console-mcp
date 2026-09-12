@@ -1,8 +1,8 @@
 {
   "name": "seo-console",
   "displayName": "SEO Console",
-  "version": "0.9.0",
-  "description": "Turn Claude Code into a senior product-marketing manager across every place a product gets discovered: Google Search Console, the App Store, Google Play, WordPress.org and real-user Core Web Vitals. Search analytics, striking-distance keywords, CTR gaps, cannibalization, store listings and conversion, App Store keywords and sales, Android vitals, on-page and whole-site audits, indexing coverage, PageSpeed, and timestamped snapshots you can diff.",
+  "version": "0.13.2",
+  "description": "Turn Claude Code into a senior product-marketing manager across every place a product gets discovered: Google Search Console, Google Ads, the App Store, Google Play, WordPress.org and real-user Core Web Vitals. Search analytics, striking-distance keywords, CTR gaps, cannibalization, store listings and conversion, App Store keywords and sales, Android vitals, on-page and whole-site audits, indexing coverage, PageSpeed, and timestamped snapshots you can diff. Google Ads reads cover campaigns, keywords, ad copy, assets, search terms, negatives and change history; its writes are dry-run by default, refuse a target that does not match exactly one thing, and read every value back after writing.",
   "author": {
     "name": "Ibrahim Hajjaj"
   },
@@ -13,6 +13,7 @@
     "seo",
     "aso",
     "google-search-console",
+    "google-ads",
     "app-store-connect",
     "google-play",
     "wordpress",
@@ -29,7 +30,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "seo-console-mcp@^0.10.0"
+        "seo-console-mcp@>=0.13.2 <1.0.0"
       ]
     }
   }
