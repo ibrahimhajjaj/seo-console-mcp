@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.13.2
+
+### Fixed
+
+- The plugin manifest said 0.9.0 while the package said 0.13.1, and the plugin
+  installer reads the manifest. So `claude plugin update` read the stale number,
+  compared it to the installed one, found them equal and reported success. It
+  went four minor versions stale behind a tick that read as an update, and the
+  whole Google Ads surface, twelve tools, was unreachable the entire time.
+- The manifest also asked npm for `seo-console-mcp@^0.10.0`, which reads as
+  "0.10 and up" and is not: a caret on a 0.x version pins the minor, so that
+  range stops below 0.11.0 and would never have installed 0.13.x. Correcting the
+  version alone would have looked like a fix and changed nothing. It now asks
+  for a range that includes the released version and every later 0.x.
+- A test now fails if the two versions disagree or if the range does not include
+  the current one. A version kept in several places with only some of them
+  automated goes stale the first time someone is in a hurry, and it fails
+  quietly, because each file on its own is still valid.
+
+### Changed
+
+- The plugin description and keywords name Google Ads, which has been in the
+  package since 0.11.0 and was missing from the text the marketplace shows.
+
 ## 0.13.1
 
 ### Fixed
