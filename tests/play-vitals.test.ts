@@ -95,6 +95,21 @@ describe("playVitals", () => {
     expect((result.structuredContent as any).metricSets.crashRate.error).toMatch(/At least one 'metric' should be specified/);
   });
 
+  it("keeps the whole path in the note instead of cutting at the first period", async () => {
+    // A package name is full of periods, so cutting the message at the first one
+    // turned "/apps/com.mbh.azkari/crashRateMetricSet" into "/apps/com" and threw
+    // away the part of the diagnostic that said which app was refused.
+    const { fetchImpl } = router((url) =>
+      url.endsWith(":query") ? { status: 404, body: { error: { message: "Requested entity was not found." } } } : { status: 404, body: { error: { message: "Requested entity was not found." } } },
+    );
+
+    const result = await playVitals(playVitalsInput.parse({ packageName: "com.mbh.azkari", metricSets: ["crashRate"] }), { fetchImpl, accessToken: "t", now: NOW });
+
+    const notes = (result.structuredContent as any).notes.join(" ");
+    expect(notes).toContain("com.mbh.azkari");
+    expect(notes).not.toContain("/apps/com)");
+  });
+
   it("keeps the package name a single path segment", async () => {
     const { fetchImpl, calls } = router((url) => (url.endsWith(":query") ? { status: 200, body: { rows: [] } } : { status: 200, body: FRESHNESS }));
 

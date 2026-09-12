@@ -102,7 +102,10 @@ export async function playVitals(params: VitalsParams, deps: VitalsDeps = {}): P
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setNotes.push(`${name} could not be read (${message.split(".")[0]}), so it is unknown rather than zero.`);
+      // Split on a sentence-ending period, not on every period. A package name,
+      // a URL and a decimal all contain one, and cutting at the first turned
+      // "/apps/com.mbh.azkari/crashRateMetricSet" into "/apps/com".
+      setNotes.push(`${name} could not be read (${message.split(/\.(?:\s|$)/)[0]}), so it is unknown rather than zero.`);
       return {
         name,
         entry: { available: false, rowCount: null, latestDataAt: null, rows: [], error: message },
