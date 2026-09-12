@@ -183,12 +183,12 @@ export async function adsChanges(params: ChangesParams, deps: AdsDeps = {}): Pro
     resourceType: String(row.changeEvent?.changeResourceType ?? ""),
     operation: String(row.changeEvent?.resourceChangeOperation ?? ""),
     changedFields: String(row.changeEvent?.changedFields ?? ""),
-    user: String(row.changeEvent?.userEmail ?? ""),
-    client: String(row.changeEvent?.clientType ?? ""),
+    userEmail: String(row.changeEvent?.userEmail ?? ""),
+    clientType: String(row.changeEvent?.clientType ?? ""),
     campaign: String(row.campaign?.name ?? ""),
   }));
   const notes = [
-    "client says where a change came from: GOOGLE_ADS_API for a tool, GOOGLE_ADS_WEB_CLIENT for someone in the browser.",
+    "clientType says where a change came from: GOOGLE_ADS_API for a tool, GOOGLE_ADS_WEB_CLIENT for someone in the browser.",
     "Google keeps change history for 30 days, so anything older cannot be recovered here.",
   ];
   if (changes.length === params.limit) {
@@ -196,7 +196,7 @@ export async function adsChanges(params: ChangesParams, deps: AdsDeps = {}): Pro
   }
   const lines = [
     `${changes.length} change(s) in the last ${params.days} day(s)`,
-    ...changes.map((c) => `- ${c.changedAt} ${c.operation} ${c.resourceType}${c.changedFields ? ` (${c.changedFields})` : ""} by ${c.user || "unknown"} via ${c.client}`),
+    ...changes.map((c) => `- ${c.changedAt} ${c.operation} ${c.resourceType}${c.changedFields ? ` (${c.changedFields})` : ""} by ${c.userEmail || "unknown"} via ${c.clientType}`),
     ...notes,
   ];
   return result(lines.join("\n"), { days: params.days, rowCount: changes.length, changes, notes });

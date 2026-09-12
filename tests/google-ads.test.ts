@@ -208,12 +208,12 @@ describe("ads reads", () => {
 
     const result = await adsChanges(adsChangesInput.parse({ days: 14, limit: 100 }), { credentials, fetchImpl, now: new Date("2026-09-12T00:00:00Z") });
     const query = String(calls[0]?.body?.query);
-    const content = result.structuredContent as { changes: Array<{ client: string }>; notes: string[] };
+    const content = result.structuredContent as { changes: Array<{ clientType: string }>; notes: string[] };
 
     expect(query).toContain("BETWEEN '2026-08-30 00:00:00' AND '2026-09-12 23:59:59'");
     expect(query).toContain("LIMIT 100");
     // Whether a change came from a tool or from a person in the browser.
-    expect(content.changes[0]?.client).toBe("GOOGLE_ADS_API");
+    expect(content.changes[0]?.clientType).toBe("GOOGLE_ADS_API");
     expect(content.notes.join(" ")).toMatch(/GOOGLE_ADS_WEB_CLIENT for someone in the browser/);
     expect(() => adsChangesOutput.parse(content)).not.toThrow();
   });
