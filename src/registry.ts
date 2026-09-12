@@ -28,6 +28,8 @@ import {
   adsUpdateBatchShape,
   adsAdCopyOutput,
   adsAdCopyShape,
+  adsAssetsOutput,
+  adsAssetsShape,
   adsSearchTermsOutput,
   adsSearchTermsShape,
   adsChangesOutput,
@@ -106,7 +108,20 @@ import { appStoreDiscovery } from "./app-store-discovery.js";
 import { appStoreSales } from "./app-store-sales.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
-import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate, adsSearchTerms, adsChanges, adsNegatives, adsNegativesUpdateTool, adsUpdateBatchTool, adsAdCopyTool } from "./google-ads-tools.js";
+import {
+  adsCampaigns,
+  adsKeywords,
+  adsAds,
+  adsQuery,
+  adsUpdate,
+  adsSearchTerms,
+  adsChanges,
+  adsNegatives,
+  adsNegativesUpdateTool,
+  adsUpdateBatchTool,
+  adsAdCopyTool,
+  adsAssetsTool,
+} from "./google-ads-tools.js";
 import { listSnapshotsTool } from "./list-snapshots.js";
 import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
@@ -434,6 +449,14 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: adsAdCopyShape,
     outputSchema: adsAdCopyOutput,
     run: (_ctx, params) => adsAdCopyTool(params),
+  }),
+  defineTool({
+    name: "ads_assets",
+    description:
+      "Read the sitelinks, callouts, structured snippets, promotions, prices, call and image assets attached to the account, its campaigns and its ad groups, with what each one actually says rather than only its type and id. An account-level asset applies to every campaign, so it is listed even when one campaign is named: an ad that looks bare in ads_ad_copy may be serving with these beside it. Attached is not shown, and a level that cannot be read is reported as an error in place rather than as nothing attached; read-only",
+    inputShape: adsAssetsShape,
+    outputSchema: adsAssetsOutput,
+    run: (_ctx, params) => adsAssetsTool(params),
   }),
   defineTool({
     name: "ads_query",

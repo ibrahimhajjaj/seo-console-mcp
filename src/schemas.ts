@@ -798,6 +798,41 @@ export const adsAdCopyOutput = z.object({
   notes: z.array(z.string()),
 });
 
+export const adsAssetTypes = ["SITELINK", "CALLOUT", "STRUCTURED_SNIPPET", "PROMOTION", "PRICE", "CALL", "IMAGE"] as const;
+export const adsAssetsShape = {
+  campaign: z
+    .string()
+    .trim()
+    .min(1)
+    .max(400)
+    .optional()
+    .describe("Limit campaign and ad group assets to one campaign by name. Account-level assets are still listed, because they apply to every campaign including this one"),
+  type: z.enum(adsAssetTypes).optional().describe("Limit to one asset type. Omitted, every type is listed, including types this tool has no shaped reading for"),
+  includeRemoved: z.boolean().default(false).describe("Include links whose status is removed. Off by default: a removed asset is history and crowds out the ones that can serve"),
+};
+export const adsAssetsInput = z.object(adsAssetsShape);
+export const adsAssetsOutput = z.object({
+  rowCount: z.number(),
+  assets: z.array(
+    z.object({
+      assetId: z.string(),
+      type: z.string(),
+      level: z
+        .enum(["account", "campaign", "adGroup"])
+        .describe("Where the asset is attached. An account-level asset applies to every campaign, so it can serve beside an ad that has none of its own"),
+      attachedTo: z.string().describe("The campaign or ad group it is attached to, or the account itself"),
+      fieldType: z.string().describe("The slot Google files it under, which is not always the same word as the asset type"),
+      status: z.string(),
+      summary: z.string().describe("What the asset actually says, in one line. A type and an id do not answer whether the promotion is the right promotion"),
+    }),
+  ),
+  byType: z.record(z.string(), z.number()).describe("How many of each type were found, so an absent type is visible as absent"),
+  levelErrors: z
+    .array(z.object({ level: z.string(), error: z.string() }))
+    .describe("A level that could not be read is recorded here rather than omitted, so an empty list is never mistaken for nothing attached"),
+  notes: z.array(z.string()),
+});
+
 export const adsQueryShape = {
   query: z.string().trim().min(1).max(4000).describe("A GAQL SELECT statement. GAQL has no other statement, so this cannot change anything"),
 };

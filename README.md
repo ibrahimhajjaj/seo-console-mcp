@@ -1081,6 +1081,34 @@ It also answers the two questions a per-ad view cannot:
 
 Removed ads are excluded unless `includeRemoved` is set, and only a responsive search ad carries text in these fields: any other ad type is listed with its type and no copy, rather than as an ad with nothing to say. Assets attached to the ad, campaign or account, such as sitelinks, promotions and prices, are **not** read here, so an ad that looks thin in this output may still be serving with assets alongside it.
 
+### `ads_assets`
+
+What is attached under the ad: sitelinks, callouts, structured snippets, promotions, prices, call and image assets, at all three levels, with **what each one actually says** rather than only its type and id.
+
+```json
+{ "campaign": "search-uk-us-2026-09" }
+```
+
+<!-- params:ads_assets -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `campaign` | string | no |  | Limit campaign and ad group assets to one campaign by name. Account-level assets are still listed, because they apply to every campaign including this one |
+| `type` | one of SITELINK, CALLOUT, STRUCTURED_SNIPPET, PROMOTION, PRICE, CALL, IMAGE | no |  | Limit to one asset type. Omitted, every type is listed, including types this tool has no shaped reading for |
+| `includeRemoved` | boolean | no | `false` | Include links whose status is removed. Off by default: a removed asset is history and crowds out the ones that can serve |
+
+<!-- /params:ads_assets -->
+
+A promotion reads back as `up to 20% off on Pro plan with code LAUNCH20, 2026-01-01 to 2026-01-31`, not as `PROMOTION #4417`. That matters because Google states a promotion's percentage in millionths, where 1,000,000 is 100%, so the raw field is a number nobody would recognise as a discount. Prices come back with their offerings and currency, sitelinks with their descriptions.
+
+Three things worth knowing before reading a result:
+
+- **An account-level asset applies to every campaign**, so it is listed even when you name one campaign. This is the other half of `ads_ad_copy`: an ad that looks bare there may be serving with four sitelinks and a promotion beside it, none of which are attached to its campaign.
+- **Attached is not shown.** Google decides per auction whether to show an asset and which ones. This says what is available to serve, not what served.
+- **A level that cannot be read is reported as an error in place.** The three levels are three separate queries, and if one fails the other two still come back with `levelErrors` naming the one that did not. An empty list that quietly meant "the query broke" would read as "nothing attached", which is the wrong answer to the only question this tool gets asked.
+
+A type this tool has no shaped reading for is named with its type and left at that, rather than given an invented summary. Asset metrics are not reported here.
+
 ### `ads_query`
 
 An arbitrary GAQL `SELECT` for a question the shaped reads do not cover. GAQL has no statement other than `SELECT`, so this cannot change anything, and a query that does not start with `SELECT` is refused.

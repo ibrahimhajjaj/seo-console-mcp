@@ -100,6 +100,7 @@ describe("MCP server tool registration", () => {
       "ads_keywords",
       "ads_ads",
       "ads_ad_copy",
+      "ads_assets",
       "ads_query",
       "ads_search_terms",
       "ads_negatives",

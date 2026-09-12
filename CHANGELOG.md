@@ -17,6 +17,18 @@
   not two variants being tested against each other. Assets such as sitelinks and
   promotions are not read, and that is said in the output rather than left to be
   inferred from an ad that looks thin.
+- `ads_assets` reads the sitelinks, callouts, structured snippets, promotions,
+  prices, call and image assets attached at account, campaign and ad group
+  level, with what each one says rather than only its type and id: a promotion
+  reads back as `up to 20% off on Pro plan with code LAUNCH20`, not as
+  `PROMOTION #4417`. Google states a promotion's percentage in millionths where
+  1,000,000 is 100%, so the raw field is a number nobody would recognise as a
+  discount. An account-level asset applies to every campaign and is listed even
+  when one campaign is named, which is the other half of `ads_ad_copy`: an ad
+  that looks bare there may be serving with four sitelinks beside it. The three
+  levels are three queries, and one that fails is reported in `levelErrors`
+  while the other two still return, because an empty list that quietly meant
+  the query broke would read as nothing attached.
 
 ## 0.11.0
 
