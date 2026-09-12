@@ -2,6 +2,62 @@
 
 ## 0.16.0
 
+An audit pass, not a feature release. Every fix below is the same shape: something absent was being presented as something known.
+
+### Fixed
+
+- **A bid or budget Google does not report was read as $0.00, and that silently
+  disabled a spend guard.** A keyword under an automated bidding strategy has no
+  CPC bid and Google omits the field entirely. `ads_keywords` reported
+  `bid $0.00` for it, and worse, the size check in `ads_update` and
+  `ads_update_batch` read `before > 0 && after > before * 3`, so with `before`
+  forced to zero it stopped applying to exactly those keywords: a change from an
+  unknown bid to $20.00 tripped nothing. An unreadable current value now trips a
+  guard rather than skipping one, and is reported as "not set" rather than as a
+  number. In a batch, a total built by counting unknowns as zero is reported as
+  unknown instead, because it was understating what the account holds and
+  overstating the increase against it.
+- **`ads_ad_copy` answered an unknown ad group name with an empty success**, the
+  same bug already fixed in `ads_assets`, in the tool written beside it. Worse
+  here, because the empty result came with a note offering a plausible wrong
+  reason: "an ad group whose ads were all replaced reads as empty". The name is
+  resolved before anything is read and an unknown one is refused by name.
+- **A second error-message truncation**, in `app_store_discovery`, the same
+  `split(".")` already fixed in `play_vitals` and not grepped for at the time.
+  Reachable through a network failure rather than an HTTP one, where the message
+  is full of periods: `getaddrinfo ENOTFOUND api.appstoreconnect.apple.com`
+  became `getaddrinfo ENOTFOUND api`, naming nothing.
+- **A pending sitemap reported zero warnings and zero errors**, which reads as
+  parsed and clean. Google sends no counts for a sitemap it has not finished
+  processing, so they are reported as unknown while it is pending. An absent
+  `isPending` is reported as unknown too, rather than as processed, which was a
+  claim the API never made.
+- **`siteUrl` accepted embedded credentials.** The other URL parameter in this
+  package already refused them; this one preserved them, and a property is
+  echoed back in results and written into snapshot files on disk. Search Console
+  has no property of that form, so such a URL was never going to match anything.
+
+### Added
+
+- Every CLI run names its own version on stderr, `seo-console-mcp 0.16.0 running
+  ads_keywords`, before the tool runs so it is there when the tool throws as
+  well as when it returns. stdout stays parseable and an `--out` file stays pure
+  JSON. A result does not otherwise say which build produced it, and reading one
+  from a stale build looks exactly like reading one from a current build. Two
+  real cases: an install that failed with `ETARGET` left the previous version in
+  place and the CLI ran happily against it, reporting a keyword count with no
+  status field that read as a regression; and after a successful publish, `npx`
+  reused its cache and went on running the previous release while npm, the
+  version range and every other signal read current.
+- `server_version` answers the same question over MCP, where the CLI banner
+  cannot reach: which build is answering, where it is running from, and whether
+  it came out of an npx cache. Four values look like this one and are not: what
+  npm calls latest, what the version range resolves to, what the plugin manifest
+  declares, and what is actually running. Checking the command-line tool is not a
+  substitute, since it is a separate process resolved separately and can be a
+  different build on the same machine.
+
+
 ### Added
 
 - Every CLI run names its own version on stderr, `seo-console-mcp 0.15.1 running
