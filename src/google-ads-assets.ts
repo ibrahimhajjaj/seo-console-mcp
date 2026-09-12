@@ -66,13 +66,20 @@ function summarize(asset: Record<string, any>): string {
   return `${type || "asset"} ${String(asset.name ?? "")}`.trim() + ", not read in detail by this tool";
 }
 
+// A Money message cannot be selected whole: asset.promotion_asset.money_amount_off
+// is rejected as an invalid argument, while its .amount_micros and .currency_code
+// are fine. This is not a general rule about messages, since the repeated
+// price_offerings below selects whole without complaint, so do not expand that
+// one to match.
 const ASSET_FIELDS = `asset.id, asset.type, asset.name, asset.final_urls,
    asset.sitelink_asset.link_text, asset.sitelink_asset.description1, asset.sitelink_asset.description2,
    asset.callout_asset.callout_text,
    asset.structured_snippet_asset.header, asset.structured_snippet_asset.values,
    asset.promotion_asset.promotion_target, asset.promotion_asset.discount_modifier,
-   asset.promotion_asset.percent_off, asset.promotion_asset.money_amount_off,
-   asset.promotion_asset.promotion_code, asset.promotion_asset.orders_over_amount,
+   asset.promotion_asset.percent_off,
+   asset.promotion_asset.money_amount_off.amount_micros, asset.promotion_asset.money_amount_off.currency_code,
+   asset.promotion_asset.promotion_code,
+   asset.promotion_asset.orders_over_amount.amount_micros, asset.promotion_asset.orders_over_amount.currency_code,
    asset.promotion_asset.occasion, asset.promotion_asset.start_date, asset.promotion_asset.end_date,
    asset.price_asset.type, asset.price_asset.price_qualifier, asset.price_asset.price_offerings,
    asset.call_asset.phone_number, asset.call_asset.country_code,

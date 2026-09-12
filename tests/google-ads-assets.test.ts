@@ -170,6 +170,22 @@ describe("adsAssets", () => {
     expect((result.structuredContent as { assets: Array<{ summary: string }> }).assets[0]?.summary).toBe("LEAD_FORM Contact us, not read in detail by this tool");
   });
 
+  it("selects each Money field by its sub-fields, which is the only way Google accepts them", async () => {
+    // Verified against the live API: asset.promotion_asset.money_amount_off is
+    // rejected as an invalid argument, while .amount_micros and .currency_code
+    // are fine. The repeated price_offerings is NOT subject to this and selects
+    // whole, so this guard is deliberately narrow.
+    const { api, queries } = fakeApi(() => []);
+    await adsAssets(api, parse());
+    const query = queries[0] ?? "";
+    for (const field of ["money_amount_off", "orders_over_amount"]) {
+      expect(query).toContain(`asset.promotion_asset.${field}.amount_micros`);
+      expect(query).toContain(`asset.promotion_asset.${field}.currency_code`);
+      expect(query).not.toMatch(new RegExp(`${field}(?![.\\w])`));
+    }
+    expect(query).toContain("asset.price_asset.price_offerings,");
+  });
+
   it("excludes removed links by default and filters by type when asked", async () => {
     const { api, queries } = fakeApi(() => []);
     await adsAssets(api, parse({ type: "SITELINK" }));
