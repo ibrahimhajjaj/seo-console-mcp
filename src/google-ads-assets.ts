@@ -26,7 +26,7 @@ const cash = (amount: Record<string, any> | undefined): string => (amount ? `${m
 // One line saying what the asset says. A type and an id answer that something is
 // attached; they do not answer whether the promotion is the right promotion, or
 // whether the sitelink still points at a page that exists.
-function summarize(asset: Record<string, any>): string {
+function summarize(asset: Record<string, any>, fieldType: string): string {
   const type = String(asset.type ?? "");
   const finalUrl = Array.isArray(asset.finalUrls) && asset.finalUrls.length ? ` -> ${String(asset.finalUrls[0])}` : "";
 
@@ -63,7 +63,10 @@ function summarize(asset: Record<string, any>): string {
   if (type === "IMAGE") return String(asset.imageAsset?.fullSize?.url ?? asset.name ?? "");
   // Naming the type and stopping is honest. Inventing a summary for a shape this
   // tool does not read would be a sentence with nothing behind it.
-  return `${type || "asset"} ${String(asset.name ?? "")}`.trim() + ", not read in detail by this tool";
+  // Name the field type as well as the asset type: for an unshaped asset the
+  // field type is usually the half that says what it is for, as with a TEXT
+  // asset filed under BUSINESS_NAME.
+  return `${[type || "asset", fieldType && fieldType !== type ? `filed as ${fieldType}` : "", String(asset.name ?? "")].filter(Boolean).join(" ")}, not read in detail by this tool`;
 }
 
 // A Money message cannot be selected whole: asset.promotion_asset.money_amount_off
@@ -101,6 +104,21 @@ const LEVELS: LevelSpec[] = [
 ];
 
 export async function adsAssets(api: AdsClient, params: Params): Promise<ToolResult> {
+  // A name that matches nothing must not come back as a successful empty
+  // answer. Without this, a typo returns zero rows beside a note saying
+  // account-level assets are listed too, and the reader concludes the account
+  // has none. Absence has to be told apart from a campaign that does not exist,
+  // and the caller who mistypes a name is exactly the caller who will then say
+  // "that campaign has no sitelinks" and act on it.
+  if (params.campaign) {
+    const found = await api.gaql(`SELECT campaign.name FROM campaign WHERE campaign.name = ${quoteGaql(params.campaign)}`);
+    if (!found.length) {
+      throw new Error(
+        `No campaign named "${params.campaign}" exists in this account, so nothing was read. This is not the same as that campaign having no assets; check the name against ads_campaigns.`,
+      );
+    }
+  }
+
   const assets: AssetRow[] = [];
   const levelErrors: Array<{ level: string; error: string }> = [];
 
@@ -128,7 +146,7 @@ export async function adsAssets(api: AdsClient, params: Params): Promise<ToolRes
           attachedTo: spec.owner(row),
           fieldType: String(link.fieldType ?? ""),
           status: String(link.status ?? ""),
-          summary: summarize(asset),
+          summary: summarize(asset, String(link.fieldType ?? "")),
         });
       }
     } catch (error) {
@@ -154,7 +172,12 @@ export async function adsAssets(api: AdsClient, params: Params): Promise<ToolRes
     const forLevel = assets.filter((asset) => asset.level === level);
     if (!forLevel.length) continue;
     lines.push(`${level}:`);
-    for (const asset of forLevel) lines.push(`- ${asset.type} on ${asset.attachedTo} (${asset.status || "status unknown"}): ${asset.summary}`);
+    for (const asset of forLevel) {
+      // fieldType usually repeats type exactly, so showing it every time is
+      // noise. Shown only when it differs, which is when it carries something.
+      const slot = asset.fieldType && asset.fieldType !== asset.type ? ` filed as ${asset.fieldType}` : "";
+      lines.push(`- ${asset.type}${slot} on ${asset.attachedTo} (${asset.status || "status unknown"}): ${asset.summary}`);
+    }
   }
   if (!assets.length && !levelErrors.length) {
     lines.push("Nothing is attached at any level. Sitelinks, callouts and the rest are what fill the space under an ad, so an account with none is showing the ad text alone.");

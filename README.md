@@ -1105,9 +1105,10 @@ Three things worth knowing before reading a result:
 
 - **An account-level asset applies to every campaign**, so it is listed even when you name one campaign. This is the other half of `ads_ad_copy`: an ad that looks bare there may be serving with four sitelinks and a promotion beside it, none of which are attached to its campaign.
 - **Attached is not shown.** Google decides per auction whether to show an asset and which ones. This says what is available to serve, not what served.
+- **A campaign name that matches nothing is refused, not answered.** A typo used to come back as zero rows with no error, next to a note explaining that account-level assets are listed too, so the reader concluded the account had none. The name is resolved before anything is read, and an unknown one says so. The caller who mistypes a campaign is exactly the caller who then says "that campaign has no sitelinks" and acts on it.
 - **A level that cannot be read is reported as an error in place.** The three levels are three separate queries, and if one fails the other two still come back with `levelErrors` naming the one that did not. An empty list that quietly meant "the query broke" would read as "nothing attached", which is the wrong answer to the only question this tool gets asked.
 
-A type this tool has no shaped reading for is named with its type and left at that, rather than given an invented summary. Asset metrics are not reported here.
+A type this tool has no shaped reading for is named with its asset type and its field type and left at that, rather than given an invented summary: a `TEXT` asset filed as `BUSINESS_NAME` is mostly described by the second half. The field type is shown only where it differs from the asset type, since the two are usually the same word and repeating it is noise. Asset metrics are not reported here.
 
 ### `ads_query`
 

@@ -17,8 +17,11 @@ function fakeApi(handler: (query: string) => unknown[]): { api: AdsClient; queri
 }
 
 // Routes by the FROM clause, the way the three levels are three separate reads.
-function route(byResource: Record<string, unknown[]>) {
+// A named campaign is resolved first, so that lookup answers by default: a test
+// about assets should not have to restate that the campaign exists.
+function route(byResource: Record<string, unknown[]>, campaignExists = true) {
   return (query: string): unknown[] => {
+    if (/FROM campaign\s+WHERE/.test(query)) return campaignExists ? [{ campaign: { name: "search-brand" } }] : [];
     for (const [resource, rows] of Object.entries(byResource)) {
       if (query.includes(`FROM ${resource}`)) return rows;
     }
@@ -102,6 +105,43 @@ describe("adsAssets", () => {
     expect(accountQuery).not.toContain("campaign.name =");
     expect(queries.find((query) => query.includes("FROM campaign_asset"))).toContain("campaign.name = 'search-brand'");
     expect(result.content[0]?.text).toContain("An account-level asset applies to every campaign");
+  });
+
+  it("refuses a campaign name that matches nothing instead of returning an empty success", async () => {
+    // Found in review against the live account. A typo returned rowCount 0 with
+    // empty levelErrors, beside a note saying account-level assets are listed
+    // too, so the reader concluded the account had none. Absence has to be told
+    // apart from a name that does not exist, and the caller who mistypes is the
+    // one who then says "that campaign has no sitelinks" and acts on it.
+    const { api } = fakeApi(
+      route({ customer_asset: [{ customerAsset: { fieldType: "CALLOUT", status: "ENABLED" }, asset: { id: "1", type: "CALLOUT", calloutAsset: { calloutText: "x" } } }] }, false),
+    );
+    await expect(adsAssets(api, parse({ campaign: "does-not-exist" }))).rejects.toThrow(/No campaign named "does-not-exist" exists in this account/);
+  });
+
+  it("does not resolve a campaign when none was named", async () => {
+    const { api, queries } = fakeApi(route({}));
+    await adsAssets(api, parse());
+    expect(queries.some((query) => /FROM campaign\s+WHERE/.test(query))).toBe(false);
+  });
+
+  it("shows the field type only when it says something the asset type does not", async () => {
+    const { api } = fakeApi(
+      route({
+        customer_asset: [
+          { customerAsset: { fieldType: "CALLOUT", status: "ENABLED" }, asset: { id: "1", type: "CALLOUT", calloutAsset: { calloutText: "Free trial" } } },
+          { customerAsset: { fieldType: "BUSINESS_NAME", status: "ENABLED" }, asset: { id: "2", type: "TEXT", name: "Backup Arena" } },
+        ],
+      }),
+    );
+    const result = await adsAssets(api, parse());
+    const text = result.content[0]?.text ?? "";
+    // Identical in 14 of 15 rows on the live account, so printing it every time
+    // is noise; the row where it differs carries the only real information.
+    expect(text).toContain("- CALLOUT on the whole account");
+    expect(text).not.toContain("CALLOUT filed as CALLOUT");
+    expect(text).toContain("- TEXT filed as BUSINESS_NAME on the whole account");
+    expect(text).toContain("TEXT filed as BUSINESS_NAME Backup Arena, not read in detail by this tool");
   });
 
   it("records a level it could not read instead of reporting nothing attached", async () => {
