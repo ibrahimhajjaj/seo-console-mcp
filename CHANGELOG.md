@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.13.1
+
+### Fixed
+
+- `ads_assets` answered an unknown campaign name with an empty success. A typo
+  returned zero rows and no error, beside a note explaining that account-level
+  assets are listed even when a campaign is named, so a reader concluded the
+  account had none of those either. Absence wore the costume of a result, which
+  is the one thing this project is meant not to do. The name is now resolved
+  before anything is read and an unknown one is refused by name, because the
+  caller who mistypes a campaign is the caller who then says that campaign has
+  no sitelinks and acts on it. Found in review against a live account.
+
+### Changed
+
+- `ads_assets` shows an asset's field type only where it differs from its asset
+  type. The two are the same word in almost every row, so printing both every
+  time buried the rows where the field type is the informative half: a `TEXT`
+  asset filed as `BUSINESS_NAME` is described by the second half, not the first,
+  and the unshaped summary now names it.
+
 ## 0.13.0
 
 Say where a missing Play metric actually lives.
