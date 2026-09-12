@@ -94,6 +94,26 @@ describe("adsUpdateBatch", () => {
     expect(mutate).not.toHaveBeenCalled();
   });
 
+  it("will not build a batch total out of unknowns, and guards instead of skipping the size check", async () => {
+    // Three keywords with no readable bid. Summed as zero, totalBefore would be
+    // $0.00, the "more than three times" check could never fire, and the
+    // increase would be measured against a number the account does not hold.
+    const rows = Array.from({ length: 3 }, (_, index) => ({ text: `k${index}`, row: { adGroupCriterion: { resourceName: `customers/1/adGroupCriteria/1~${index}` } } }));
+    const { api, mutate } = fakeApi(keywordRoute(rows));
+
+    const result = await adsUpdateBatch(api, parse({ kind: "bid", changes: rows.map((row) => ({ target: row.text, value: 2 })), dryRun: false }));
+    const content = result.structuredContent as { totalBefore: number | null; totalGuards: string[]; entries: Array<{ before: number | null; guards: string[] }> };
+
+    expect(content.totalBefore).toBeNull();
+    expect(content.entries.every((entry) => entry.before === null)).toBe(true);
+    expect(content.entries.every((entry) => entry.guards.some((guard) => guard.includes("could not be read")))).toBe(true);
+    expect(content.totalGuards.join(" ")).toContain("have no current bid to read");
+    expect(result.content[0]?.text).toContain("Total of the entries being changed: unknown -> $6.00");
+    // Refused rather than applied, because every guard needs confirm.
+    expect(mutate).not.toHaveBeenCalled();
+    expect(result.isError).toBe(true);
+  });
+
   it("guards the sum even when no single entry trips a guard", async () => {
     const rows = Array.from({ length: 5 }, (_, index) => keyword(`k${index}`, `customers/1/adGroupCriteria/1~${index}`, 8));
     const { api, mutate } = fakeApi(keywordRoute(rows));

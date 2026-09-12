@@ -195,6 +195,40 @@ describe("ads reads", () => {
     );
   });
 
+  it("refuses to call an unreadable bid zero, and guards instead of skipping the size check", async () => {
+    // A keyword under an automated bidding strategy has no CPC bid and Google
+    // omits the field. Coercing that to 0 reported "bid $0.00", and worse, the
+    // multiple check read `before > 0 && after > before * 3`, so it stopped
+    // applying to exactly those keywords: $0.00 -> $20.00 tripped nothing.
+    const { fetchImpl } = router((url, body) => {
+      if (url.includes(":mutate")) return { body: { results: [{}] } };
+      const query = String((body as { query?: string })?.query ?? "");
+      return {
+        body: stream([query.includes("resource_name =") ? { adGroupCriterion: {} } : { adGroupCriterion: { resourceName: "customers/1/adGroupCriteria/7~9", keyword: { text: "smart bid" } } }]),
+      };
+    });
+
+    const result = await adsUpdate(adsUpdateInput.parse({ kind: "bid", target: "smart bid", value: "20" }), { credentials, fetchImpl });
+    const content = result.structuredContent as { before: string; guards: string[] };
+
+    expect(content.before).toBe("not set");
+    expect(content.guards.join(" ")).toContain("could not be read, so how large a change this is cannot be checked");
+    expect(result.content[0]?.text).not.toContain("$0.00");
+  });
+
+  it("reports an unreadable bid and budget as not set rather than as zero", async () => {
+    const { fetchImpl } = router(() => ({
+      body: stream([{ adGroup: { name: "core" }, adGroupCriterion: { keyword: { text: "smart bid" }, status: "ENABLED" }, metrics: { impressions: 4, clicks: 0, costMicros: "0" } }]),
+    }));
+
+    const result = await adsKeywords(adsKeywordsInput.parse({}), { credentials, fetchImpl });
+    const content = result.structuredContent as { keywords: Array<{ bid: number | null }>; notes: string[] };
+
+    expect(content.keywords[0]?.bid).toBeNull();
+    expect(result.content[0]?.text).toContain("bid not set");
+    expect(content.notes.join(" ")).toContain("automated bidding strategy");
+  });
+
   it("converts micros to dollars", async () => {
     const { fetchImpl } = router(() => ({
       body: stream([

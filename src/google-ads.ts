@@ -204,5 +204,14 @@ export function createAdsClient(credentials: AdsCredentials, fetchImpl: typeof f
   };
 }
 
+// For METRICS this is right: Google omits a metric that is zero, so an absent
+// impression count really is zero impressions.
 export const money = (micros: unknown): number => Number(micros ?? 0) / 1e6;
+
+// For SETTINGS it is not. A keyword under an automated bidding strategy has no
+// CPC bid at all and Google omits the field, so coercing it to zero reports a
+// bid of $0.00 for something that has no bid. That is an absence dressed as a
+// finding, and worse, a guard written as `before > 0 && after > before * 3`
+// silently stops firing when before is unknown.
+export const moneyOrNull = (micros: unknown): number | null => (micros === undefined || micros === null || micros === "" ? null : Number(micros) / 1e6);
 export const toMicros = (dollars: number): string => String(Math.round(dollars * 1e6));

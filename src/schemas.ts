@@ -270,10 +270,10 @@ const sitemapOutput = z.object({
   path: z.string().nullable(),
   lastSubmitted: z.string().nullable(),
   lastDownloaded: z.string().nullable(),
-  isPending: z.boolean(),
+  isPending: z.boolean().nullable().describe("Null when Google did not report it, which is not the same as known to be processed"),
   isSitemapsIndex: z.boolean(),
-  warnings: z.number(),
-  errors: z.number(),
+  warnings: z.number().nullable().describe("Null while the sitemap is pending. Zero warnings beside zero errors reads as parsed and clean, which an unprocessed sitemap is not"),
+  errors: z.number().nullable(),
   contents: z.array(
     z.object({
       type: z.string().nullable(),
@@ -516,6 +516,18 @@ export const auditSiteOutput = z.object({
   rollup: z.record(z.string(), z.number()),
 });
 
+export const serverVersionShape = {};
+export const serverVersionInput = z.object(serverVersionShape);
+export const serverVersionOutput = z.object({
+  name: z.string(),
+  version: z
+    .string()
+    .describe("The version of the build answering this call, which is not necessarily what npm calls latest, what the version range resolves to, or what the plugin manifest declares"),
+  nodeVersion: z.string(),
+  installPath: z.string().describe("Where this build is running from. An npx cache path is what distinguishes the release you expected from whatever npx already had"),
+  npxCache: z.boolean().describe("Whether this build is being served out of an npx cache, which reuses a build without re-resolving the version range and without erroring"),
+});
+
 export const wporgPluginShape = {
   slug: z.string().trim().min(1).max(200).describe("WordPress.org plugin slug, e.g. akismet"),
   downloadDays: z.number().int().min(0).max(365).default(30).describe("Days of daily download history to fetch; 0 skips it"),
@@ -692,7 +704,7 @@ export const adsCampaignsOutput = z.object({
     z.object({
       name: z.string(),
       status: z.string(),
-      dailyBudget: z.number(),
+      dailyBudget: z.number().nullable().describe("Null when Google returned no amount, which is not a budget of zero"),
       impressions: z.number(),
       clicks: z.number(),
       cost: z.number(),
@@ -719,7 +731,7 @@ export const adsKeywordsOutput = z.object({
     z.object({
       keyword: z.string(),
       adGroup: z.string(),
-      bid: z.number(),
+      bid: z.number().nullable().describe("Null when Google returned no amount. A keyword under an automated bidding strategy has no CPC bid to read, which is not a bid of zero"),
       status: z.string().describe("ENABLED, PAUSED or REMOVED. This is whether the keyword is turned on, which servingStatus does not tell you: a paused keyword still reports ELIGIBLE"),
       approvalStatus: z.string(),
       servingStatus: z.string().describe("Google's system serving status. ELIGIBLE means approved and capable of serving, not currently serving; a paused keyword reads ELIGIBLE"),
@@ -931,7 +943,7 @@ export const adsUpdateBatchOutput = z.object({
       matches: z.boolean().nullable(),
     }),
   ),
-  totalBefore: z.number(),
+  totalBefore: z.number().nullable().describe("Null when any entry has no current value to read, because a total that counts unknowns as zero is not a total"),
   totalAfter: z.number(),
   totalSummary: z.string().describe("The batch total in words, always present whether or not anything tripped. The sentence is what gets read; the guard is only what stops you when it is not"),
   totalGuards: z.array(z.string()).describe("Guards on the batch as a whole. Five individually reasonable raises are one large spend change, and doing them one at a time is how that gets missed"),

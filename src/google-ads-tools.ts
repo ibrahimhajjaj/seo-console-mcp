@@ -18,7 +18,7 @@ import { adsNegativesUpdate } from "./google-ads-negatives.js";
 import { adsUpdateBatch } from "./google-ads-batch.js";
 import { adsAdCopy } from "./google-ads-copy.js";
 import { adsAssets } from "./google-ads-assets.js";
-import { createAdsClient, resolveAdsCredentials, quoteGaql, duringWindow, dateRange, money, toMicros, type AdsClient, type AdsDeps } from "./google-ads.js";
+import { createAdsClient, resolveAdsCredentials, quoteGaql, duringWindow, dateRange, money, moneyOrNull, toMicros, type AdsClient, type AdsDeps } from "./google-ads.js";
 
 type CampaignsParams = z.output<typeof adsCampaignsInput>;
 type KeywordsParams = z.output<typeof adsKeywordsInput>;
@@ -66,7 +66,7 @@ export async function adsCampaigns(params: CampaignsParams, deps: AdsDeps = {}):
   const campaigns = rows.map((row) => ({
     name: String(row.campaign?.name ?? ""),
     status: String(row.campaign?.status ?? ""),
-    dailyBudget: money(row.campaignBudget?.amountMicros),
+    dailyBudget: moneyOrNull(row.campaignBudget?.amountMicros),
     impressions: Number(row.metrics?.impressions ?? 0),
     clicks: Number(row.metrics?.clicks ?? 0),
     cost: money(row.metrics?.costMicros),
@@ -75,11 +75,17 @@ export async function adsCampaigns(params: CampaignsParams, deps: AdsDeps = {}):
   const lines = [
     `Google Ads campaigns over the last ${params.days} day(s)`,
     ...campaigns.map(
-      (c) => `- ${c.name} [${c.status}] budget $${c.dailyBudget.toFixed(2)}/day: ${c.impressions} impressions, ${c.clicks} clicks, $${c.cost.toFixed(2)} spent, ${c.conversions} conversions`,
+      (c) =>
+        `- ${c.name} [${c.status}] budget ${c.dailyBudget === null ? "not set" : `$${c.dailyBudget.toFixed(2)}/day`}: ${c.impressions} impressions, ${c.clicks} clicks, $${c.cost.toFixed(2)} spent, ${c.conversions} conversions`,
     ),
   ];
   if (!campaigns.length) lines.push("No campaigns had activity in this window.");
   const notes = [currentStateNote(["status", "dailyBudget"])];
+  if (campaigns.some((campaign) => campaign.dailyBudget === null)) {
+    notes.push(
+      "A budget reported as not set is one Google returned no amount for, which is not the same as a budget of zero. It is reported as null rather than 0 so it cannot be read as a campaign that can never spend.",
+    );
+  }
   lines.push(...notes);
   return result(lines.join("\n"), { days: params.days, rowCount: campaigns.length, campaigns, notes });
 }
@@ -97,7 +103,7 @@ export async function adsKeywords(params: KeywordsParams, deps: AdsDeps = {}): P
   const keywords = rows.map((row) => ({
     keyword: String(row.adGroupCriterion?.keyword?.text ?? ""),
     adGroup: String(row.adGroup?.name ?? ""),
-    bid: money(row.adGroupCriterion?.effectiveCpcBidMicros),
+    bid: moneyOrNull(row.adGroupCriterion?.effectiveCpcBidMicros),
     status: String(row.adGroupCriterion?.status ?? ""),
     approvalStatus: String(row.adGroupCriterion?.approvalStatus ?? ""),
     servingStatus: String(row.adGroupCriterion?.systemServingStatus ?? ""),
@@ -109,10 +115,18 @@ export async function adsKeywords(params: KeywordsParams, deps: AdsDeps = {}): P
   // from it can be wrong without looking wrong. This returns every row.
   const lines = [
     `${keywords.length} keyword(s) over the last ${params.days} day(s), every row, not a first page`,
-    ...keywords.map((k) => `- ${k.keyword} (${k.adGroup}) ${k.status || "state unknown"} bid $${k.bid.toFixed(2)} ${k.servingStatus}: ${k.impressions} impressions, ${k.clicks} clicks`),
+    ...keywords.map(
+      (k) =>
+        `- ${k.keyword} (${k.adGroup}) ${k.status || "state unknown"} bid ${k.bid === null ? "not set" : `$${k.bid.toFixed(2)}`} ${k.servingStatus}: ${k.impressions} impressions, ${k.clicks} clicks`,
+    ),
   ];
   if (!keywords.length) lines.push("No keywords had activity in this window.");
   const notes = [currentStateNote(["status", "bid", "approvalStatus", "servingStatus"])];
+  if (keywords.some((keyword) => keyword.bid === null)) {
+    notes.push(
+      "A bid reported as not set is one Google returned no amount for, which is what a keyword under an automated bidding strategy looks like: the strategy sets the price per auction and there is no CPC bid to read. It is null rather than 0 so it cannot be read as a bid of zero.",
+    );
+  }
   // ELIGIBLE is the word that does the damage. It means approved and capable of
   // serving, not currently serving, so a paused keyword reads ELIGIBLE and its
   // row is otherwise identical to a live one. Someone who paused three keywords
@@ -316,7 +330,7 @@ interface Plan {
   operations: unknown[];
   before: string;
   after: string;
-  beforeAmount: number;
+  beforeAmount: number | null;
   afterAmount: number;
   pausingLive: boolean;
   verify: (client: AdsClient) => Promise<string>;
@@ -355,13 +369,14 @@ async function plan(api: AdsClient, params: UpdateParams): Promise<Plan> {
       "keyword",
     );
     const resourceName = String(row.adGroupCriterion.resourceName);
+    const bidBefore = moneyOrNull(row.adGroupCriterion.effectiveCpcBidMicros);
     const next = amount(params.value, "bid");
     return {
       service: "adGroupCriteria",
       operations: [{ update: { resourceName, cpcBidMicros: toMicros(next) }, updateMask: "cpc_bid_micros" }],
-      before: `$${money(row.adGroupCriterion.effectiveCpcBidMicros).toFixed(2)}`,
+      before: bidBefore === null ? "not set" : `$${bidBefore.toFixed(2)}`,
       after: `$${next.toFixed(2)}`,
-      beforeAmount: money(row.adGroupCriterion.effectiveCpcBidMicros),
+      beforeAmount: bidBefore,
       afterAmount: next,
       pausingLive: false,
       verify: (c) =>
@@ -379,13 +394,14 @@ async function plan(api: AdsClient, params: UpdateParams): Promise<Plan> {
       "campaign",
     );
     const resourceName = String(row.campaignBudget.resourceName);
+    const budgetBefore = moneyOrNull(row.campaignBudget.amountMicros);
     const next = amount(params.value, "budget");
     return {
       service: "campaignBudgets",
       operations: [{ update: { resourceName, amountMicros: toMicros(next) }, updateMask: "amount_micros" }],
-      before: `$${money(row.campaignBudget.amountMicros).toFixed(2)}/day`,
+      before: budgetBefore === null ? "not set" : `$${budgetBefore.toFixed(2)}/day`,
       after: `$${next.toFixed(2)}/day`,
-      beforeAmount: money(row.campaignBudget.amountMicros),
+      beforeAmount: budgetBefore,
       afterAmount: next,
       pausingLive: false,
       verify: (c) => c.gaql(`SELECT campaign_budget.amount_micros FROM campaign WHERE campaign.name = ${target}`).then((rows) => `$${money(rows[0]?.campaignBudget?.amountMicros).toFixed(2)}/day`),
@@ -453,10 +469,18 @@ async function plan(api: AdsClient, params: UpdateParams): Promise<Plan> {
 
 // Reasons in plain words, so a dry run can say why it would refuse instead of
 // only that it refused, and the caller confirms something they have read.
-function guardReasons(kind: string, before: number, after: number, pausingLive: boolean): string[] {
+function guardReasons(kind: string, before: number | null, after: number, pausingLive: boolean): string[] {
   const reasons: string[] = [];
   if (kind === "bid" || kind === "budget") {
-    if (before > 0 && after > before * MULTIPLE_LIMIT) {
+    // An unknown current value must TRIP a guard, never quietly skip one. The
+    // old test was `before > 0 && ...`, so a keyword whose bid Google does not
+    // return, which is every keyword under an automated bidding strategy, read
+    // as zero and the multiple check stopped applying to it entirely.
+    if (before === null) {
+      reasons.push(
+        `the current ${kind} could not be read, so how large a change this is cannot be checked; it may be an automated bidding strategy, where setting a ${kind} changes how the campaign is run`,
+      );
+    } else if (before > 0 && after > before * MULTIPLE_LIMIT) {
       reasons.push(`${after / before >= 10 ? "over ten" : "more than three"} times the current value, $${before.toFixed(2)} to $${after.toFixed(2)}`);
     }
     if (after > MAX_SINGLE_AMOUNT) reasons.push(`$${after.toFixed(2)} is above the $${MAX_SINGLE_AMOUNT} ceiling for a single ${kind}`);

@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
 import type { adsUpdateBatchInput } from "./schemas.js";
-import { quoteGaql, money, toMicros, type AdsClient } from "./google-ads.js";
+import { quoteGaql, money, moneyOrNull, toMicros, type AdsClient } from "./google-ads.js";
 
 type Params = z.output<typeof adsUpdateBatchInput>;
 
@@ -30,13 +30,13 @@ const OUTLIER_FLOOR = 1;
 interface Resolved {
   target: string;
   resourceName: string;
-  before: number;
+  before: number | null;
   after: number;
 }
 
 interface Entry {
   target: string;
-  before: number;
+  before: number | null;
   after: number;
   guards: string[];
   applied: boolean;
@@ -44,9 +44,13 @@ interface Entry {
   matches: boolean | null;
 }
 
-function itemGuards(kind: string, before: number, after: number): string[] {
+function itemGuards(kind: string, before: number | null, after: number): string[] {
   const guards: string[] = [];
-  if (before > 0 && after > before * MULTIPLE_LIMIT) {
+  // Unknown must trip rather than skip. Reading it as zero made the multiple
+  // check stop applying to exactly the entries nobody can sanity-check by eye.
+  if (before === null) {
+    guards.push(`the current ${kind} could not be read, so how large a change this is cannot be checked`);
+  } else if (before > 0 && after > before * MULTIPLE_LIMIT) {
     guards.push(`${after / before >= 10 ? "over ten" : "more than three"} times the current value, $${before.toFixed(2)} to $${after.toFixed(2)}`);
   }
   if (after > MAX_SINGLE_AMOUNT) guards.push(`$${after.toFixed(2)} is above the $${MAX_SINGLE_AMOUNT} ceiling for a single ${kind}`);
@@ -60,11 +64,17 @@ function outliers(changing: Resolved[]): Map<string, string> {
   // Under three entries there is no "rest of the batch" to be out of line with,
   // and both entries are already in front of the reader.
   if (changing.length < 3) return flagged;
-  const moves = changing.map((entry) => Math.abs(entry.after - entry.before)).sort((first, second) => first - second);
+  // An entry whose current value is unknown has no move to compare.
+  const moves = changing
+    .filter((entry) => entry.before !== null)
+    .map((entry) => Math.abs(entry.after - (entry.before as number)))
+    .sort((first, second) => first - second);
   const middle = moves.length / 2;
+  if (!moves.length) return flagged;
   const median = moves.length % 2 === 1 ? (moves[Math.floor(middle)] as number) : ((moves[middle - 1] as number) + (moves[middle] as number)) / 2;
-  if (median <= 0) return flagged;
+  if (!moves.length || median <= 0) return flagged;
   for (const entry of changing) {
+    if (entry.before === null) continue;
     const move = Math.abs(entry.after - entry.before);
     if (move >= OUTLIER_FLOOR && move > median * OUTLIER_MULTIPLE) {
       flagged.set(entry.target, `this moves $${move.toFixed(2)} while the middle of the batch moves $${median.toFixed(2)}, so it is out of line with the other ${changing.length - 1} entries`);
@@ -122,7 +132,7 @@ async function resolveAll(api: AdsClient, params: Params): Promise<Resolved[]> {
     resolved.push({
       target: change.target,
       resourceName,
-      before: money(params.kind === "bid" ? block.effectiveCpcBidMicros : block.amountMicros),
+      before: moneyOrNull(params.kind === "bid" ? block.effectiveCpcBidMicros : block.amountMicros),
       after: change.value,
     });
   }
@@ -162,17 +172,22 @@ export async function adsUpdateBatch(api: AdsClient, params: Params): Promise<To
     "An entry far out of line with the rest is named even when the total is within every ceiling, because that is where a typo hides in a batch.",
   ];
 
-  const totalBefore = changing.reduce((sum, entry) => sum + entry.before, 0);
+  // A total built by treating unknowns as zero is not a total. It understates
+  // what the account holds now and overstates the increase, so it is reported
+  // as unknown and the size checks that depend on it are replaced by a guard.
+  const unknownBefore = changing.filter((entry) => entry.before === null);
+  const totalBefore = unknownBefore.length ? null : changing.reduce((sum, entry) => sum + (entry.before as number), 0);
   const totalAfter = changing.reduce((sum, entry) => sum + entry.after, 0);
 
   // Always said out loud, tripped or not. A daily number reads smaller than it
   // is and a column of daily numbers reads smaller still, and the sentence is
   // the thing that actually gets read: the guard is only what stops someone when
   // it does not.
+  const from = totalBefore === null ? `an unknown total, because ${unknownBefore.length} of these have no current ${params.kind} to read` : null;
   const totalSummary =
     params.kind === "budget"
-      ? `These daily budgets come to $${totalAfter.toFixed(2)} a day, about $${(totalAfter * DAYS_PER_MONTH).toFixed(0)} a month, up from $${totalBefore.toFixed(2)} a day, about $${(totalBefore * DAYS_PER_MONTH).toFixed(0)} a month.`
-      : `These bids come to $${totalAfter.toFixed(2)} per click across ${changing.length} keyword(s), up from $${totalBefore.toFixed(2)}. What that costs depends on clicks, which no setting here fixes.`;
+      ? `These daily budgets come to $${totalAfter.toFixed(2)} a day, about $${(totalAfter * DAYS_PER_MONTH).toFixed(0)} a month, up from ${from ?? `$${(totalBefore as number).toFixed(2)} a day, about $${((totalBefore as number) * DAYS_PER_MONTH).toFixed(0)} a month`}.`
+      : `These bids come to $${totalAfter.toFixed(2)} per click across ${changing.length} keyword(s), up from ${from ?? `$${(totalBefore as number).toFixed(2)}`}. What that costs depends on clicks, which no setting here fixes.`;
 
   const base = { kind: params.kind, customerId: api.customerId, totalBefore, totalAfter, totalSummary, notes };
 
@@ -186,13 +201,21 @@ export async function adsUpdateBatch(api: AdsClient, params: Params): Promise<To
   }
 
   const totalGuards: string[] = [];
-  const increase = totalAfter - totalBefore;
   const ceiling = batchCeiling(changing.length);
-  if (increase > ceiling) {
-    totalGuards.push(`the batch raises the total by $${increase.toFixed(2)}, above the $${ceiling.toFixed(2)} ceiling for a batch of ${changing.length}`);
-  }
-  if (changing.length > 1 && totalBefore > 0 && totalAfter > totalBefore * MULTIPLE_LIMIT) {
-    totalGuards.push(`the batch total is more than three times what it is now, $${totalBefore.toFixed(2)} to $${totalAfter.toFixed(2)}`);
+  if (totalBefore === null) {
+    // The size checks are arithmetic on the current total, and there is no
+    // current total. Saying so is the guard; inventing a zero would pass.
+    totalGuards.push(
+      `${unknownBefore.length} of these ${changing.length} entries have no current ${params.kind} to read (${unknownBefore.map((entry) => entry.target).join(", ")}), so the size of this batch cannot be checked against what the account holds now`,
+    );
+  } else {
+    const increase = totalAfter - totalBefore;
+    if (increase > ceiling) {
+      totalGuards.push(`the batch raises the total by $${increase.toFixed(2)}, above the $${ceiling.toFixed(2)} ceiling for a batch of ${changing.length}`);
+    }
+    if (changing.length > 1 && totalBefore > 0 && totalAfter > totalBefore * MULTIPLE_LIMIT) {
+      totalGuards.push(`the batch total is more than three times what it is now, $${totalBefore.toFixed(2)} to $${totalAfter.toFixed(2)}`);
+    }
   }
   const guardCount = totalGuards.length + entries.reduce((count, entry) => count + entry.guards.length, 0);
 
@@ -201,9 +224,9 @@ export async function adsUpdateBatch(api: AdsClient, params: Params): Promise<To
     ...entries.map((entry) =>
       entry.before === entry.after
         ? `- ${entry.target}: already $${entry.after.toFixed(2)}, nothing to do`
-        : `- ${entry.target}: $${entry.before.toFixed(2)} -> $${entry.after.toFixed(2)}${entry.guards.length ? ` (${entry.guards.join("; ")})` : ""}`,
+        : `- ${entry.target}: ${entry.before === null ? "not set" : `$${entry.before.toFixed(2)}`} -> $${entry.after.toFixed(2)}${entry.guards.length ? ` (${entry.guards.join("; ")})` : ""}`,
     ),
-    `Total of the entries being changed: $${totalBefore.toFixed(2)} -> $${totalAfter.toFixed(2)}`,
+    `Total of the entries being changed: ${totalBefore === null ? "unknown" : `$${totalBefore.toFixed(2)}`} -> $${totalAfter.toFixed(2)}`,
     totalSummary,
     ...totalGuards.map((guard) => `Guard: ${guard}`),
   ];
