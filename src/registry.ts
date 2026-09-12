@@ -24,6 +24,8 @@ import {
   adsQueryShape,
   adsUpdateOutput,
   adsUpdateShape,
+  adsUpdateBatchOutput,
+  adsUpdateBatchShape,
   adsSearchTermsOutput,
   adsSearchTermsShape,
   adsChangesOutput,
@@ -102,7 +104,7 @@ import { appStoreDiscovery } from "./app-store-discovery.js";
 import { appStoreSales } from "./app-store-sales.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
-import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate, adsSearchTerms, adsChanges, adsNegatives, adsNegativesUpdateTool } from "./google-ads-tools.js";
+import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate, adsSearchTerms, adsChanges, adsNegatives, adsNegativesUpdateTool, adsUpdateBatchTool } from "./google-ads-tools.js";
 import { listSnapshotsTool } from "./list-snapshots.js";
 import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
@@ -474,6 +476,16 @@ export const toolDefinitions: ToolDefinition[] = [
     write: true,
     spendsMoney: true,
     run: (_ctx, params) => adsUpdate(params),
+  }),
+  defineTool({
+    name: "ads_update_batch",
+    description:
+      "Change several Google Ads keyword bids, or several campaign daily budgets, in one call. It is a named list of pairs, not a rule applied to many things: each entry names one target and the value it should end at, and an entry that matches no row or more than one refuses the whole batch before anything is written. The sum is guarded as well as each entry, because separately reasonable raises are one large spend change together. Dry run unless dryRun is false, and every value is read back afterwards",
+    inputShape: adsUpdateBatchShape,
+    outputSchema: adsUpdateBatchOutput,
+    write: true,
+    spendsMoney: true,
+    run: (_ctx, params) => adsUpdateBatchTool(params),
   }),
   defineTool({
     name: "list_snapshots",

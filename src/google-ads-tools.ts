@@ -1,7 +1,19 @@
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
-import type { adsCampaignsInput, adsKeywordsInput, adsAdsInput, adsQueryInput, adsUpdateInput, adsSearchTermsInput, adsChangesInput, adsNegativesInput, adsNegativesUpdateInput } from "./schemas.js";
+import type {
+  adsCampaignsInput,
+  adsKeywordsInput,
+  adsAdsInput,
+  adsQueryInput,
+  adsUpdateInput,
+  adsSearchTermsInput,
+  adsChangesInput,
+  adsNegativesInput,
+  adsNegativesUpdateInput,
+  adsUpdateBatchInput,
+} from "./schemas.js";
 import { adsNegativesUpdate } from "./google-ads-negatives.js";
+import { adsUpdateBatch } from "./google-ads-batch.js";
 import { createAdsClient, resolveAdsCredentials, quoteGaql, duringWindow, dateRange, money, toMicros, type AdsClient, type AdsDeps } from "./google-ads.js";
 
 type CampaignsParams = z.output<typeof adsCampaignsInput>;
@@ -13,6 +25,7 @@ type SearchTermsParams = z.output<typeof adsSearchTermsInput>;
 type ChangesParams = z.output<typeof adsChangesInput>;
 type NegativesParams = z.output<typeof adsNegativesInput>;
 type NegativesUpdateParams = z.output<typeof adsNegativesUpdateInput>;
+type UpdateBatchParams = z.output<typeof adsUpdateBatchInput>;
 
 // Deliberately low, because they are a fraction of the account they guard rather
 // than a round number. A ceiling that is large next to the budget it protects
@@ -466,4 +479,8 @@ export async function adsUpdate(params: UpdateParams, deps: AdsDeps = {}): Promi
 
 export async function adsNegativesUpdateTool(params: NegativesUpdateParams, deps: AdsDeps = {}): Promise<ToolResult> {
   return adsNegativesUpdate(client(deps), params);
+}
+
+export async function adsUpdateBatchTool(params: UpdateBatchParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  return adsUpdateBatch(client(deps), params);
 }

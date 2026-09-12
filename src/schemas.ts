@@ -803,6 +803,40 @@ export const adsChangesOutput = z.object({
   notes: z.array(z.string()),
 });
 
+export const adsUpdateBatchShape = {
+  kind: z
+    .enum(["bid", "budget"])
+    .describe("One kind per call. A summed guard is only honest inside one kind: bids and budgets sum to dollars, statuses do not, and mixing them makes the total unreadable"),
+  changes: z
+    .array(z.object({ target: z.string().trim().min(1).max(400), value: z.number().min(0) }))
+    .min(1)
+    .max(50)
+    .describe("A named list of pairs, each with its own value. There is no selector form: enumeration cannot make the mistake that a pattern can"),
+  dryRun: z.boolean().default(true).describe("Resolve and price every entry and report the total, without changing anything"),
+  confirm: z.boolean().default(false).describe("Perform the batch even though a guard tripped. The dry run lists every reason, so this confirms something already read"),
+};
+export const adsUpdateBatchInput = z.object(adsUpdateBatchShape);
+export const adsUpdateBatchOutput = z.object({
+  kind: z.string(),
+  customerId: z.string(),
+  entries: z.array(
+    z.object({
+      target: z.string(),
+      before: z.number().nullable(),
+      after: z.number(),
+      guards: z.array(z.string()),
+      applied: z.boolean(),
+      readBack: z.number().nullable(),
+      matches: z.boolean().nullable(),
+    }),
+  ),
+  totalBefore: z.number(),
+  totalAfter: z.number(),
+  totalGuards: z.array(z.string()).describe("Guards on the batch as a whole. Five individually reasonable raises are one large spend change, and doing them one at a time is how that gets missed"),
+  applied: z.boolean(),
+  notes: z.array(z.string()),
+});
+
 export const adsNegativesShape = {
   level: z
     .enum(["campaign", "adGroup", "sharedSet", "all"])

@@ -31,6 +31,17 @@
 - `ads_changes` reads the change history: what changed, when, which fields, by
   whom, and whether it came from a tool or from someone in the browser. Google
   keeps 30 days. It is the audit trail for anything `ads_update` writes.
+- `ads_update_batch` changes several keyword bids, or several campaign daily
+  budgets, in one call. It is a named list of pairs, not a rule applied to many
+  things: there is no selector form, because the mistake it exists to prevent is
+  the one a pattern makes easy. Every entry resolves before anything is written,
+  so a fourth entry that matches nothing does not leave the first three already
+  live. The sum is guarded as well as each entry, since five separately
+  reasonable raises are one large spend change and making them one at a time is
+  how that goes unnoticed; a batch of budgets states the monthly total in and
+  out. Two entries cannot name the same thing, including two campaigns that
+  share one budget, where the total would count it twice and the second write
+  would quietly win. Every value is read back afterwards, entry by entry.
 
 ### Fixed
 
@@ -59,7 +70,7 @@
   removing one can only let traffic through.
 - `--allow-spend`, a second CLI gate for tools that cost money. One flag
   authorising both "resubmit a sitemap" and "triple a daily budget" is not a
-  gate, so `ads_update` needs both it and `--allow-write`.
+  gate, so `ads_update` and `ads_update_batch` need both it and `--allow-write`.
 
 ## 0.10.0
 

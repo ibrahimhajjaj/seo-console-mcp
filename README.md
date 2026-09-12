@@ -1181,6 +1181,37 @@ A change that would be a no-op says so instead of sending a pointless mutation.
 
 From the command line this tool needs `--allow-spend` as well as `--allow-write`. One flag authorising both "resubmit a sitemap" and "triple a daily budget" is not a gate.
 
+### `ads_update_batch`
+
+Changes several keyword bids, or several campaign daily budgets, in one call. One kind per call: a total across bids and budgets would add a per-click ceiling to a per-day amount, and no honest sentence describes that sum.
+
+```json
+{ "kind": "bid", "changes": [{ "target": "wordpress backup", "value": 0.85 }, { "target": "backup plugin", "value": 0.6 }], "dryRun": false, "confirm": true }
+```
+
+<!-- params:ads_update_batch -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kind` | one of bid, budget | yes |  | One kind per call. A summed guard is only honest inside one kind: bids and budgets sum to dollars, statuses do not, and mixing them makes the total unreadable |
+| `changes` | JSON list | yes |  | A named list of pairs, each with its own value. There is no selector form: enumeration cannot make the mistake that a pattern can |
+| `dryRun` | boolean | no | `true` | Resolve and price every entry and report the total, without changing anything |
+| `confirm` | boolean | no | `false` | Perform the batch even though a guard tripped. The dry run lists every reason, so this confirms something already read |
+
+<!-- /params:ads_update_batch -->
+
+It is a named list of pairs, not a rule applied to many things. There is no "raise everything by 20%" and no selector, because the mistake this tool exists to prevent is exactly the one a selector makes easy: a pattern that matches more than the caller pictured, applied before anyone can see the list it produced. Every entry names one target and the value it should end at, and the dry run prints that list back.
+
+Three things it does that `ads_update` called in a loop does not:
+
+- **Everything resolves before anything is written.** If entry four matches nothing, entries one to three are not already live. A loop of single calls fails halfway and leaves the account in a state nobody chose, with no single row anywhere saying so.
+- **The sum is guarded, not only each entry.** Five raises that are each within the per-item ceilings are still one large spend change together, and doing them one at a time is how that goes unnoticed. A batch of budgets also states the monthly total, in and out: `$13.00 a day, about $395 a month, up from about $304 a month`.
+- **Two entries cannot name the same thing.** The same target twice is refused, and so are two differently named campaigns that share one budget, where the total would count it twice and the second write would quietly win.
+
+Every value is read back after the write, entry by entry, and any that did not store what was sent is named in the result. One accepted request is one acceptance, not N stored values, and a batch is exactly where a partial landing hides.
+
+Like `ads_update`, it needs `--allow-spend` as well as `--allow-write` from the command line.
+
 ## Running a tool from the command line
 
 Every tool above is also runnable without an MCP client, which is what to use when a result has to land in a file that a later run can diff:
