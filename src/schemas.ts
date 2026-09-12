@@ -994,7 +994,11 @@ export const adsNegativesUpdateOutput = z.object({
 });
 
 export const adsUpdateShape = {
-  kind: z.enum(["bid", "budget", "campaignStatus", "adStatus"]).describe("What to change: a keyword's max CPC bid, a campaign's daily budget, a campaign's status, or an ad's status"),
+  kind: z
+    .enum(["bid", "budget", "campaignStatus", "adStatus", "keywordStatus"])
+    .describe(
+      "What to change: a keyword's max CPC bid, a campaign's daily budget, a campaign's status, an ad's status, or a keyword's status. Use keywordStatus to stop one keyword serving; dropping its bid is not the same thing, because the keyword stays eligible and keeps competing for the same budget",
+    ),
   target: z.string().trim().min(1).max(400).describe("The keyword text, the campaign name, or the numeric ad id. It must match exactly one thing or the call is refused"),
   value: z.string().trim().min(1).max(40).describe("The new amount in dollars for a bid or budget, or pause or enable for a status"),
   dryRun: z

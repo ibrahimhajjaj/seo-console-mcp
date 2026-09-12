@@ -392,6 +392,31 @@ async function plan(api: AdsClient, params: UpdateParams): Promise<Plan> {
     };
   }
 
+  if (params.kind === "keywordStatus") {
+    const status = statusWord(params.value);
+    const row = await exactlyOne(
+      api,
+      `SELECT ad_group_criterion.resource_name, ad_group_criterion.status, ad_group_criterion.keyword.text
+       FROM keyword_view WHERE ad_group_criterion.keyword.text = ${target}`,
+      "keyword",
+    );
+    const resourceName = String(row.adGroupCriterion.resourceName);
+    const before = String(row.adGroupCriterion.status);
+    return {
+      service: "adGroupCriteria",
+      operations: [{ update: { resourceName, status }, updateMask: "status" }],
+      before,
+      after: status,
+      beforeAmount: 0,
+      afterAmount: 0,
+      pausingLive: before === "ENABLED" && status === "PAUSED",
+      verify: (c) =>
+        c
+          .gaql(`SELECT ad_group_criterion.status FROM keyword_view WHERE ad_group_criterion.resource_name = ${quoteGaql(resourceName)}`)
+          .then((rows) => String(rows[0]?.adGroupCriterion?.status ?? "")),
+    };
+  }
+
   if (params.kind === "campaignStatus") {
     const status = statusWord(params.value);
     const row = await exactlyOne(api, `SELECT campaign.resource_name, campaign.name, campaign.status FROM campaign WHERE campaign.name = ${target}`, "campaign");

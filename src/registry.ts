@@ -503,7 +503,7 @@ export const toolDefinitions: ToolDefinition[] = [
   defineTool({
     name: "ads_update",
     description:
-      "Change one Google Ads keyword bid, campaign daily budget, campaign status or ad status. Spends money, so it is a dry run unless dryRun is false, it refuses a change that trips a guard unless confirm is true, and it re-reads the value after writing because an accepted request is not a stored value. Guards: more than three times the current amount, more than $25, or pausing something that is serving",
+      "Change one Google Ads keyword bid, campaign daily budget, campaign status, ad status or keyword status. Pausing one keyword is its own kind because dropping a bid is not the same thing: the keyword stays eligible and goes on competing for the same budget. Spends money, so it is a dry run unless dryRun is false, it refuses a change that trips a guard unless confirm is true, and it re-reads the value after writing because an accepted request is not a stored value. Guards: more than three times the current amount, more than $25, or pausing something that is serving",
     inputShape: adsUpdateShape,
     outputSchema: adsUpdateOutput,
     write: true,

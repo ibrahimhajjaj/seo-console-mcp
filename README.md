@@ -1211,7 +1211,9 @@ Removals are not collision-checked. Removing a negative can only let traffic thr
 
 ### `ads_update`
 
-Changes one keyword bid, campaign daily budget, campaign status or ad status. This is the only tool here that spends money, so it is built to be hard to fire by accident.
+Changes one keyword bid, campaign daily budget, campaign status, ad status or keyword status. This is the only tool here that spends money, so it is built to be hard to fire by accident.
+
+**Pausing a keyword is its own kind, because dropping its bid is not the same thing.** A keyword with a lowered bid is still enabled, still eligible, and still competing for the same daily budget. If the reason to act was that budget is the constraint, lowering the bid does not free any of it.
 
 ```json
 { "kind": "budget", "target": "search-uk-us-2026-09", "value": "5.00", "dryRun": false, "confirm": true }
@@ -1221,7 +1223,7 @@ Changes one keyword bid, campaign daily budget, campaign status or ad status. Th
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `kind` | one of bid, budget, campaignStatus, adStatus | yes |  | What to change: a keyword's max CPC bid, a campaign's daily budget, a campaign's status, or an ad's status |
+| `kind` | one of bid, budget, campaignStatus, adStatus, keywordStatus | yes |  | What to change: a keyword's max CPC bid, a campaign's daily budget, a campaign's status, an ad's status, or a keyword's status. Use keywordStatus to stop one keyword serving; dropping its bid is not the same thing, because the keyword stays eligible and keeps competing for the same budget |
 | `target` | string | yes |  | The keyword text, the campaign name, or the numeric ad id. It must match exactly one thing or the call is refused |
 | `value` | string | yes |  | The new amount in dollars for a bid or budget, or pause or enable for a status |
 | `dryRun` | boolean | no | `true` | Report what would change and which guards it trips, without changing anything. On by default: this tool spends money, so performing a change has to be asked for |

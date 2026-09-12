@@ -153,6 +153,48 @@ describe("ads reads", () => {
     expect(JSON.stringify(filtered.calls)).toContain("ad_group_criterion.status = 'ENABLED'");
   });
 
+  it("pauses one keyword, which dropping its bid does not do", async () => {
+    // Raised in review after three keywords had to be paused outside this tool:
+    // it could change a campaign's status and an ad's status but not a
+    // keyword's. Lowering the bid is not a substitute, because the keyword stays
+    // eligible and goes on competing for the same budget.
+    const calls: string[] = [];
+    const { fetchImpl } = router((url, body) => {
+      calls.push(url);
+      if (url.includes(":mutate")) return { body: { results: [{}] } };
+      const query = String((body as { query?: string })?.query ?? "");
+      return {
+        body: stream([
+          query.includes("resource_name =")
+            ? { adGroupCriterion: { status: "PAUSED" } }
+            : { adGroupCriterion: { resourceName: "customers/1/adGroupCriteria/7~9", status: "ENABLED", keyword: { text: "backwpup" } } },
+        ]),
+      };
+    });
+
+    const result = await adsUpdate(adsUpdateInput.parse({ kind: "keywordStatus", target: "backwpup", value: "pause", dryRun: false, confirm: true }), { credentials, fetchImpl });
+    const content = result.structuredContent as { before: string; after: string; readBack: string; matches: boolean; guards: string[] };
+
+    expect(calls.some((url) => url.includes("adGroupCriteria:mutate"))).toBe(true);
+    expect(content.before).toBe("ENABLED");
+    expect(content.after).toBe("PAUSED");
+    // Read back, because an accepted request is not a stored value.
+    expect(content.readBack).toBe("PAUSED");
+    expect(content.matches).toBe(true);
+    // Pausing something that is serving stops delivery, so it trips the guard
+    // the same way pausing a live campaign does.
+    expect(content.guards.join(" ")).toContain("currently serving");
+  });
+
+  it("refuses a keyword pause that matches no keyword", async () => {
+    const { fetchImpl } = router(() => ({ body: stream([]) }));
+    // Refused before any mutate, the same one-match-or-refuse rail the other
+    // kinds use. The registry turns the throw into an isError result.
+    await expect(adsUpdate(adsUpdateInput.parse({ kind: "keywordStatus", target: "never-existed", value: "pause", dryRun: false, confirm: true }), { credentials, fetchImpl })).rejects.toThrow(
+      /No keyword matched. Nothing was changed./,
+    );
+  });
+
   it("converts micros to dollars", async () => {
     const { fetchImpl } = router(() => ({
       body: stream([
