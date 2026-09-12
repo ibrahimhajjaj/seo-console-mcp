@@ -1,7 +1,7 @@
 {
   "name": "seo-console-mcp",
-  "version": "0.10.0",
-  "description": "MCP server for Google Search Console, the App Store, Google Play, WordPress.org and Core Web Vitals: search analytics, ASO, store conversion, on-page audits, and diffable snapshots",
+  "version": "0.11.0",
+  "description": "MCP server for Google Search Console, Google Ads, the App Store, Google Play, WordPress.org and Core Web Vitals: search analytics, ASO, paid search, store conversion, on-page audits, and diffable snapshots",
   "type": "module",
   "bin": {
     "seo-console-mcp": "dist/index.js",
@@ -35,6 +35,7 @@
     "seo",
     "aso",
     "google-search-console",
+    "google-ads",
     "app-store-connect",
     "google-play",
     "wordpress",

@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.11.0
+
+Google Ads: seven reads and three guarded writes.
 
 ### Added
 
