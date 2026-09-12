@@ -154,6 +154,20 @@ export async function playStoreStats(params: PlayStoreStatsParams, deps: { readR
     );
   }
 
+  // Named one by one, and named as the reason to open a browser rather than as a
+  // vague gap. An absent metric reads as "this app has none of that" unless
+  // something says where it actually lives, and these five live in one place:
+  // no Google API returns them. Checked at contract level, not assumed. The Play
+  // Developer Reporting API carries vitals, anomalies and apps only, and the Play
+  // Android Developer API carries reviews, edits, purchases and tracks.
+  const CONSOLE_ONLY = [
+    "device first opens: Grow users > Acquisition reports",
+    "DAU and MAU: Statistics",
+    "7-day device retention: Grow users > Retention",
+    "peer group and peer benchmarks: Statistics > Compare to peers",
+    "store listing experiment state: Grow users > Store listing experiments",
+  ];
+
   const acquisitions = trafficSources.reduce((total, group) => total + (group.acquisitions ?? 0), 0);
   const missingColumns = traffic?.missing ?? [];
   if (missingColumns.length) {
@@ -174,6 +188,10 @@ export async function playStoreStats(params: PlayStoreStatsParams, deps: { readR
       `Every traffic row is a placeholder source (${[...new Set(trafficSources.map((group) => group.source))].join(", ")}), so the traffic source breakdown for this period carries no attribution and should not be quoted as one.`,
     );
   }
+
+  // Last, so it reads as a pointer after the findings rather than as a caveat
+  // competing with them.
+  notes.push(`[info] These are not in any Google API and can only be read in Play Console for ${params.packageName}, so their absence here is not evidence of zero: ${CONSOLE_ONLY.join("; ")}.`);
 
   const text = [
     `Play Store stats for ${params.packageName} (${window ? `${window.startDate} to ${window.endDate}` : month})`,

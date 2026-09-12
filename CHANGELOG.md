@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A `play_vitals` error note cut the API's message at the first period, so
+  `/apps/com.mbh.azkari/crashRateMetricSet` printed as `/apps/com` and the note
+  threw away the app name at the moment it mattered. A package name, a URL and a
+  decimal all carry periods; it now splits on a sentence-ending one.
+
+### Changed
+
+- `play_store_stats` names the five metrics that exist only in Play Console, and
+  where each one lives: device first opens, DAU and MAU, 7-day device retention,
+  peer benchmarks, and store listing experiment state. No Google API returns
+  them, checked at contract level against both the Play Developer Reporting API
+  and the Play Android Developer API rather than assumed. A metric that is absent
+  with nothing said about it reads as a zero, which is the same mistake this tool
+  already had to fix once for unpopulated columns. Store listing visitors,
+  acquisitions and conversion rate are NOT in that list: those come from the
+  bulk reports and this tool already returns them.
+
 ## 0.12.0
 
 Google Ads: read what the ad says and what serves beside it.

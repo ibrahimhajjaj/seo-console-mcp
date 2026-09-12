@@ -65,6 +65,29 @@ function traffic(result: Awaited<ReturnType<typeof playStoreStats>>): TrafficGro
 }
 
 describe("playStoreStats", () => {
+  it("names the metrics that exist only in Play Console, so their absence is not read as zero", async () => {
+    const { readReport } = reader({
+      "installs_app.getpsst_202310": INSTALLS_202310,
+      "store_performance_app.getpsst_202310": TRAFFIC_202310,
+    });
+
+    const result = await playStoreStats({ packageName: "app.getpsst", month: "202310" }, { readReport });
+
+    const notes = (result.structuredContent as { notes: string[] }).notes.join(" ");
+    // Each one named, with where it lives. "Some metrics are missing" sends
+    // nobody anywhere; a metric absent with no explanation reads as a zero.
+    expect(notes).toContain("[info]");
+    for (const metric of ["device first opens", "DAU and MAU", "7-day device retention", "peer benchmarks", "store listing experiment state"]) {
+      expect(notes).toContain(metric);
+    }
+    expect(notes).toContain("Statistics > Compare to peers");
+    expect(notes).toContain("app.getpsst");
+    // The three that ARE reachable must not be listed as console-only.
+    for (const shipped of ["store listing visitors", "conversion rate"]) {
+      expect(notes.toLowerCase()).not.toContain(`${shipped}: `);
+    }
+  });
+
   it("decodes UTF-16LE with a BOM and reports installs for the last date present", async () => {
     const { readReport } = reader({
       "installs_app.getpsst_202310": INSTALLS_202310,
