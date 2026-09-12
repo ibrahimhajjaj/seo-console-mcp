@@ -85,17 +85,20 @@ export async function adsCampaigns(params: CampaignsParams, deps: AdsDeps = {}):
 }
 
 export async function adsKeywords(params: KeywordsParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  const conditions = [duringWindow(params.days, deps.now ?? new Date())];
+  if (params.status) conditions.push(`ad_group_criterion.status = '${params.status}'`);
   const rows = await client(deps).gaql(
     `SELECT ad_group.name, ad_group_criterion.keyword.text,
-            ad_group_criterion.effective_cpc_bid_micros,
+            ad_group_criterion.effective_cpc_bid_micros, ad_group_criterion.status,
             ad_group_criterion.approval_status, ad_group_criterion.system_serving_status,
             metrics.impressions, metrics.clicks, metrics.cost_micros
-     FROM keyword_view WHERE ${duringWindow(params.days, deps.now ?? new Date())}`,
+     FROM keyword_view WHERE ${conditions.join(" AND ")}`,
   );
   const keywords = rows.map((row) => ({
     keyword: String(row.adGroupCriterion?.keyword?.text ?? ""),
     adGroup: String(row.adGroup?.name ?? ""),
     bid: money(row.adGroupCriterion?.effectiveCpcBidMicros),
+    status: String(row.adGroupCriterion?.status ?? ""),
     approvalStatus: String(row.adGroupCriterion?.approvalStatus ?? ""),
     servingStatus: String(row.adGroupCriterion?.systemServingStatus ?? ""),
     impressions: Number(row.metrics?.impressions ?? 0),
@@ -106,10 +109,20 @@ export async function adsKeywords(params: KeywordsParams, deps: AdsDeps = {}): P
   // from it can be wrong without looking wrong. This returns every row.
   const lines = [
     `${keywords.length} keyword(s) over the last ${params.days} day(s), every row, not a first page`,
-    ...keywords.map((k) => `- ${k.keyword} (${k.adGroup}) bid $${k.bid.toFixed(2)} ${k.servingStatus}: ${k.impressions} impressions, ${k.clicks} clicks`),
+    ...keywords.map((k) => `- ${k.keyword} (${k.adGroup}) ${k.status || "state unknown"} bid $${k.bid.toFixed(2)} ${k.servingStatus}: ${k.impressions} impressions, ${k.clicks} clicks`),
   ];
   if (!keywords.length) lines.push("No keywords had activity in this window.");
-  const notes = [currentStateNote(["bid", "approvalStatus", "servingStatus"])];
+  const notes = [currentStateNote(["status", "bid", "approvalStatus", "servingStatus"])];
+  // ELIGIBLE is the word that does the damage. It means approved and capable of
+  // serving, not currently serving, so a paused keyword reads ELIGIBLE and its
+  // row is otherwise identical to a live one. Someone who paused three keywords
+  // and sees them here unchanged concludes the pause did not take.
+  const paused = keywords.filter((keyword) => keyword.status === "PAUSED");
+  if (paused.length) {
+    notes.push(
+      `${paused.length} of these ${keywords.length} keyword(s) are PAUSED and are not serving: ${paused.map((keyword) => keyword.keyword).join(", ")}. They still report an ELIGIBLE serving status, which means approved and capable of serving rather than currently serving, and they still carry the impressions they earned before they were paused.`,
+    );
+  }
   lines.push(...notes);
   return result(lines.join("\n"), { days: params.days, rowCount: keywords.length, keywords, notes });
 }

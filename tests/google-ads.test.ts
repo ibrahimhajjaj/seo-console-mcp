@@ -110,6 +110,49 @@ describe("ads reads", () => {
     expect(() => adsKeywordsOutput.parse(content)).not.toThrow();
   });
 
+  it("names a paused keyword as paused instead of leaving it identical to a live one", async () => {
+    // Found in review. Three keywords had been paused; this tool returned them
+    // with an unchanged bid, APPROVED and ELIGIBLE, byte-identical in shape to a
+    // serving keyword, and the obvious reading was that the pause had not taken.
+    const rows = [
+      {
+        adGroup: { name: "core" },
+        adGroupCriterion: { keyword: { text: "live one" }, status: "ENABLED", effectiveCpcBidMicros: "1500000", approvalStatus: "APPROVED", systemServingStatus: "ELIGIBLE" },
+        metrics: { impressions: 9, clicks: 1, costMicros: "0" },
+      },
+      {
+        adGroup: { name: "all-in-one" },
+        adGroupCriterion: { keyword: { text: "all in one wp migration" }, status: "PAUSED", effectiveCpcBidMicros: "7100000", approvalStatus: "APPROVED", systemServingStatus: "ELIGIBLE" },
+        metrics: { impressions: 2, clicks: 0, costMicros: "0" },
+      },
+    ];
+    const { fetchImpl } = router(() => ({ body: stream(rows) }));
+
+    const result = await adsKeywords(adsKeywordsInput.parse({}), { credentials, fetchImpl });
+    const content = result.structuredContent as { keywords: Array<{ keyword: string; status: string }>; notes: string[] };
+
+    expect(content.keywords.map((keyword) => keyword.status)).toEqual(["ENABLED", "PAUSED"]);
+    const notes = content.notes.join(" ");
+    expect(notes).toContain("1 of these 2 keyword(s) are PAUSED");
+    expect(notes).toContain("all in one wp migration");
+    // ELIGIBLE is the word that misleads, so the note has to say what it means.
+    expect(notes).toContain("approved and capable of serving rather than currently serving");
+    expect(result.content[0]?.text).toContain("- all in one wp migration (all-in-one) PAUSED bid $7.10");
+  });
+
+  it("returns every state by default and filters only when asked", async () => {
+    // Dropping paused rows silently would trade a labelling bug for an absence
+    // bug, which is the same failure one layer down: the caller asks whether a
+    // keyword is in the account and gets nothing back.
+    const { fetchImpl, calls } = router(() => ({ body: stream([]) }));
+    await adsKeywords(adsKeywordsInput.parse({}), { credentials, fetchImpl });
+    expect(JSON.stringify(calls)).not.toContain("ad_group_criterion.status =");
+
+    const filtered = router(() => ({ body: stream([]) }));
+    await adsKeywords(adsKeywordsInput.parse({ status: "ENABLED" }), { credentials, fetchImpl: filtered.fetchImpl });
+    expect(JSON.stringify(filtered.calls)).toContain("ad_group_criterion.status = 'ENABLED'");
+  });
+
   it("converts micros to dollars", async () => {
     const { fetchImpl } = router(() => ({
       body: stream([

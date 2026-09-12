@@ -702,7 +702,15 @@ export const adsCampaignsOutput = z.object({
   notes: z.array(z.string()),
 });
 
-export const adsKeywordsShape = { days: adsWindow };
+export const adsKeywordsShape = {
+  days: adsWindow,
+  status: z
+    .enum(["ENABLED", "PAUSED", "REMOVED"])
+    .optional()
+    .describe(
+      "Limit to one keyword state. Omitted, every keyword is returned with its state named, because dropping rows silently is how a count taken from this tool goes wrong the way a console count does",
+    ),
+};
 export const adsKeywordsInput = z.object(adsKeywordsShape);
 export const adsKeywordsOutput = z.object({
   days: z.number(),
@@ -712,8 +720,9 @@ export const adsKeywordsOutput = z.object({
       keyword: z.string(),
       adGroup: z.string(),
       bid: z.number(),
+      status: z.string().describe("ENABLED, PAUSED or REMOVED. This is whether the keyword is turned on, which servingStatus does not tell you: a paused keyword still reports ELIGIBLE"),
       approvalStatus: z.string(),
-      servingStatus: z.string(),
+      servingStatus: z.string().describe("Google's system serving status. ELIGIBLE means approved and capable of serving, not currently serving; a paused keyword reads ELIGIBLE"),
       impressions: z.number(),
       clicks: z.number(),
       cost: z.number(),

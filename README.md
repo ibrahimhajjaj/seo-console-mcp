@@ -1024,7 +1024,9 @@ Campaign name, status, daily budget, impressions, clicks, cost and conversions o
 
 ### `ads_keywords`
 
-Every keyword with its effective CPC bid, approval status, serving status and metrics.
+Every keyword with its state, effective CPC bid, approval status, serving status and metrics.
+
+**`ELIGIBLE` does not mean serving.** It means approved and capable of serving, and a paused keyword reports it. That is why `status` is returned alongside it: without it a paused keyword's row is identical to a live one, and someone who has just paused three keywords reads that as the pause not having taken. Paused keywords are named in a note rather than dropped, because silently removing rows is the same failure one layer down: you ask whether a keyword is in the account and get nothing back. Pass `status` to filter deliberately.
 
 ```json
 { "days": 30 }
@@ -1035,6 +1037,7 @@ Every keyword with its effective CPC bid, approval status, serving status and me
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `days` | number | no | `30` | How many days back to report, ending today |
+| `status` | one of ENABLED, PAUSED, REMOVED | no |  | Limit to one keyword state. Omitted, every keyword is returned with its state named, because dropping rows silently is how a count taken from this tool goes wrong the way a console count does |
 
 <!-- /params:ads_keywords -->
 
