@@ -76,6 +76,22 @@ describe("appStoreDiscovery", () => {
     expect(rows.map((row: any) => row.locale)).toEqual(["en-US", "en-GB", "ar-SA"]);
   });
 
+  it("keeps the whole message in the note instead of cutting at the first period", async () => {
+    // Reachable through a network failure rather than an HTTP one: the note
+    // reports whatever error was caught, and a DNS message is full of periods.
+    // Cutting at the first turned "getaddrinfo ENOTFOUND api.appstoreconnect.apple.com"
+    // into "getaddrinfo ENOTFOUND api", which names nothing.
+    const fetchImpl = (async () => {
+      throw new Error("getaddrinfo ENOTFOUND api.appstoreconnect.apple.com");
+    }) as unknown as typeof fetch;
+
+    const result = await appStoreDiscovery(appStoreDiscoveryInput.parse({ appId: "1", include: ["appEvents"] }), { fetchImpl, credentials: credentials() });
+
+    const notes = (result.structuredContent as { notes: string[] }).notes.join(" ");
+    expect(notes).toContain("api.appstoreconnect.apple.com");
+    expect(notes).not.toContain("ENOTFOUND api)");
+  });
+
   it("separates a resource it cannot read from one that is genuinely empty", async () => {
     const fetchImpl = router((url) => (url.includes("appEvents") ? { status: 403, body: { errors: [{ detail: "forbidden" }] } } : { status: 200, body: { data: [] } }));
 

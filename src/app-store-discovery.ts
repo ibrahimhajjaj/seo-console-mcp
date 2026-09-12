@@ -97,7 +97,10 @@ export async function appStoreDiscovery(params: DiscoveryParams, deps: Discovery
       // condemns the whole resource: a partial keyword set read as complete
       // would be a quieter wrong answer than none at all.
       resources[name] = { available: false, count: null, rows: [], error: message };
-      notes.push(`${name} could not be read (${message.split(".")[0]}), so it is unknown rather than empty.`);
+      // A sentence-ending period, not every period. A bundle id, a URL and a
+      // decimal all carry one, and cutting at the first threw away the part of
+      // the message that named what failed.
+      notes.push(`${name} could not be read (${message.split(/\.(?:\s|$)/)[0]}), so it is unknown rather than empty.`);
       continue;
     }
     const rows = own.flatMap((entry) => entry.rows ?? []);
