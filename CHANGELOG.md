@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.15.1
+
+### Fixed
+
+- The plugin manifest asked npm for `seo-console-mcp@>=<current version> <1.0.0`,
+  which broke the server for the window between committing a release and
+  publishing it. The manifest is committed first, so during that gap the range
+  names a version npm does not have, `npx` fails with `ETARGET`, and every tool
+  disappears behind `MCP error -32000: Connection closed`. The guard added in
+  0.13.2 could not see it: it compared the repo to itself and passed, while the
+  registry is a separate system that only agrees once someone publishes.
+  The floor never earned its place. npm resolves a range to the highest matching
+  version, so `<1.0.0` installs exactly what the floored range would whenever
+  that version exists, and still installs a working one when it does not. The
+  upper bound is the part doing real work, keeping a future 1.0 from being picked
+  up silently. Found in review, the same shape as the 0.13.2 bug in the opposite
+  direction: that one lagged npm and installed an old build quietly, this one led
+  npm and installed nothing loudly.
+
 ## 0.15.0
 
 ### Added
