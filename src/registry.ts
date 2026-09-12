@@ -28,6 +28,10 @@ import {
   adsSearchTermsShape,
   adsChangesOutput,
   adsChangesShape,
+  adsNegativesOutput,
+  adsNegativesShape,
+  adsNegativesUpdateOutput,
+  adsNegativesUpdateShape,
   listSnapshotsOutput,
   listSnapshotsShape,
   snapshotOutput,
@@ -98,7 +102,7 @@ import { appStoreDiscovery } from "./app-store-discovery.js";
 import { appStoreSales } from "./app-store-sales.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
-import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate, adsSearchTerms, adsChanges } from "./google-ads-tools.js";
+import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate, adsSearchTerms, adsChanges, adsNegatives, adsNegativesUpdateTool } from "./google-ads-tools.js";
 import { listSnapshotsTool } from "./list-snapshots.js";
 import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
@@ -436,12 +440,30 @@ export const toolDefinitions: ToolDefinition[] = [
     run: (_ctx, params) => adsSearchTerms(params),
   }),
   defineTool({
+    name: "ads_negatives",
+    description:
+      "Read the negative keywords already in place, at campaign, ad group or shared-set level. A negative blocks traffic without leaving any record that it did, so this is what to check when a keyword stops serving and nothing looks wrong, and what to check before adding a term twice; read-only",
+    inputShape: adsNegativesShape,
+    outputSchema: adsNegativesOutput,
+    run: (_ctx, params) => adsNegatives(params),
+  }),
+  defineTool({
     name: "ads_changes",
     description:
       "Read the Google Ads change history: what changed, when, which fields, by whom, and whether it came from a tool or from someone in the browser. Google keeps 30 days. This is the audit trail for anything ads_update writes; read-only",
     inputShape: adsChangesShape,
     outputSchema: adsChangesOutput,
     run: (_ctx, params) => adsChanges(params),
+  }),
+  defineTool({
+    name: "ads_negatives_update",
+    description:
+      "Add or remove negative keywords in a batch, enumerated one by one with no pattern form. Before adding, every proposed negative is checked against the campaign's own live keywords and the batch is refused if one would block traffic, because a wrong negative leaves no evidence anywhere: the traffic just stops. Dry run unless dryRun is false, and the terms are read back afterwards",
+    inputShape: adsNegativesUpdateShape,
+    outputSchema: adsNegativesUpdateOutput,
+    write: true,
+    spendsMoney: true,
+    run: (_ctx, params) => adsNegativesUpdateTool(params),
   }),
   defineTool({
     name: "ads_update",

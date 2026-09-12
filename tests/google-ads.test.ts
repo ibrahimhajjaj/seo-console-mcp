@@ -128,6 +128,37 @@ describe("ads reads", () => {
     expect(() => adsCampaignsOutput.parse(content)).not.toThrow();
   });
 
+  it("sorts search terms by cost, because the list is for deciding what to stop paying for", async () => {
+    const { fetchImpl } = router(() => ({
+      body: stream([
+        { searchTermView: { searchTerm: "cheap noise" }, metrics: { impressions: 900, clicks: 0, costMicros: "0", conversions: 0 } },
+        { searchTermView: { searchTerm: "costly" }, metrics: { impressions: 3, clicks: 2, costMicros: "4000000", conversions: 0 } },
+      ]),
+    }));
+
+    const result = await adsSearchTerms(adsSearchTermsInput.parse({ days: 30 }), { credentials, fetchImpl });
+    const terms = (result.structuredContent as { searchTerms: Array<{ searchTerm: string }> }).searchTerms;
+
+    // Impressions-first would put 900 impressions of free noise above $4 spent.
+    expect(terms.map((t) => t.searchTerm)).toEqual(["costly", "cheap noise"]);
+  });
+
+  it("keeps only terms that converted nothing when asked, which is the negatives list", async () => {
+    const { fetchImpl } = router(() => ({
+      body: stream([
+        { searchTermView: { searchTerm: "converted" }, metrics: { impressions: 5, clicks: 1, costMicros: "2000000", conversions: 1 } },
+        { searchTermView: { searchTerm: "wasted" }, metrics: { impressions: 5, clicks: 1, costMicros: "2000000", conversions: 0 } },
+      ]),
+    }));
+
+    const result = await adsSearchTerms(adsSearchTermsInput.parse({ days: 30, zeroConversionsOnly: true }), { credentials, fetchImpl });
+    const content = result.structuredContent as { rowCount: number; searchTerms: Array<{ searchTerm: string }>; notes: string[] };
+
+    expect(content.rowCount).toBe(1);
+    expect(content.searchTerms[0]?.searchTerm).toBe("wasted");
+    expect(content.notes.join(" ")).toMatch(/at least one conversion/);
+  });
+
   it("asks for an explicit date range, since most day counts have no GAQL literal", async () => {
     const { fetchImpl, calls } = router(() => ({ body: stream([]) }));
 
@@ -186,7 +217,7 @@ describe("ads reads", () => {
     const content = result.structuredContent as { rowCount: number; notes: string[] };
 
     expect(content.rowCount).toBe(1);
-    expect(content.notes.join(" ")).toMatch(/1 term\(s\) fell below the 10 impression floor/);
+    expect(content.notes.join(" ")).toMatch(/1 term\(s\) are not listed because of the filters asked for \(fewer than 10 impressions\)/);
   });
 
   it("asks change history for a datetime range with a limit, as the resource requires", async () => {

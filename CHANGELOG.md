@@ -22,7 +22,10 @@
   back: an accepted request is not a stored value, and a mismatch comes back as
   an error.
 - `ads_search_terms` reads the queries that actually triggered an ad, with the
-  keyword each matched. This is the paid equivalent of the Search Console query
+  keyword and match type each matched, costliest first, with a cost floor and a
+  zero-conversions filter so it feeds the negatives tool directly. Sorting by
+  impressions would put the cheapest noise at the top of a list whose only
+  purpose is deciding what to stop paying for. This is the paid equivalent of the Search Console query
   dimension, and it carries the same caveat: Google withholds terms too few
   people searched, so an absent term is unknown rather than absent.
 - `ads_changes` reads the change history: what changed, when, which fields, by
@@ -41,6 +44,19 @@
 
 ### Changed
 
+- `ads_negatives` reads the negative keywords already in place, at campaign, ad
+  group or shared-set level. A negative blocks traffic without leaving a record
+  that it did, so it is the list to check when a keyword stops serving and
+  nothing looks wrong.
+- `ads_negatives_update` adds or removes negatives in a batch, enumerated one by
+  one with no pattern form, because "block everything matching X" is one typo
+  away from an account-sized mistake. Before adding, every proposed negative is
+  checked against the campaign's own live keywords and the batch is refused
+  unless confirmed, naming what it would cost: adding `backup` broadly to a
+  backup-plugin campaign would block `wordpress backup`, and Google reports no
+  error because it is a perfectly valid negative. A wrong bid shows up as spend;
+  a wrong negative shows up as nothing. Removals are not collision-checked, since
+  removing one can only let traffic through.
 - `--allow-spend`, a second CLI gate for tools that cost money. One flag
   authorising both "resubmit a sitemap" and "triple a daily budget" is not a
   gate, so `ads_update` needs both it and `--allow-write`.

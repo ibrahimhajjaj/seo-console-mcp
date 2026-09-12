@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
-import type { adsCampaignsInput, adsKeywordsInput, adsAdsInput, adsQueryInput, adsUpdateInput, adsSearchTermsInput, adsChangesInput } from "./schemas.js";
+import type { adsCampaignsInput, adsKeywordsInput, adsAdsInput, adsQueryInput, adsUpdateInput, adsSearchTermsInput, adsChangesInput, adsNegativesInput, adsNegativesUpdateInput } from "./schemas.js";
+import { adsNegativesUpdate } from "./google-ads-negatives.js";
 import { createAdsClient, resolveAdsCredentials, quoteGaql, duringWindow, dateRange, money, toMicros, type AdsClient, type AdsDeps } from "./google-ads.js";
 
 type CampaignsParams = z.output<typeof adsCampaignsInput>;
@@ -10,6 +11,8 @@ type QueryParams = z.output<typeof adsQueryInput>;
 type UpdateParams = z.output<typeof adsUpdateInput>;
 type SearchTermsParams = z.output<typeof adsSearchTermsInput>;
 type ChangesParams = z.output<typeof adsChangesInput>;
+type NegativesParams = z.output<typeof adsNegativesInput>;
+type NegativesUpdateParams = z.output<typeof adsNegativesUpdateInput>;
 
 // Deliberately low, because they are a fraction of the account they guard rather
 // than a round number. A ceiling that is large next to the budget it protects
@@ -131,13 +134,14 @@ export async function adsQuery(params: QueryParams, deps: AdsDeps = {}): Promise
 export async function adsSearchTerms(params: SearchTermsParams, deps: AdsDeps = {}): Promise<ToolResult> {
   const rows = await client(deps).gaql(
     `SELECT search_term_view.search_term, search_term_view.status, campaign.name,
-            segments.keyword.info.text,
+            segments.keyword.info.text, segments.keyword.info.match_type,
             metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions
      FROM search_term_view WHERE ${duringWindow(params.days, deps.now ?? new Date())}`,
   );
   const all = rows.map((row) => ({
     searchTerm: String(row.searchTermView?.searchTerm ?? ""),
     matchedKeyword: String(row.segments?.keyword?.info?.text ?? ""),
+    matchType: String(row.segments?.keyword?.info?.matchType ?? ""),
     campaign: String(row.campaign?.name ?? ""),
     status: String(row.searchTermView?.status ?? ""),
     impressions: Number(row.metrics?.impressions ?? 0),
@@ -145,7 +149,11 @@ export async function adsSearchTerms(params: SearchTermsParams, deps: AdsDeps = 
     cost: money(row.metrics?.costMicros),
     conversions: Number(row.metrics?.conversions ?? 0),
   }));
-  const searchTerms = all.filter((term) => term.impressions >= params.minImpressions).sort((left, right) => right.impressions - left.impressions);
+  const searchTerms = all
+    .filter((term) => term.impressions >= params.minImpressions && term.cost >= params.minCost && (!params.zeroConversionsOnly || term.conversions === 0))
+    // Cost descending, because the question this list answers is what to stop
+    // paying for. Impressions first would put the cheapest noise at the top.
+    .sort((left, right) => right.cost - left.cost || right.impressions - left.impressions);
 
   const notes = [
     "These are the queries that actually triggered an ad, which is the paid equivalent of the Search Console query dimension.",
@@ -153,16 +161,85 @@ export async function adsSearchTerms(params: SearchTermsParams, deps: AdsDeps = 
     // is not here is not a term nobody searched.
     "Google withholds search terms that too few people searched, so this list is not every query that reached the account and an absent term is unknown rather than absent.",
   ];
-  if (params.minImpressions > 0 && all.length !== searchTerms.length) {
-    notes.push(`${all.length - searchTerms.length} term(s) fell below the ${params.minImpressions} impression floor and are not listed.`);
+  if (all.length !== searchTerms.length) {
+    const filters = [
+      ...(params.minCost > 0 ? [`cost below $${params.minCost.toFixed(2)}`] : []),
+      ...(params.minImpressions > 0 ? [`fewer than ${params.minImpressions} impressions`] : []),
+      ...(params.zeroConversionsOnly ? ["at least one conversion"] : []),
+    ];
+    notes.push(`${all.length - searchTerms.length} term(s) are not listed because of the filters asked for (${filters.join(", ")}).`);
   }
 
   const lines = [
-    `${searchTerms.length} search term(s) over the last ${params.days} day(s)`,
-    ...searchTerms.map((t) => `- ${t.searchTerm} (matched ${t.matchedKeyword || "unknown"}): ${t.impressions} impressions, ${t.clicks} clicks, ${t.conversions} conversions`),
+    `${searchTerms.length} search term(s) over the last ${params.days} day(s), costliest first`,
+    ...searchTerms.map(
+      (t) =>
+        `- ${t.searchTerm} (matched ${t.matchedKeyword || "unknown"}${t.matchType ? `, ${t.matchType}` : ""}): $${t.cost.toFixed(2)}, ${t.impressions} impressions, ${t.clicks} clicks, ${t.conversions} conversions`,
+    ),
     ...notes,
   ];
   return result(lines.join("\n"), { days: params.days, rowCount: searchTerms.length, searchTerms, notes });
+}
+
+export async function adsNegatives(params: NegativesParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  const api = client(deps);
+  const wanted = (level: string): boolean => params.level === "all" || params.level === level;
+  const negatives: Array<{ level: string; owner: string; keyword: string; matchType: string; criterionId: string }> = [];
+
+  if (wanted("campaign")) {
+    for (const row of await api.gaql(
+      `SELECT campaign.name, campaign_criterion.criterion_id, campaign_criterion.keyword.text, campaign_criterion.keyword.match_type
+       FROM campaign_criterion WHERE campaign_criterion.negative = true AND campaign_criterion.type = 'KEYWORD'`,
+    )) {
+      negatives.push({
+        level: "campaign",
+        owner: String(row.campaign?.name ?? ""),
+        keyword: String(row.campaignCriterion?.keyword?.text ?? ""),
+        matchType: String(row.campaignCriterion?.keyword?.matchType ?? ""),
+        criterionId: String(row.campaignCriterion?.criterionId ?? ""),
+      });
+    }
+  }
+
+  if (wanted("adGroup")) {
+    for (const row of await api.gaql(
+      `SELECT ad_group.name, ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type
+       FROM ad_group_criterion WHERE ad_group_criterion.negative = true AND ad_group_criterion.type = 'KEYWORD'`,
+    )) {
+      negatives.push({
+        level: "adGroup",
+        owner: String(row.adGroup?.name ?? ""),
+        keyword: String(row.adGroupCriterion?.keyword?.text ?? ""),
+        matchType: String(row.adGroupCriterion?.keyword?.matchType ?? ""),
+        criterionId: String(row.adGroupCriterion?.criterionId ?? ""),
+      });
+    }
+  }
+
+  if (wanted("sharedSet")) {
+    for (const row of await api.gaql(
+      `SELECT shared_set.name, shared_criterion.criterion_id, shared_criterion.keyword.text, shared_criterion.keyword.match_type
+       FROM shared_criterion WHERE shared_set.type = 'NEGATIVE_KEYWORDS'`,
+    )) {
+      negatives.push({
+        level: "sharedSet",
+        owner: String(row.sharedSet?.name ?? ""),
+        keyword: String(row.sharedCriterion?.keyword?.text ?? ""),
+        matchType: String(row.sharedCriterion?.keyword?.matchType ?? ""),
+        criterionId: String(row.sharedCriterion?.criterionId ?? ""),
+      });
+    }
+  }
+
+  const notes = [
+    // A negative that is already there is the reason a term is missing from the
+    // search terms report, and nothing else in the surface can see it.
+    "A negative keyword blocks traffic without leaving a record anywhere that it did, so this is the list to check when a keyword stops serving and nothing looks wrong.",
+  ];
+  if (!negatives.length) notes.push("No negative keywords exist at the level asked for. That is an absence of negatives, not a failed read.");
+
+  const lines = [`${negatives.length} negative keyword(s)`, ...negatives.map((n) => `- [${n.level}] ${n.owner}: ${n.keyword}${n.matchType ? ` (${n.matchType})` : ""}`), ...notes];
+  return result(lines.join("\n"), { rowCount: negatives.length, negatives, notes });
 }
 
 export async function adsChanges(params: ChangesParams, deps: AdsDeps = {}): Promise<ToolResult> {
@@ -385,4 +462,8 @@ export async function adsUpdate(params: UpdateParams, deps: AdsDeps = {}): Promi
     matches ? "The stored value matches what was sent." : "The stored value DOES NOT match what was sent. Check the account before relying on this.",
   ];
   return result(lines.join("\n"), { ...base, applied: true, noOp: false, readBack, matches }, !matches);
+}
+
+export async function adsNegativesUpdateTool(params: NegativesUpdateParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  return adsNegativesUpdate(client(deps), params);
 }

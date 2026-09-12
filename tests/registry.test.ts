@@ -28,10 +28,10 @@ function elementOf(array: z.ZodType): z.ZodType {
 // Everything a flag value can carry: scalars as text, nested parameters as JSON.
 const flagTypes = new Set(["string", "number", "boolean", "enum", "object"]);
 
-const writeTools = ["ads_update", "delete_sitemap", "indexnow_submit", "request_recrawl", "submit_sitemap"];
+const writeTools = ["ads_negatives_update", "ads_update", "delete_sitemap", "indexnow_submit", "request_recrawl", "submit_sitemap"];
 // Writes that cost money rather than only changing state. They carry their own
 // CLI gate, so the set is pinned the same way the write set is.
-const spendTools = ["ads_update"];
+const spendTools = ["ads_negatives_update", "ads_update"];
 
 describe("tool registry invariants", () => {
   it("gives every tool a unique name a shell and an MCP client can both use", () => {

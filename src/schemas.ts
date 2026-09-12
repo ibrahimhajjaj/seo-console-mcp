@@ -753,7 +753,11 @@ export const adsQueryOutput = z.object({
 
 export const adsSearchTermsShape = {
   days: adsWindow,
+  // Money is what the decision is about. Sorting by impressions puts cheap noise
+  // at the top of a list whose purpose is deciding what to stop paying for.
+  minCost: z.number().min(0).default(0).describe("Drop search terms that cost less than this over the window"),
   minImpressions: z.number().int().min(0).default(0).describe("Drop search terms below this many impressions"),
+  zeroConversionsOnly: z.boolean().default(false).describe("Keep only terms that converted nothing, which is the list that feeds negative keywords"),
 };
 export const adsSearchTermsInput = z.object(adsSearchTermsShape);
 export const adsSearchTermsOutput = z.object({
@@ -763,6 +767,7 @@ export const adsSearchTermsOutput = z.object({
     z.object({
       searchTerm: z.string(),
       matchedKeyword: z.string(),
+      matchType: z.string().describe("How the term matched the keyword. A wrong term and a right term in the wrong ad group have different fixes"),
       campaign: z.string(),
       status: z.string(),
       impressions: z.number(),
@@ -795,6 +800,60 @@ export const adsChangesOutput = z.object({
       campaign: z.string(),
     }),
   ),
+  notes: z.array(z.string()),
+});
+
+export const adsNegativesShape = {
+  level: z
+    .enum(["campaign", "adGroup", "sharedSet", "all"])
+    .default("all")
+    .describe("Which negatives to read. A term blocked at campaign level is blocked everywhere in it; a shared set applies to every campaign it is attached to"),
+};
+export const adsNegativesInput = z.object(adsNegativesShape);
+export const adsNegativesOutput = z.object({
+  rowCount: z.number(),
+  negatives: z.array(
+    z.object({
+      level: z.string(),
+      owner: z.string().describe("The campaign, ad group or shared set the negative belongs to"),
+      keyword: z.string(),
+      matchType: z.string(),
+      criterionId: z.string(),
+    }),
+  ),
+  notes: z.array(z.string()),
+});
+
+export const adsNegativesUpdateShape = {
+  action: z.enum(["add", "remove"]).describe("Add negative keywords or remove existing ones. Removal matters as much as adding: a wrong negative shows up as nothing at all"),
+  level: z.enum(["campaign", "adGroup"]).default("campaign").describe("Where the negatives live. A campaign-level negative blocks the term everywhere in that campaign"),
+  target: z.string().trim().min(1).max(400).describe("The campaign or ad group name. It must match exactly one or nothing is changed"),
+  keywords: z
+    .array(z.string().trim().min(1).max(200))
+    .min(1)
+    .max(100)
+    .describe("The negative terms, enumerated one by one. There is no pattern or match-all form: a selector is one typo away from blocking a whole campaign"),
+  matchType: z
+    .enum(["BROAD", "PHRASE", "EXACT"])
+    .default("EXACT")
+    .describe("How each term blocks. BROAD blocks any query containing all its words, which is the setting that can silently kill a campaign"),
+  dryRun: z.boolean().default(true).describe("Report what would change, and which proposed negatives would block a live keyword, without changing anything"),
+  confirm: z.boolean().default(false).describe("Perform the batch even though a guard tripped. The dry run lists what tripped, so this confirms something already read"),
+};
+export const adsNegativesUpdateInput = z.object(adsNegativesUpdateShape);
+export const adsNegativesUpdateOutput = z.object({
+  action: z.string(),
+  level: z.string(),
+  target: z.string(),
+  matchType: z.string(),
+  requested: z.array(z.string()),
+  applied: z.boolean(),
+  skipped: z.array(z.object({ keyword: z.string(), reason: z.string() })).describe("Terms not sent, because they are already present when adding or absent when removing"),
+  collisions: z
+    .array(z.object({ negative: z.string(), blocks: z.string(), impressions: z.number() }))
+    .describe("Proposed negatives that would stop one of this campaign's own live keywords from serving. This is the error that otherwise produces no evidence at all"),
+  guards: z.array(z.string()),
+  changed: z.array(z.string()),
   notes: z.array(z.string()),
 });
 

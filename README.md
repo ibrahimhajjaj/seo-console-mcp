@@ -1083,7 +1083,9 @@ The queries that actually triggered an ad, with the keyword each one matched. Th
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `days` | number | no | `30` | How many days back to report, ending today |
+| `minCost` | number | no | `0` | Drop search terms that cost less than this over the window |
 | `minImpressions` | number | no | `0` | Drop search terms below this many impressions |
+| `zeroConversionsOnly` | boolean | no | `false` | Keep only terms that converted nothing, which is the list that feeds negative keywords |
 
 <!-- /params:ads_search_terms -->
 
@@ -1103,6 +1105,50 @@ What changed in the account, when, which fields, by whom, and whether it came fr
 | `limit` | number | no | `100` | Most recent changes to return |
 
 <!-- /params:ads_changes -->
+
+### `ads_negatives`
+
+The negative keywords already in place, at campaign, ad group or shared-set level. A negative blocks traffic without leaving any record that it did, so this is the list to check when a keyword stops serving and nothing looks wrong, and before adding a term that may already be there.
+
+```json
+{ "level": "all" }
+```
+
+<!-- params:ads_negatives -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `level` | one of campaign, adGroup, sharedSet, all | no | `"all"` | Which negatives to read. A term blocked at campaign level is blocked everywhere in it; a shared set applies to every campaign it is attached to |
+
+<!-- /params:ads_negatives -->
+
+### `ads_negatives_update`
+
+Adds or removes negative keywords in a batch, enumerated one by one. There is no pattern or match-all form on purpose: "block every term matching X" is one typo away from an account-sized mistake, and an explicit list cannot make that mistake.
+
+```json
+{ "action": "add", "level": "campaign", "target": "search-uk-us", "keywords": ["free", "crack"], "matchType": "EXACT", "dryRun": false }
+```
+
+<!-- params:ads_negatives_update -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `action` | one of add, remove | yes |  | Add negative keywords or remove existing ones. Removal matters as much as adding: a wrong negative shows up as nothing at all |
+| `level` | one of campaign, adGroup | no | `"campaign"` | Where the negatives live. A campaign-level negative blocks the term everywhere in that campaign |
+| `target` | string | yes |  | The campaign or ad group name. It must match exactly one or nothing is changed |
+| `keywords` | list of string | yes |  | The negative terms, enumerated one by one. There is no pattern or match-all form: a selector is one typo away from blocking a whole campaign |
+| `matchType` | one of BROAD, PHRASE, EXACT | no | `"EXACT"` | How each term blocks. BROAD blocks any query containing all its words, which is the setting that can silently kill a campaign |
+| `dryRun` | boolean | no | `true` | Report what would change, and which proposed negatives would block a live keyword, without changing anything |
+| `confirm` | boolean | no | `false` | Perform the batch even though a guard tripped. The dry run lists what tripped, so this confirms something already read |
+
+<!-- /params:ads_negatives_update -->
+
+Negatives feel safe because they only reduce spend, and that instinct is what makes them dangerous. **A wrong bid shows up as spend. A wrong negative shows up as nothing**: the traffic stops arriving, the term leaves the search terms report, and no row anywhere says why. Adding `backup` as a broad negative to a backup-plugin campaign ends its traffic, and Google reports no error because it is a perfectly valid negative.
+
+So before adding anything, every proposed negative is checked against the campaign's own live keywords, and the batch is refused unless `confirm` is set. The refusal names what it would have cost: `"backup" as a BROAD negative would block this campaign's own keyword "wordpress backup", which served 41 impressions`. The check mirrors Google's matching closely but Google is the authority, and it is deliberately generous, because a false warning costs a sentence and a missed one costs the campaign.
+
+Removals are not collision-checked. Removing a negative can only let traffic through, which shows up as spend rather than as silence.
 
 ### `ads_update`
 
