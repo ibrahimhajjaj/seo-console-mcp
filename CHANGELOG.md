@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.0
+
+### Added
+
+- `ads_update` takes `keywordStatus`, so one keyword can be paused or enabled.
+  It could change a campaign's status and an ad's status but not a keyword's,
+  which meant pausing a keyword had to be done outside the tool. Dropping the
+  bid is not a substitute: the keyword stays enabled, stays eligible, and goes
+  on competing for the same daily budget, so if budget was the constraint,
+  lowering the bid frees none of it. It carries the same rails as the other
+  kinds: dry run by default, exactly one match or refuse, the serving guard when
+  pausing something live, and the status read back after writing. Raised in
+  review after three keywords had to be paused by hand.
+
 ## 0.14.0
 
 ### Fixed
