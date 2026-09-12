@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.16.0
+## 0.17.0
 
 An audit pass, not a feature release. Every fix below is the same shape: something absent was being presented as something known.
 
@@ -39,16 +39,6 @@ An audit pass, not a feature release. Every fix below is the same shape: somethi
 
 ### Added
 
-- Every CLI run names its own version on stderr, `seo-console-mcp 0.16.0 running
-  ads_keywords`, before the tool runs so it is there when the tool throws as
-  well as when it returns. stdout stays parseable and an `--out` file stays pure
-  JSON. A result does not otherwise say which build produced it, and reading one
-  from a stale build looks exactly like reading one from a current build. Two
-  real cases: an install that failed with `ETARGET` left the previous version in
-  place and the CLI ran happily against it, reporting a keyword count with no
-  status field that read as a regression; and after a successful publish, `npx`
-  reused its cache and went on running the previous release while npm, the
-  version range and every other signal read current.
 - `server_version` answers the same question over MCP, where the CLI banner
   cannot reach: which build is answering, where it is running from, and whether
   it came out of an npx cache. Four values look like this one and are not: what
@@ -57,6 +47,7 @@ An audit pass, not a feature release. Every fix below is the same shape: somethi
   substitute, since it is a separate process resolved separately and can be a
   different build on the same machine.
 
+## 0.16.0
 
 ### Added
 
