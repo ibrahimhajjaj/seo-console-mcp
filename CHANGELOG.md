@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.13.0
+
+Say where a missing Play metric actually lives.
 
 ### Fixed
 
