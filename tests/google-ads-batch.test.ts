@@ -102,10 +102,84 @@ describe("adsUpdateBatch", () => {
     // No entry is more than three times its own value and none is over $25, so
     // every per-item guard is empty; only the total catches this.
     expect(content.entries.every((entry) => entry.guards.length === 0)).toBe(true);
-    expect(content.totalGuards.join(" ")).toMatch(/raises the total by \$80\.00/);
+    expect(content.totalGuards.join(" ")).toMatch(/raises the total by \$80\.00, above the \$50\.00 ceiling for a batch of 5/);
     expect(content.applied).toBe(false);
     expect(result.isError).toBe(true);
     expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it("names the one entry out of line with the rest even when the total is small", async () => {
+    // Nineteen entries moving cents and one moving $40 sits under every ceiling
+    // and is still the mistake. The count alone would not say which one.
+    const rows = Array.from({ length: 6 }, (_, index) => keyword(`k${index}`, `customers/1/adGroupCriteria/1~${index}`, 5));
+    const { api } = fakeApi(keywordRoute(rows));
+    const result = await adsUpdateBatch(api, parse({ kind: "bid", changes: rows.map((row, index) => ({ target: row.text, value: index === 4 ? 12 : 5.1 })) }));
+    const content = result.structuredContent as { entries: Array<{ target: string; guards: string[] }>; totalGuards: string[] };
+    // The batch total rose $7.50, under the $55 ceiling for six entries, and
+    // no entry is over $25 or more than three times its own value.
+    expect(content.totalGuards).toEqual([]);
+    expect(content.entries.filter((entry) => entry.guards.some((guard) => guard.includes("out of line"))).map((entry) => entry.target)).toEqual(["k4"]);
+    expect(result.content[0]?.text).toMatch(/k4: \$5\.00 -> \$12\.00 .*out of line with the other 5 entries/);
+  });
+
+  it("does not call one of two entries an outlier, since both are already in front of the reader", async () => {
+    const rows = [keyword("one", "customers/1/adGroupCriteria/1~1", 5), keyword("two", "customers/1/adGroupCriteria/1~2", 5)];
+    const { api } = fakeApi(keywordRoute(rows));
+    const result = await adsUpdateBatch(
+      api,
+      parse({
+        kind: "bid",
+        changes: [
+          { target: "one", value: 5.1 },
+          { target: "two", value: 12 },
+        ],
+      }),
+    );
+    const content = result.structuredContent as { entries: Array<{ guards: string[] }> };
+    expect(content.entries.flatMap((entry) => entry.guards).some((guard) => guard.includes("out of line"))).toBe(false);
+  });
+
+  it("lets the batch ceiling grow with the batch, so confirm does not become routine", async () => {
+    // The same per-entry move that trips a batch of three passes in a batch of
+    // twenty: a guard that fires on every realistic batch gets passed unread.
+    const build = (count: number) => Array.from({ length: count }, (_, index) => keyword(`k${index}`, `customers/1/adGroupCriteria/1~${index}`, 1));
+    const small = build(3);
+    const smallResult = await adsUpdateBatch(fakeApi(keywordRoute(small)).api, parse({ kind: "bid", changes: small.map((row) => ({ target: row.text, value: 15 })) }));
+    // 3 entries: $42 increase against a $40 ceiling, so it trips.
+    expect((smallResult.structuredContent as { totalGuards: string[] }).totalGuards.join(" ")).toContain("ceiling for a batch of 3");
+
+    const large = build(20);
+    const largeResult = await adsUpdateBatch(fakeApi(keywordRoute(large)).api, parse({ kind: "bid", changes: large.map((row) => ({ target: row.text, value: 2 })) }));
+    // 20 entries: $20 increase against a $125 ceiling, so it does not.
+    expect((largeResult.structuredContent as { totalGuards: string[] }).totalGuards).toEqual([]);
+  });
+
+  it("names which entries are live and which are not when only some store", async () => {
+    const rows = Array.from({ length: 3 }, (_, index) => keyword(`k${index}`, `customers/1/adGroupCriteria/1~${index}`, 1));
+    const stored = new Map([
+      ["customers/1/adGroupCriteria/1~0", 2],
+      ["customers/1/adGroupCriteria/1~1", 1],
+      ["customers/1/adGroupCriteria/1~2", 2],
+    ]);
+    const { api } = fakeApi(keywordRoute(rows, stored));
+    const result = await adsUpdateBatch(api, parse({ kind: "bid", changes: rows.map((row) => ({ target: row.text, value: 2 })), dryRun: false, confirm: true }));
+    const text = result.content[0]?.text ?? "";
+    // The failures come first and by name. A count alone leaves the reader
+    // opening the account to find out which two of three are live.
+    expect(text.indexOf("DID NOT store")).toBeLessThan(text.indexOf("Live now"));
+    expect(text).toContain("- k1: sent $2.00, the account reads $1.00");
+    expect(text).toContain("Live now, confirmed by reading the account back:");
+    expect(text).toMatch(/- k0: \$2\.00/);
+    expect(text).toMatch(/- k2: \$2\.00/);
+  });
+
+  it("says nothing was written when the write itself is refused", async () => {
+    const rows = [keyword("one", "customers/1/adGroupCriteria/1~1", 1)];
+    const mutate = vi.fn(async () => {
+      throw new Error("Google Ads returned HTTP 400 for adGroupCriteria:mutate: too low.");
+    });
+    const { api } = fakeApi(keywordRoute(rows), mutate);
+    await expect(adsUpdateBatch(api, parse({ kind: "bid", changes: [{ target: "one", value: 2 }], dryRun: false, confirm: true }))).rejects.toThrow(/none of the 1 entries should have been written/);
   });
 
   it("says the monthly figure for a batch of daily budgets", async () => {
@@ -123,8 +197,13 @@ describe("adsUpdateBatch", () => {
         ],
       }),
     );
-    const content = result.structuredContent as { totalGuards: string[] };
-    expect(content.totalGuards[0]).toMatch(/\$13\.00 a day, about \$395 a month, up from about \$304 a month/);
+    const content = result.structuredContent as { totalGuards: string[]; totalSummary: string };
+    // The sentence is always said. It is not a guard: a $2 a day rise that
+    // always demanded confirm would teach the reader to pass it unread.
+    expect(content.totalGuards).toEqual([]);
+    expect(content.totalSummary).toMatch(/\$13\.00 a day, about \$395 a month, up from \$10\.00 a day, about \$304 a month/);
+    expect(result.content[0]?.text).toContain("$395 a month");
+    expect(result.content[0]?.text).toContain("Nothing tripped a guard.");
     expect(result.content[0]?.text).toContain("Dry run. Nothing was changed.");
   });
 
@@ -162,7 +241,7 @@ describe("adsUpdateBatch", () => {
     const result = await adsUpdateBatch(api, parse({ kind: "bid", changes: [{ target: "one", value: 2 }], dryRun: false, confirm: true }));
     const content = result.structuredContent as { entries: Array<{ readBack: number | null }> };
     expect(content.entries[0]?.readBack).toBeNull();
-    expect(result.content[0]?.text).toContain("the account reads nothing");
+    expect(result.content[0]?.text).toContain("the value could not be read back");
   });
 
   it("does nothing when every entry already holds the value asked for", async () => {

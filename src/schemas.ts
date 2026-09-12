@@ -832,6 +832,7 @@ export const adsUpdateBatchOutput = z.object({
   ),
   totalBefore: z.number(),
   totalAfter: z.number(),
+  totalSummary: z.string().describe("The batch total in words, always present whether or not anything tripped. The sentence is what gets read; the guard is only what stops you when it is not"),
   totalGuards: z.array(z.string()).describe("Guards on the batch as a whole. Five individually reasonable raises are one large spend change, and doing them one at a time is how that gets missed"),
   applied: z.boolean(),
   notes: z.array(z.string()),

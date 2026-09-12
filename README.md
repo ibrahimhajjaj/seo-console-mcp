@@ -1202,13 +1202,18 @@ Changes several keyword bids, or several campaign daily budgets, in one call. On
 
 It is a named list of pairs, not a rule applied to many things. There is no "raise everything by 20%" and no selector, because the mistake this tool exists to prevent is exactly the one a selector makes easy: a pattern that matches more than the caller pictured, applied before anyone can see the list it produced. Every entry names one target and the value it should end at, and the dry run prints that list back.
 
-Three things it does that `ads_update` called in a loop does not:
+Four things it does that `ads_update` called in a loop does not:
 
 - **Everything resolves before anything is written.** If entry four matches nothing, entries one to three are not already live. A loop of single calls fails halfway and leaves the account in a state nobody chose, with no single row anywhere saying so.
-- **The sum is guarded, not only each entry.** Five raises that are each within the per-item ceilings are still one large spend change together, and doing them one at a time is how that goes unnoticed. A batch of budgets also states the monthly total, in and out: `$13.00 a day, about $395 a month, up from about $304 a month`.
+- **The sum is guarded, not only each entry.** Five raises that are each within the per-item ceilings are still one large spend change together, and doing them one at a time is how that goes unnoticed.
+- **The one entry out of line with the rest is named.** Nineteen bids moving a few cents and one moving $40 can sit under every ceiling and still be the mistake. An entry whose move is far larger than the middle of the batch is flagged by name, because a typo hides inside an acceptable total, and that is exactly how a batch differs from the same writes sent one at a time.
 - **Two entries cannot name the same thing.** The same target twice is refused, and so are two differently named campaigns that share one budget, where the total would count it twice and the second write would quietly win.
 
-Every value is read back after the write, entry by entry, and any that did not store what was sent is named in the result. One accepted request is one acceptance, not N stored values, and a batch is exactly where a partial landing hides.
+The per-entry ceilings stay flat however long the list is, because the per-entry question is whether that one entry is a typo and a typo does not get more acceptable in a bigger batch. The ceiling on the batch total grows with the batch, slowly: twenty entries is not twenty times the risk of one, it is one decision taken once. A guard that trips on every realistic batch is not a guard, it is a checkbox, and once `confirm` is routine it gets passed unread.
+
+The total is always stated in words whether or not anything tripped, since the sentence is what gets read and the guard is only what stops you when it does not. For budgets that is the monthly figure both ways: `These daily budgets come to $13.00 a day, about $395 a month, up from $10.00 a day, about $304 a month.`
+
+Every value is read back after the write, entry by entry. The result names which entries did not store what was sent first, then which are live with what the account now holds, because on a partial landing the question is never how many but which ones. One accepted request is one acceptance, not N stored values, and a batch is exactly where a partial landing hides. The batch is sent as a single request without partial failure, so a rejected write leaves nothing behind, and the error says so rather than leaving you to guess.
 
 Like `ads_update`, it needs `--allow-spend` as well as `--allow-write` from the command line.
 

@@ -38,10 +38,21 @@
   so a fourth entry that matches nothing does not leave the first three already
   live. The sum is guarded as well as each entry, since five separately
   reasonable raises are one large spend change and making them one at a time is
-  how that goes unnoticed; a batch of budgets states the monthly total in and
-  out. Two entries cannot name the same thing, including two campaigns that
-  share one budget, where the total would count it twice and the second write
-  would quietly win. Every value is read back afterwards, entry by entry.
+  how that goes unnoticed. The per-entry ceilings stay flat however long the
+  list is, because a typo does not get more acceptable in a bigger batch, but
+  the ceiling on the total grows with the batch: a guard that trips on every
+  realistic batch is not a guard, it is a checkbox, and once confirm is routine
+  it gets passed unread. The total is stated in words whether or not anything
+  tripped, the monthly figure both ways for budgets, since the sentence is what
+  gets read and the guard is only what stops you when it does not. The one entry
+  out of line with the rest is named even when the total is within every
+  ceiling: nineteen bids moving cents and one moving $40 is where a typo hides
+  in a batch. Two entries cannot name the same thing, including two campaigns
+  that share one budget, where the total would count it twice and the second
+  write would quietly win. Every value is read back afterwards, entry by entry,
+  and the result names the entries that did not store what was sent before the
+  ones that did, because on a partial landing the question is which ones, not
+  how many.
 
 ### Fixed
 
