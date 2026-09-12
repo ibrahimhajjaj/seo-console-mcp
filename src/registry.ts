@@ -24,6 +24,10 @@ import {
   adsQueryShape,
   adsUpdateOutput,
   adsUpdateShape,
+  adsSearchTermsOutput,
+  adsSearchTermsShape,
+  adsChangesOutput,
+  adsChangesShape,
   listSnapshotsOutput,
   listSnapshotsShape,
   snapshotOutput,
@@ -94,7 +98,7 @@ import { appStoreDiscovery } from "./app-store-discovery.js";
 import { appStoreSales } from "./app-store-sales.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
-import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate } from "./google-ads-tools.js";
+import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate, adsSearchTerms, adsChanges } from "./google-ads-tools.js";
 import { listSnapshotsTool } from "./list-snapshots.js";
 import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
@@ -422,6 +426,22 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: adsQueryShape,
     outputSchema: adsQueryOutput,
     run: (_ctx, params) => adsQuery(params),
+  }),
+  defineTool({
+    name: "ads_search_terms",
+    description:
+      "Read the queries that actually triggered an ad, with the keyword each one matched and its metrics. This is the paid equivalent of the Search Console query dimension. Google withholds terms too few people searched, so an absent term is unknown rather than absent; read-only",
+    inputShape: adsSearchTermsShape,
+    outputSchema: adsSearchTermsOutput,
+    run: (_ctx, params) => adsSearchTerms(params),
+  }),
+  defineTool({
+    name: "ads_changes",
+    description:
+      "Read the Google Ads change history: what changed, when, which fields, by whom, and whether it came from a tool or from someone in the browser. Google keeps 30 days. This is the audit trail for anything ads_update writes; read-only",
+    inputShape: adsChangesShape,
+    outputSchema: adsChangesOutput,
+    run: (_ctx, params) => adsChanges(params),
   }),
   defineTool({
     name: "ads_update",

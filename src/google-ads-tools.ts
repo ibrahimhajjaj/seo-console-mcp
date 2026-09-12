@@ -1,13 +1,15 @@
 import type { z } from "zod";
 import type { ToolResult } from "./google-tools.js";
-import type { adsCampaignsInput, adsKeywordsInput, adsAdsInput, adsQueryInput, adsUpdateInput } from "./schemas.js";
-import { createAdsClient, resolveAdsCredentials, quoteGaql, duringWindow, money, toMicros, type AdsClient, type AdsDeps } from "./google-ads.js";
+import type { adsCampaignsInput, adsKeywordsInput, adsAdsInput, adsQueryInput, adsUpdateInput, adsSearchTermsInput, adsChangesInput } from "./schemas.js";
+import { createAdsClient, resolveAdsCredentials, quoteGaql, duringWindow, dateRange, money, toMicros, type AdsClient, type AdsDeps } from "./google-ads.js";
 
 type CampaignsParams = z.output<typeof adsCampaignsInput>;
 type KeywordsParams = z.output<typeof adsKeywordsInput>;
 type AdsParams = z.output<typeof adsAdsInput>;
 type QueryParams = z.output<typeof adsQueryInput>;
 type UpdateParams = z.output<typeof adsUpdateInput>;
+type SearchTermsParams = z.output<typeof adsSearchTermsInput>;
+type ChangesParams = z.output<typeof adsChangesInput>;
 
 // Deliberately low, because they are a fraction of the account they guard rather
 // than a round number. A ceiling that is large next to the budget it protects
@@ -22,6 +24,15 @@ function client(deps: AdsDeps): AdsClient {
 
 function result(text: string, structuredContent: Record<string, unknown>, isError = false): ToolResult {
   return { content: [{ type: "text", text }], structuredContent, ...(isError ? { isError: true } : {}) };
+}
+
+// status, budget, bid, ad strength and approval are the value RIGHT NOW. Google
+// stores no history for them, so a date-filtered query staples today's setting
+// onto an old day's metrics: a campaign paused this morning reports PAUSED
+// beside the impressions it served last month. The metrics are of the window;
+// these are not, and only saying so keeps the two apart.
+function currentStateNote(fields: string[]): string {
+  return `${fields.join(", ")} are the value now, not the value during the window. Google keeps no history for settings, so a setting changed since then is reported at its current value beside metrics that are not. ads_changes has the last 30 days of changes.`;
 }
 
 export async function adsCampaigns(params: CampaignsParams, deps: AdsDeps = {}): Promise<ToolResult> {
@@ -46,7 +57,9 @@ export async function adsCampaigns(params: CampaignsParams, deps: AdsDeps = {}):
     ),
   ];
   if (!campaigns.length) lines.push("No campaigns had activity in this window.");
-  return result(lines.join("\n"), { days: params.days, rowCount: campaigns.length, campaigns });
+  const notes = [currentStateNote(["status", "dailyBudget"])];
+  lines.push(...notes);
+  return result(lines.join("\n"), { days: params.days, rowCount: campaigns.length, campaigns, notes });
 }
 
 export async function adsKeywords(params: KeywordsParams, deps: AdsDeps = {}): Promise<ToolResult> {
@@ -74,7 +87,9 @@ export async function adsKeywords(params: KeywordsParams, deps: AdsDeps = {}): P
     ...keywords.map((k) => `- ${k.keyword} (${k.adGroup}) bid $${k.bid.toFixed(2)} ${k.servingStatus}: ${k.impressions} impressions, ${k.clicks} clicks`),
   ];
   if (!keywords.length) lines.push("No keywords had activity in this window.");
-  return result(lines.join("\n"), { days: params.days, rowCount: keywords.length, keywords });
+  const notes = [currentStateNote(["bid", "approvalStatus", "servingStatus"])];
+  lines.push(...notes);
+  return result(lines.join("\n"), { days: params.days, rowCount: keywords.length, keywords, notes });
 }
 
 export async function adsAds(params: AdsParams, deps: AdsDeps = {}): Promise<ToolResult> {
@@ -98,7 +113,9 @@ export async function adsAds(params: AdsParams, deps: AdsDeps = {}): Promise<Too
     ...ads.map((a) => `- ${a.adId} (${a.adGroup}) ${a.status}, strength ${a.adStrength || "unknown"}, ${a.approvalStatus || "unknown"}: ${a.impressions} impressions`),
   ];
   if (!ads.length) lines.push("No ads had activity in this window.");
-  return result(lines.join("\n"), { days: params.days, rowCount: ads.length, ads });
+  const notes = [currentStateNote(["status", "adStrength", "approvalStatus"])];
+  lines.push(...notes);
+  return result(lines.join("\n"), { days: params.days, rowCount: ads.length, ads, notes });
 }
 
 export async function adsQuery(params: QueryParams, deps: AdsDeps = {}): Promise<ToolResult> {
@@ -109,6 +126,80 @@ export async function adsQuery(params: QueryParams, deps: AdsDeps = {}): Promise
   }
   const rows = await client(deps).gaql(params.query);
   return result(`${rows.length} row(s) returned. See structured data.`, { query: params.query, rowCount: rows.length, rows });
+}
+
+export async function adsSearchTerms(params: SearchTermsParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  const rows = await client(deps).gaql(
+    `SELECT search_term_view.search_term, search_term_view.status, campaign.name,
+            segments.keyword.info.text,
+            metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions
+     FROM search_term_view WHERE ${duringWindow(params.days, deps.now ?? new Date())}`,
+  );
+  const all = rows.map((row) => ({
+    searchTerm: String(row.searchTermView?.searchTerm ?? ""),
+    matchedKeyword: String(row.segments?.keyword?.info?.text ?? ""),
+    campaign: String(row.campaign?.name ?? ""),
+    status: String(row.searchTermView?.status ?? ""),
+    impressions: Number(row.metrics?.impressions ?? 0),
+    clicks: Number(row.metrics?.clicks ?? 0),
+    cost: money(row.metrics?.costMicros),
+    conversions: Number(row.metrics?.conversions ?? 0),
+  }));
+  const searchTerms = all.filter((term) => term.impressions >= params.minImpressions).sort((left, right) => right.impressions - left.impressions);
+
+  const notes = [
+    "These are the queries that actually triggered an ad, which is the paid equivalent of the Search Console query dimension.",
+    // Same withholding shape as Search Console, and the same trap: a term that
+    // is not here is not a term nobody searched.
+    "Google withholds search terms that too few people searched, so this list is not every query that reached the account and an absent term is unknown rather than absent.",
+  ];
+  if (params.minImpressions > 0 && all.length !== searchTerms.length) {
+    notes.push(`${all.length - searchTerms.length} term(s) fell below the ${params.minImpressions} impression floor and are not listed.`);
+  }
+
+  const lines = [
+    `${searchTerms.length} search term(s) over the last ${params.days} day(s)`,
+    ...searchTerms.map((t) => `- ${t.searchTerm} (matched ${t.matchedKeyword || "unknown"}): ${t.impressions} impressions, ${t.clicks} clicks, ${t.conversions} conversions`),
+    ...notes,
+  ];
+  return result(lines.join("\n"), { days: params.days, rowCount: searchTerms.length, searchTerms, notes });
+}
+
+export async function adsChanges(params: ChangesParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  const { startDate, endDate } = dateRange(params.days, deps.now ?? new Date());
+  // change_event takes a datetime rather than a date, and refuses a query with
+  // no LIMIT, so both are part of the contract rather than a preference.
+  const rows = await client(deps).gaql(
+    `SELECT change_event.change_date_time, change_event.change_resource_type,
+            change_event.resource_change_operation, change_event.changed_fields,
+            change_event.user_email, change_event.client_type, campaign.name
+     FROM change_event
+     WHERE change_event.change_date_time BETWEEN '${startDate} 00:00:00' AND '${endDate} 23:59:59'
+     ORDER BY change_event.change_date_time DESC
+     LIMIT ${params.limit}`,
+  );
+  const changes = rows.map((row) => ({
+    changedAt: String(row.changeEvent?.changeDateTime ?? ""),
+    resourceType: String(row.changeEvent?.changeResourceType ?? ""),
+    operation: String(row.changeEvent?.resourceChangeOperation ?? ""),
+    changedFields: String(row.changeEvent?.changedFields ?? ""),
+    user: String(row.changeEvent?.userEmail ?? ""),
+    client: String(row.changeEvent?.clientType ?? ""),
+    campaign: String(row.campaign?.name ?? ""),
+  }));
+  const notes = [
+    "client says where a change came from: GOOGLE_ADS_API for a tool, GOOGLE_ADS_WEB_CLIENT for someone in the browser.",
+    "Google keeps change history for 30 days, so anything older cannot be recovered here.",
+  ];
+  if (changes.length === params.limit) {
+    notes.push(`Exactly ${params.limit} rows came back, which is the limit asked for, so there may be more. Raise limit or shorten the window.`);
+  }
+  const lines = [
+    `${changes.length} change(s) in the last ${params.days} day(s)`,
+    ...changes.map((c) => `- ${c.changedAt} ${c.operation} ${c.resourceType}${c.changedFields ? ` (${c.changedFields})` : ""} by ${c.user || "unknown"} via ${c.client}`),
+    ...notes,
+  ];
+  return result(lines.join("\n"), { days: params.days, rowCount: changes.length, changes, notes });
 }
 
 interface Plan {

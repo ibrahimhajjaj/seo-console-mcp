@@ -21,6 +21,26 @@
   `confirm` confirms something already read. After writing, the value is read
   back: an accepted request is not a stored value, and a mismatch comes back as
   an error.
+- `ads_search_terms` reads the queries that actually triggered an ad, with the
+  keyword each matched. This is the paid equivalent of the Search Console query
+  dimension, and it carries the same caveat: Google withholds terms too few
+  people searched, so an absent term is unknown rather than absent.
+- `ads_changes` reads the change history: what changed, when, which fields, by
+  whom, and whether it came from a tool or from someone in the browser. Google
+  keeps 30 days. It is the audit trail for anything `ads_update` writes.
+
+### Fixed
+
+- The Google Ads reads now say which of their fields are current rather than
+  historical. Google keeps no history for a setting, so a date-filtered query
+  staples today's value onto an old day's metrics: a campaign paused this
+  morning reports PAUSED beside the 1,445 impressions it served last month.
+  Status, budget, bid, ad strength and approval are named as current in a note,
+  because a number that is true of the window sitting next to one that is not is
+  how a reader gets it wrong.
+
+### Changed
+
 - `--allow-spend`, a second CLI gate for tools that cost money. One flag
   authorising both "resubmit a sitemap" and "triple a daily budget" is not a
   gate, so `ads_update` needs both it and `--allow-write`.

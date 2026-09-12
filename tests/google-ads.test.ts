@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import { dateRange, quoteGaql, resolveAdsCredentials } from "../src/google-ads.js";
-import { adsCampaigns, adsKeywords, adsQuery, adsUpdate } from "../src/google-ads-tools.js";
-import { adsCampaignsInput, adsCampaignsOutput, adsKeywordsInput, adsKeywordsOutput, adsQueryInput, adsUpdateInput, adsUpdateOutput } from "../src/schemas.js";
+import { adsCampaigns, adsChanges, adsKeywords, adsQuery, adsSearchTerms, adsUpdate } from "../src/google-ads-tools.js";
+import {
+  adsCampaignsInput,
+  adsCampaignsOutput,
+  adsChangesInput,
+  adsChangesOutput,
+  adsKeywordsInput,
+  adsKeywordsOutput,
+  adsQueryInput,
+  adsSearchTermsInput,
+  adsSearchTermsOutput,
+  adsUpdateInput,
+  adsUpdateOutput,
+} from "../src/schemas.js";
 
 const credentials = {
   developerToken: "dev",
@@ -124,6 +136,94 @@ describe("ads reads", () => {
     const query = String(calls[0]?.body?.query);
     expect(query).toContain("segments.date BETWEEN '2026-06-15' AND '2026-09-12'");
     expect(query).not.toContain("LAST_90_DAYS");
+  });
+
+  it("says a setting is current, so it cannot be read as the value during the window", async () => {
+    // A campaign paused this morning still reports PAUSED beside the
+    // impressions it served last month, because Google keeps no setting history.
+    const { fetchImpl } = router(() => ({
+      body: stream([{ campaign: { name: "zad", status: "PAUSED" }, campaignBudget: { amountMicros: "1000000" }, metrics: { impressions: 1445, clicks: 39, costMicros: "0", conversions: 0 } }]),
+    }));
+
+    const result = await adsCampaigns(adsCampaignsInput.parse({ days: 30 }), { credentials, fetchImpl });
+    const content = result.structuredContent as { notes: string[] };
+
+    expect(content.notes.join(" ")).toMatch(/status, dailyBudget are the value now, not the value during the window/);
+    expect(content.notes.join(" ")).toMatch(/ads_changes/);
+    expect(() => adsCampaignsOutput.parse(content)).not.toThrow();
+  });
+
+  it("reads search terms and keeps Google's withholding caveat attached", async () => {
+    const { fetchImpl } = router(() => ({
+      body: stream([
+        {
+          searchTermView: { searchTerm: "duplicator pro plugin", status: "NONE" },
+          segments: { keyword: { info: { text: "duplicator pro" } } },
+          campaign: { name: "safeguard" },
+          metrics: { impressions: 1, clicks: 0, costMicros: "0", conversions: 0 },
+        },
+      ]),
+    }));
+
+    const result = await adsSearchTerms(adsSearchTermsInput.parse({ days: 90 }), { credentials, fetchImpl });
+    const content = result.structuredContent as { searchTerms: Array<{ matchedKeyword: string }>; notes: string[] };
+
+    expect(content.searchTerms[0]).toMatchObject({ searchTerm: "duplicator pro plugin", matchedKeyword: "duplicator pro" });
+    // The same shape as Search Console withholding low-volume queries.
+    expect(content.notes.join(" ")).toMatch(/absent term is unknown rather than absent/);
+    expect(() => adsSearchTermsOutput.parse(content)).not.toThrow();
+  });
+
+  it("drops search terms below the impression floor and says how many", async () => {
+    const { fetchImpl } = router(() => ({
+      body: stream([
+        { searchTermView: { searchTerm: "loud" }, metrics: { impressions: 40, clicks: 1, costMicros: "0", conversions: 0 } },
+        { searchTermView: { searchTerm: "quiet" }, metrics: { impressions: 1, clicks: 0, costMicros: "0", conversions: 0 } },
+      ]),
+    }));
+
+    const result = await adsSearchTerms(adsSearchTermsInput.parse({ days: 30, minImpressions: 10 }), { credentials, fetchImpl });
+    const content = result.structuredContent as { rowCount: number; notes: string[] };
+
+    expect(content.rowCount).toBe(1);
+    expect(content.notes.join(" ")).toMatch(/1 term\(s\) fell below the 10 impression floor/);
+  });
+
+  it("asks change history for a datetime range with a limit, as the resource requires", async () => {
+    const { fetchImpl, calls } = router(() => ({
+      body: stream([
+        {
+          changeEvent: {
+            changeDateTime: "2026-09-12 12:33:46",
+            changeResourceType: "AD_GROUP_CRITERION",
+            resourceChangeOperation: "UPDATE",
+            changedFields: "cpcBidMicros",
+            userEmail: "someone@example.com",
+            clientType: "GOOGLE_ADS_API",
+          },
+          campaign: { name: "safeguard" },
+        },
+      ]),
+    }));
+
+    const result = await adsChanges(adsChangesInput.parse({ days: 14, limit: 100 }), { credentials, fetchImpl, now: new Date("2026-09-12T00:00:00Z") });
+    const query = String(calls[0]?.body?.query);
+    const content = result.structuredContent as { changes: Array<{ client: string }>; notes: string[] };
+
+    expect(query).toContain("BETWEEN '2026-08-30 00:00:00' AND '2026-09-12 23:59:59'");
+    expect(query).toContain("LIMIT 100");
+    // Whether a change came from a tool or from a person in the browser.
+    expect(content.changes[0]?.client).toBe("GOOGLE_ADS_API");
+    expect(content.notes.join(" ")).toMatch(/GOOGLE_ADS_WEB_CLIENT for someone in the browser/);
+    expect(() => adsChangesOutput.parse(content)).not.toThrow();
+  });
+
+  it("warns when the change list is exactly the limit, because there may be more", async () => {
+    const { fetchImpl } = router(() => ({ body: stream([{ changeEvent: { changeDateTime: "x" } }, { changeEvent: { changeDateTime: "y" } }]) }));
+
+    const result = await adsChanges(adsChangesInput.parse({ days: 14, limit: 2 }), { credentials, fetchImpl });
+
+    expect((result.structuredContent as { notes: string[] }).notes.join(" ")).toMatch(/which is the limit asked for, so there may be more/);
   });
 
   it("refuses a query that is not a SELECT", async () => {

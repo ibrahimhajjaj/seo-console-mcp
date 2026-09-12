@@ -1,6 +1,6 @@
 # seo-mcp
 
-`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients twenty-nine tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, WordPress.org, and real-user Core Web Vitals, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records Search Console, the App Store, Google Play and WordPress.org at one moment so a later run can diff against it.
+`seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients thirty-six tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, WordPress.org, Google Ads, and real-user Core Web Vitals, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records Search Console, the App Store, Google Play and WordPress.org at one moment so a later run can diff against it.
 
 ## Requirements
 
@@ -22,6 +22,7 @@ What else you need depends on which tools you use. The setup wizard covers Searc
 | `app_store_sales` | the above plus `SEO_MCP_ASC_VENDOR_NUMBER` | team key created with Admin, Finance, or Sales and Reports |
 | `play_store_stats` | `SEO_MCP_PLAY_BUCKET`, `SEO_MCP_PLAY_CREDENTIALS` | service account with read access to the reporting bucket |
 | `play_vitals` | `SEO_MCP_PLAY_CREDENTIALS` | service account invited in Play Console with app quality access |
+| the `ads_` tools | `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`, `GOOGLE_ADS_CUSTOMER_ID` | a Google Ads developer token and an OAuth client with a refresh token |
 
 ## Install and build
 
@@ -1068,6 +1069,40 @@ An arbitrary GAQL `SELECT` for a question the shaped reads do not cover. GAQL ha
 | `query` | string | yes |  | A GAQL SELECT statement. GAQL has no other statement, so this cannot change anything |
 
 <!-- /params:ads_query -->
+
+### `ads_search_terms`
+
+The queries that actually triggered an ad, with the keyword each one matched. This is the paid equivalent of the Search Console query dimension, and it carries the same caveat: Google withholds terms too few people searched, so a term that is not listed is unknown rather than absent.
+
+```json
+{ "days": 90, "minImpressions": 1 }
+```
+
+<!-- params:ads_search_terms -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `days` | number | no | `30` | How many days back to report, ending today |
+| `minImpressions` | number | no | `0` | Drop search terms below this many impressions |
+
+<!-- /params:ads_search_terms -->
+
+### `ads_changes`
+
+What changed in the account, when, which fields, by whom, and whether it came from a tool or from someone in the browser: `client` is `GOOGLE_ADS_API` for the former and `GOOGLE_ADS_WEB_CLIENT` for the latter. This is the audit trail for anything `ads_update` writes, and for console edits made by hand. Google keeps 30 days, so a longer window is refused rather than silently truncated.
+
+```json
+{ "days": 14, "limit": 100 }
+```
+
+<!-- params:ads_changes -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `days` | number | no | `14` | How many days of change history to read, ending now. Google keeps 30 days and refuses more |
+| `limit` | number | no | `100` | Most recent changes to return |
+
+<!-- /params:ads_changes -->
 
 ### `ads_update`
 

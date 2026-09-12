@@ -699,6 +699,7 @@ export const adsCampaignsOutput = z.object({
       conversions: z.number(),
     }),
   ),
+  notes: z.array(z.string()),
 });
 
 export const adsKeywordsShape = { days: adsWindow };
@@ -718,6 +719,7 @@ export const adsKeywordsOutput = z.object({
       cost: z.number(),
     }),
   ),
+  notes: z.array(z.string()),
 });
 
 export const adsAdsShape = { days: adsWindow };
@@ -736,6 +738,7 @@ export const adsAdsOutput = z.object({
       clicks: z.number(),
     }),
   ),
+  notes: z.array(z.string()),
 });
 
 export const adsQueryShape = {
@@ -746,6 +749,53 @@ export const adsQueryOutput = z.object({
   query: z.string(),
   rowCount: z.number(),
   rows: z.array(z.record(z.string(), z.unknown())),
+});
+
+export const adsSearchTermsShape = {
+  days: adsWindow,
+  minImpressions: z.number().int().min(0).default(0).describe("Drop search terms below this many impressions"),
+};
+export const adsSearchTermsInput = z.object(adsSearchTermsShape);
+export const adsSearchTermsOutput = z.object({
+  days: z.number(),
+  rowCount: z.number(),
+  searchTerms: z.array(
+    z.object({
+      searchTerm: z.string(),
+      matchedKeyword: z.string(),
+      campaign: z.string(),
+      status: z.string(),
+      impressions: z.number(),
+      clicks: z.number(),
+      cost: z.number(),
+      conversions: z.number(),
+    }),
+  ),
+  notes: z.array(z.string()),
+});
+
+export const adsChangesShape = {
+  // Google keeps change history for 30 days and refuses a longer window, so the
+  // cap is the API's, not a preference.
+  days: z.number().int().min(1).max(30).default(14).describe("How many days of change history to read, ending now. Google keeps 30 days and refuses more"),
+  limit: z.number().int().min(1).max(1000).default(100).describe("Most recent changes to return"),
+};
+export const adsChangesInput = z.object(adsChangesShape);
+export const adsChangesOutput = z.object({
+  days: z.number(),
+  rowCount: z.number(),
+  changes: z.array(
+    z.object({
+      changedAt: z.string(),
+      resourceType: z.string(),
+      operation: z.string(),
+      changedFields: z.string(),
+      user: z.string(),
+      client: z.string().describe("GOOGLE_ADS_API for a change made by a tool, GOOGLE_ADS_WEB_CLIENT for one made in the browser"),
+      campaign: z.string(),
+    }),
+  ),
+  notes: z.array(z.string()),
 });
 
 export const adsUpdateShape = {
