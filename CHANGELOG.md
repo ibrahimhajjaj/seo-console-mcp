@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.12.0
+
+Google Ads: read what the ad says and what serves beside it.
 
 ### Added
 
@@ -28,7 +30,10 @@
   that looks bare there may be serving with four sitelinks beside it. The three
   levels are three queries, and one that fails is reported in `levelErrors`
   while the other two still return, because an empty list that quietly meant
-  the query broke would read as nothing attached.
+  the query broke would read as nothing attached. A Money field is selected by its
+  `amount_micros` and `currency_code` rather than whole, which is the only
+  spelling Google accepts; a repeated message such as `price_offerings` selects
+  whole and is left that way.
 
 ## 0.11.0
 
