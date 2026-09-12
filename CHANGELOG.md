@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.14.0
+
+### Fixed
+
+- `ads_keywords` returned paused keywords with nothing to say they were paused.
+  The row carried an unchanged bid, `APPROVED` and `ELIGIBLE`, identical in
+  shape to a serving keyword, so someone who had just paused three keywords read
+  it as the pause not having taken. `ELIGIBLE` is the word that does the damage:
+  it means approved and capable of serving, not currently serving. Rows now
+  carry `status`, paused ones are named in a note with what `ELIGIBLE` actually
+  means, and `ads_campaigns` and `ads_ads` already carried their status, so this
+  was the one read missing it. Found in review against a live account.
+
+### Added
+
+- `ads_keywords` takes an optional `status` to narrow to `ENABLED`, `PAUSED` or
+  `REMOVED`. Every state is still returned by default: dropping paused rows
+  silently would trade a labelling bug for an absence one, which is the same
+  mistake a layer down.
+
 ## 0.13.2
 
 ### Fixed
