@@ -14,6 +14,16 @@ import {
   cruxFieldDataShape,
   cruxHistoryOutput,
   cruxHistoryShape,
+  adsCampaignsOutput,
+  adsCampaignsShape,
+  adsKeywordsOutput,
+  adsKeywordsShape,
+  adsAdsOutput,
+  adsAdsShape,
+  adsQueryOutput,
+  adsQueryShape,
+  adsUpdateOutput,
+  adsUpdateShape,
   listSnapshotsOutput,
   listSnapshotsShape,
   snapshotOutput,
@@ -84,6 +94,7 @@ import { appStoreDiscovery } from "./app-store-discovery.js";
 import { appStoreSales } from "./app-store-sales.js";
 import { compareSnapshots } from "./compare-snapshots.js";
 import { cruxFieldData, cruxHistory } from "./crux.js";
+import { adsCampaigns, adsKeywords, adsAds, adsQuery, adsUpdate } from "./google-ads-tools.js";
 import { listSnapshotsTool } from "./list-snapshots.js";
 import { snapshot } from "./snapshot.js";
 import { auditSite } from "./audit-site.js";
@@ -134,6 +145,10 @@ interface ToolSpec<Shape extends z.ZodRawShape> {
   // watching the call; from a shell these are one line in a cron job, so the
   // query command makes them opt in.
   write?: boolean;
+  // A write that costs money every hour it is wrong. Resubmitting a sitemap and
+  // tripling a daily budget are both writes, and one flag authorising both is
+  // not a gate, so these need their own.
+  spendsMoney?: boolean;
   run(ctx: ToolContext, params: z.infer<z.ZodObject<Shape>>): Promise<ToolResult>;
 }
 
@@ -146,6 +161,7 @@ export interface ToolDefinition {
   inputShape: z.ZodRawShape;
   outputSchema: z.ZodType;
   write: boolean;
+  spendsMoney: boolean;
   run(ctx: ToolContext, params: unknown): Promise<ToolResult>;
 }
 
@@ -156,6 +172,7 @@ function defineTool<Shape extends z.ZodRawShape>(spec: ToolSpec<Shape>): ToolDef
     inputShape: spec.inputShape,
     outputSchema: spec.outputSchema,
     write: spec.write ?? false,
+    spendsMoney: spec.spendsMoney ?? false,
     run: (ctx, params) => spec.run(ctx, params as z.infer<z.ZodObject<Shape>>),
   };
 }
@@ -374,6 +391,47 @@ export const toolDefinitions: ToolDefinition[] = [
     inputShape: cruxHistoryShape,
     outputSchema: cruxHistoryOutput,
     run: (_ctx, params) => cruxHistory(params),
+  }),
+  defineTool({
+    name: "ads_campaigns",
+    description:
+      "Read Google Ads campaigns: status, daily budget, impressions, clicks, cost and conversions over a window. Needs GOOGLE_ADS_DEVELOPER_TOKEN, an OAuth client and a refresh token; read-only",
+    inputShape: adsCampaignsShape,
+    outputSchema: adsCampaignsOutput,
+    run: (_ctx, params) => adsCampaigns(params),
+  }),
+  defineTool({
+    name: "ads_keywords",
+    description:
+      "Read every Google Ads keyword with its effective CPC bid, approval and serving status, and metrics. Returns every row rather than a first page, which is how a count taken from the console goes wrong; read-only",
+    inputShape: adsKeywordsShape,
+    outputSchema: adsKeywordsOutput,
+    run: (_ctx, params) => adsKeywords(params),
+  }),
+  defineTool({
+    name: "ads_ads",
+    description: "Read Google Ads ads with ad strength, policy approval status, serving status and metrics; read-only",
+    inputShape: adsAdsShape,
+    outputSchema: adsAdsOutput,
+    run: (_ctx, params) => adsAds(params),
+  }),
+  defineTool({
+    name: "ads_query",
+    description:
+      "Run an arbitrary GAQL SELECT against the Google Ads account for a question the shaped reads do not cover. GAQL has no statement other than SELECT, so this cannot change anything; read-only",
+    inputShape: adsQueryShape,
+    outputSchema: adsQueryOutput,
+    run: (_ctx, params) => adsQuery(params),
+  }),
+  defineTool({
+    name: "ads_update",
+    description:
+      "Change one Google Ads keyword bid, campaign daily budget, campaign status or ad status. Spends money, so it is a dry run unless dryRun is false, it refuses a change that trips a guard unless confirm is true, and it re-reads the value after writing because an accepted request is not a stored value. Guards: more than three times the current amount, more than $25, or pausing something that is serving",
+    inputShape: adsUpdateShape,
+    outputSchema: adsUpdateOutput,
+    write: true,
+    spendsMoney: true,
+    run: (_ctx, params) => adsUpdate(params),
   }),
   defineTool({
     name: "list_snapshots",

@@ -28,7 +28,10 @@ function elementOf(array: z.ZodType): z.ZodType {
 // Everything a flag value can carry: scalars as text, nested parameters as JSON.
 const flagTypes = new Set(["string", "number", "boolean", "enum", "object"]);
 
-const writeTools = ["delete_sitemap", "indexnow_submit", "request_recrawl", "submit_sitemap"];
+const writeTools = ["ads_update", "delete_sitemap", "indexnow_submit", "request_recrawl", "submit_sitemap"];
+// Writes that cost money rather than only changing state. They carry their own
+// CLI gate, so the set is pinned the same way the write set is.
+const spendTools = ["ads_update"];
 
 describe("tool registry invariants", () => {
   it("gives every tool a unique name a shell and an MCP client can both use", () => {
@@ -59,6 +62,17 @@ describe("tool registry invariants", () => {
       .sort();
 
     expect(flagged).toEqual(writeTools);
+  });
+
+  it("marks exactly the money-spending tools, and each one is also a write", () => {
+    const spending = toolDefinitions
+      .filter((tool) => tool.spendsMoney)
+      .map((tool) => tool.name)
+      .sort();
+
+    expect(spending).toEqual(spendTools);
+    // A tool that spends without being a write would slip past the write gate.
+    for (const name of spending) expect(writeTools).toContain(name);
   });
 
   it.each(toolDefinitions)("$name takes only parameters that can be typed as a flag value", (tool) => {

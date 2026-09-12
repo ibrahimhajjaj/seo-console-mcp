@@ -82,21 +82,23 @@ describe("parseCliArgs", () => {
       out: "/tmp/sg.json",
       help: false,
       allowWrite: false,
+      allowSpend: false,
     });
   });
 
   it("parses a bare query as a tool listing request", () => {
-    expect(parseCliArgs(["query"])).toEqual({ kind: "query", params: {}, help: false, allowWrite: false });
+    expect(parseCliArgs(["query"])).toEqual({ kind: "query", params: {}, help: false, allowWrite: false, allowSpend: false });
   });
 
   it("routes query --help to the query command rather than global help", () => {
-    expect(parseCliArgs(["query", "--help"])).toEqual({ kind: "query", params: {}, help: true, allowWrite: false });
+    expect(parseCliArgs(["query", "--help"])).toEqual({ kind: "query", params: {}, help: true, allowWrite: false, allowSpend: false });
     expect(parseCliArgs(["query", "wporg_plugin", "--help"])).toEqual({
       kind: "query",
       tool: "wporg_plugin",
       params: {},
       help: true,
       allowWrite: false,
+      allowSpend: false,
     });
   });
 
@@ -108,6 +110,7 @@ describe("parseCliArgs", () => {
       credentials: "/k.json",
       help: false,
       allowWrite: false,
+      allowSpend: false,
     });
   });
 
@@ -122,6 +125,7 @@ describe("parseCliArgs", () => {
       params: { siteUrl: "sc-domain:example.com" },
       help: false,
       allowWrite: true,
+      allowSpend: false,
     });
   });
 });

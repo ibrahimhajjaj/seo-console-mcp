@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Google Ads, five tools. `ads_campaigns`, `ads_keywords` and `ads_ads` read the
+  account through the API; `ads_query` runs an arbitrary GAQL SELECT for a
+  question the shaped reads do not cover. A console table pages, so a count taken
+  off the first screen can be wrong without looking wrong: a keyword count read
+  as two when the answer was five, because the table shows ten rows and there
+  were fourteen. These return every row.
+- `ads_update` changes one keyword bid, campaign daily budget, campaign status or
+  ad status. It is the only tool here that spends money, so it carries four
+  rails, each from a real failure rather than a hypothetical. `dryRun` defaults
+  to true, so omitting it reports the change and stops; a required parameter
+  enforces that better than a flag, because a flag can be forgotten and a default
+  cannot. A target must match exactly one thing or nothing is changed. Guards
+  refuse more than three times the current amount, more than $25, or pausing
+  something that is serving, and the dry run returns the reasons in words so
+  `confirm` confirms something already read. After writing, the value is read
+  back: an accepted request is not a stored value, and a mismatch comes back as
+  an error.
+- `--allow-spend`, a second CLI gate for tools that cost money. One flag
+  authorising both "resubmit a sitemap" and "triple a daily budget" is not a
+  gate, so `ads_update` needs both it and `--allow-write`.
+
 ## 0.10.0
 
 The total_ store performance report, read properly.

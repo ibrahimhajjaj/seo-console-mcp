@@ -1,0 +1,297 @@
+import type { z } from "zod";
+import type { ToolResult } from "./google-tools.js";
+import type { adsCampaignsInput, adsKeywordsInput, adsAdsInput, adsQueryInput, adsUpdateInput } from "./schemas.js";
+import { createAdsClient, resolveAdsCredentials, quoteGaql, duringWindow, money, toMicros, type AdsClient, type AdsDeps } from "./google-ads.js";
+
+type CampaignsParams = z.output<typeof adsCampaignsInput>;
+type KeywordsParams = z.output<typeof adsKeywordsInput>;
+type AdsParams = z.output<typeof adsAdsInput>;
+type QueryParams = z.output<typeof adsQueryInput>;
+type UpdateParams = z.output<typeof adsUpdateInput>;
+
+// Deliberately low, because they are a fraction of the account they guard rather
+// than a round number. A ceiling that is large next to the budget it protects
+// stops nothing.
+const MAX_SINGLE_AMOUNT = 25;
+const MULTIPLE_LIMIT = 3;
+const DAYS_PER_MONTH = 30.4;
+
+function client(deps: AdsDeps): AdsClient {
+  return deps.credentials ? createAdsClient(deps.credentials, deps.fetchImpl ?? fetch) : createAdsClient(resolveAdsCredentials(deps.env ?? process.env), deps.fetchImpl ?? fetch);
+}
+
+function result(text: string, structuredContent: Record<string, unknown>, isError = false): ToolResult {
+  return { content: [{ type: "text", text }], structuredContent, ...(isError ? { isError: true } : {}) };
+}
+
+export async function adsCampaigns(params: CampaignsParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  const rows = await client(deps).gaql(
+    `SELECT campaign.name, campaign.status, campaign_budget.amount_micros,
+            metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions
+     FROM campaign WHERE ${duringWindow(params.days, deps.now ?? new Date())}`,
+  );
+  const campaigns = rows.map((row) => ({
+    name: String(row.campaign?.name ?? ""),
+    status: String(row.campaign?.status ?? ""),
+    dailyBudget: money(row.campaignBudget?.amountMicros),
+    impressions: Number(row.metrics?.impressions ?? 0),
+    clicks: Number(row.metrics?.clicks ?? 0),
+    cost: money(row.metrics?.costMicros),
+    conversions: Number(row.metrics?.conversions ?? 0),
+  }));
+  const lines = [
+    `Google Ads campaigns over the last ${params.days} day(s)`,
+    ...campaigns.map(
+      (c) => `- ${c.name} [${c.status}] budget $${c.dailyBudget.toFixed(2)}/day: ${c.impressions} impressions, ${c.clicks} clicks, $${c.cost.toFixed(2)} spent, ${c.conversions} conversions`,
+    ),
+  ];
+  if (!campaigns.length) lines.push("No campaigns had activity in this window.");
+  return result(lines.join("\n"), { days: params.days, rowCount: campaigns.length, campaigns });
+}
+
+export async function adsKeywords(params: KeywordsParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  const rows = await client(deps).gaql(
+    `SELECT ad_group.name, ad_group_criterion.keyword.text,
+            ad_group_criterion.effective_cpc_bid_micros,
+            ad_group_criterion.approval_status, ad_group_criterion.system_serving_status,
+            metrics.impressions, metrics.clicks, metrics.cost_micros
+     FROM keyword_view WHERE ${duringWindow(params.days, deps.now ?? new Date())}`,
+  );
+  const keywords = rows.map((row) => ({
+    keyword: String(row.adGroupCriterion?.keyword?.text ?? ""),
+    adGroup: String(row.adGroup?.name ?? ""),
+    bid: money(row.adGroupCriterion?.effectiveCpcBidMicros),
+    approvalStatus: String(row.adGroupCriterion?.approvalStatus ?? ""),
+    servingStatus: String(row.adGroupCriterion?.systemServingStatus ?? ""),
+    impressions: Number(row.metrics?.impressions ?? 0),
+    clicks: Number(row.metrics?.clicks ?? 0),
+    cost: money(row.metrics?.costMicros),
+  }));
+  // The console's keyword table pages at ten rows, which is how a count taken
+  // from it can be wrong without looking wrong. This returns every row.
+  const lines = [
+    `${keywords.length} keyword(s) over the last ${params.days} day(s), every row, not a first page`,
+    ...keywords.map((k) => `- ${k.keyword} (${k.adGroup}) bid $${k.bid.toFixed(2)} ${k.servingStatus}: ${k.impressions} impressions, ${k.clicks} clicks`),
+  ];
+  if (!keywords.length) lines.push("No keywords had activity in this window.");
+  return result(lines.join("\n"), { days: params.days, rowCount: keywords.length, keywords });
+}
+
+export async function adsAds(params: AdsParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  const rows = await client(deps).gaql(
+    `SELECT ad_group.name, ad_group_ad.ad.id, ad_group_ad.status,
+            ad_group_ad.ad_strength, ad_group_ad.policy_summary.approval_status,
+            metrics.impressions, metrics.clicks
+     FROM ad_group_ad WHERE ${duringWindow(params.days, deps.now ?? new Date())}`,
+  );
+  const ads = rows.map((row) => ({
+    adId: String(row.adGroupAd?.ad?.id ?? ""),
+    adGroup: String(row.adGroup?.name ?? ""),
+    status: String(row.adGroupAd?.status ?? ""),
+    adStrength: String(row.adGroupAd?.adStrength ?? ""),
+    approvalStatus: String(row.adGroupAd?.policySummary?.approvalStatus ?? ""),
+    impressions: Number(row.metrics?.impressions ?? 0),
+    clicks: Number(row.metrics?.clicks ?? 0),
+  }));
+  const lines = [
+    `${ads.length} ad(s) over the last ${params.days} day(s)`,
+    ...ads.map((a) => `- ${a.adId} (${a.adGroup}) ${a.status}, strength ${a.adStrength || "unknown"}, ${a.approvalStatus || "unknown"}: ${a.impressions} impressions`),
+  ];
+  if (!ads.length) lines.push("No ads had activity in this window.");
+  return result(lines.join("\n"), { days: params.days, rowCount: ads.length, ads });
+}
+
+export async function adsQuery(params: QueryParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  // GAQL only selects, so this cannot change anything. It exists because the
+  // four shaped reads cannot anticipate every question.
+  if (!/^\s*SELECT\s/i.test(params.query)) {
+    throw new Error("A Google Ads query must start with SELECT. GAQL has no other statement, and this tool does not mutate.");
+  }
+  const rows = await client(deps).gaql(params.query);
+  return result(`${rows.length} row(s) returned. See structured data.`, { query: params.query, rowCount: rows.length, rows });
+}
+
+interface Plan {
+  service: string;
+  operations: unknown[];
+  before: string;
+  after: string;
+  beforeAmount: number;
+  afterAmount: number;
+  pausingLive: boolean;
+  verify: (client: AdsClient) => Promise<string>;
+}
+
+function statusWord(value: string): "PAUSED" | "ENABLED" {
+  const word = value.trim().toLowerCase();
+  if (word === "pause" || word === "paused") return "PAUSED";
+  if (word === "enable" || word === "enabled") return "ENABLED";
+  throw new Error(`A status change takes pause or enable, not "${value}".`);
+}
+
+function amount(value: string, kind: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`A ${kind} takes a positive amount in dollars, not "${value}".`);
+  return parsed;
+}
+
+// One row or refuse. A target that matches nothing is a typo, and a target that
+// matches two is a request to change something the caller did not name.
+async function exactlyOne(api: AdsClient, query: string, what: string): Promise<Record<string, any>> {
+  const rows = await api.gaql(query);
+  if (!rows.length) throw new Error(`No ${what} matched. Nothing was changed.`);
+  if (rows.length > 1) throw new Error(`${rows.length} ${what}s matched that target; name it more precisely. Nothing was changed.`);
+  return rows[0] as Record<string, any>;
+}
+
+async function plan(api: AdsClient, params: UpdateParams): Promise<Plan> {
+  const target = quoteGaql(params.target);
+
+  if (params.kind === "bid") {
+    const row = await exactlyOne(
+      api,
+      `SELECT ad_group_criterion.resource_name, ad_group_criterion.keyword.text, ad_group_criterion.effective_cpc_bid_micros
+       FROM keyword_view WHERE ad_group_criterion.keyword.text = ${target}`,
+      "keyword",
+    );
+    const resourceName = String(row.adGroupCriterion.resourceName);
+    const next = amount(params.value, "bid");
+    return {
+      service: "adGroupCriteria",
+      operations: [{ update: { resourceName, cpcBidMicros: toMicros(next) }, updateMask: "cpc_bid_micros" }],
+      before: `$${money(row.adGroupCriterion.effectiveCpcBidMicros).toFixed(2)}`,
+      after: `$${next.toFixed(2)}`,
+      beforeAmount: money(row.adGroupCriterion.effectiveCpcBidMicros),
+      afterAmount: next,
+      pausingLive: false,
+      verify: (c) =>
+        c
+          .gaql(`SELECT ad_group_criterion.effective_cpc_bid_micros FROM keyword_view WHERE ad_group_criterion.resource_name = ${quoteGaql(resourceName)}`)
+          .then((rows) => `$${money(rows[0]?.adGroupCriterion?.effectiveCpcBidMicros).toFixed(2)}`),
+    };
+  }
+
+  if (params.kind === "budget") {
+    const row = await exactlyOne(
+      api,
+      `SELECT campaign.name, campaign_budget.resource_name, campaign_budget.amount_micros
+       FROM campaign WHERE campaign.name = ${target}`,
+      "campaign",
+    );
+    const resourceName = String(row.campaignBudget.resourceName);
+    const next = amount(params.value, "budget");
+    return {
+      service: "campaignBudgets",
+      operations: [{ update: { resourceName, amountMicros: toMicros(next) }, updateMask: "amount_micros" }],
+      before: `$${money(row.campaignBudget.amountMicros).toFixed(2)}/day`,
+      after: `$${next.toFixed(2)}/day`,
+      beforeAmount: money(row.campaignBudget.amountMicros),
+      afterAmount: next,
+      pausingLive: false,
+      verify: (c) => c.gaql(`SELECT campaign_budget.amount_micros FROM campaign WHERE campaign.name = ${target}`).then((rows) => `$${money(rows[0]?.campaignBudget?.amountMicros).toFixed(2)}/day`),
+    };
+  }
+
+  if (params.kind === "campaignStatus") {
+    const status = statusWord(params.value);
+    const row = await exactlyOne(api, `SELECT campaign.resource_name, campaign.name, campaign.status FROM campaign WHERE campaign.name = ${target}`, "campaign");
+    const resourceName = String(row.campaign.resourceName);
+    const before = String(row.campaign.status);
+    return {
+      service: "campaigns",
+      operations: [{ update: { resourceName, status }, updateMask: "status" }],
+      before,
+      after: status,
+      beforeAmount: 0,
+      afterAmount: 0,
+      pausingLive: before === "ENABLED" && status === "PAUSED",
+      verify: (c) => c.gaql(`SELECT campaign.status FROM campaign WHERE campaign.resource_name = ${quoteGaql(resourceName)}`).then((rows) => String(rows[0]?.campaign?.status ?? "")),
+    };
+  }
+
+  const status = statusWord(params.value);
+  if (!/^\d+$/.test(params.target)) throw new Error(`An ad is named by its numeric id, not "${params.target}".`);
+  const row = await exactlyOne(api, `SELECT ad_group_ad.resource_name, ad_group_ad.status, ad_group.name FROM ad_group_ad WHERE ad_group_ad.ad.id = ${Number(params.target)}`, "ad");
+  const resourceName = String(row.adGroupAd.resourceName);
+  const before = String(row.adGroupAd.status);
+  return {
+    service: "adGroupAds",
+    operations: [{ update: { resourceName, status }, updateMask: "status" }],
+    before,
+    after: status,
+    beforeAmount: 0,
+    afterAmount: 0,
+    pausingLive: before === "ENABLED" && status === "PAUSED",
+    verify: (c) => c.gaql(`SELECT ad_group_ad.status FROM ad_group_ad WHERE ad_group_ad.ad.id = ${Number(params.target)}`).then((rows) => String(rows[0]?.adGroupAd?.status ?? "")),
+  };
+}
+
+// Reasons in plain words, so a dry run can say why it would refuse instead of
+// only that it refused, and the caller confirms something they have read.
+function guardReasons(kind: string, before: number, after: number, pausingLive: boolean): string[] {
+  const reasons: string[] = [];
+  if (kind === "bid" || kind === "budget") {
+    if (before > 0 && after > before * MULTIPLE_LIMIT) {
+      reasons.push(`${after / before >= 10 ? "over ten" : "more than three"} times the current value, $${before.toFixed(2)} to $${after.toFixed(2)}`);
+    }
+    if (after > MAX_SINGLE_AMOUNT) reasons.push(`$${after.toFixed(2)} is above the $${MAX_SINGLE_AMOUNT} ceiling for a single ${kind}`);
+  }
+  // A daily number reads smaller than it is. Saying the month out loud is the
+  // whole point: $30 a day against a $100 budget is nine times the budget.
+  if (kind === "budget") reasons.push(`a daily budget of $${after.toFixed(2)} is about $${(after * DAYS_PER_MONTH).toFixed(0)} a month`);
+  if (pausingLive) reasons.push("this is currently serving, so pausing it stops delivery immediately");
+  return reasons;
+}
+
+export async function adsUpdate(params: UpdateParams, deps: AdsDeps = {}): Promise<ToolResult> {
+  const api = client(deps);
+  const change = await plan(api, params);
+  const guards = guardReasons(params.kind, change.beforeAmount, change.afterAmount, change.pausingLive);
+  const base = {
+    kind: params.kind,
+    target: params.target,
+    before: change.before,
+    after: change.after,
+    guards,
+    customerId: api.customerId,
+  };
+
+  if (change.before === change.after) {
+    return result(`${params.kind} ${params.target} is already ${change.after}. Nothing to do.`, { ...base, applied: false, noOp: true, readBack: null, matches: null, guards: [] });
+  }
+
+  if (params.dryRun) {
+    const lines = [
+      `Dry run. Nothing was changed.`,
+      `${params.kind} ${params.target}: ${change.before} -> ${change.after}`,
+      ...guards.map((reason) => `Guard: ${reason}`),
+      guards.length ? `This change trips ${guards.length} guard(s). To perform it, call again with dryRun false and confirm true.` : `To perform it, call again with dryRun false.`,
+    ];
+    return result(lines.join("\n"), { ...base, applied: false, noOp: false, readBack: null, matches: null });
+  }
+
+  if (guards.length && !params.confirm) {
+    return result(
+      [
+        `Refused. Nothing was changed.`,
+        `${params.kind} ${params.target}: ${change.before} -> ${change.after}`,
+        ...guards.map((reason) => `Guard: ${reason}`),
+        `Set confirm true to perform it anyway.`,
+      ].join("\n"),
+      { ...base, applied: false, noOp: false, readBack: null, matches: null },
+      true,
+    );
+  }
+
+  await api.mutate(change.service, change.operations);
+  // A 200 says the request was accepted, not that it stored what was meant.
+  // Reading the value back is the only evidence that it did.
+  const readBack = await change.verify(api);
+  const matches = readBack === change.after;
+  const lines = [
+    `${params.kind} ${params.target}: ${change.before} -> ${change.after}`,
+    `Applied. Read back: ${readBack}`,
+    matches ? "The stored value matches what was sent." : "The stored value DOES NOT match what was sent. Check the account before relying on this.",
+  ];
+  return result(lines.join("\n"), { ...base, applied: true, noOp: false, readBack, matches }, !matches);
+}

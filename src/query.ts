@@ -43,6 +43,13 @@ export async function runQuery(command: QueryCommand, deps: RunQueryDeps = {}): 
     writeError(`${definition.name} changes data and is not run from the CLI unless you pass --allow-write.\n`);
     return 1;
   }
+  // Spending is its own gate. --allow-write authorises resubmitting a sitemap;
+  // it must not also authorise tripling a daily budget in a cron line nobody
+  // reads until the invoice.
+  if (definition.spendsMoney && !command.allowSpend) {
+    writeError(`${definition.name} can spend money and needs --allow-spend as well as --allow-write. It is still a dry run unless you also pass --dry-run false.\n`);
+    return 1;
+  }
 
   try {
     const params = z.object(definition.inputShape).parse(coerceCliParams(definition.inputShape, command.params));
@@ -147,14 +154,14 @@ export function coerceValue(schema: z.ZodType, value: string, flag?: string): un
 }
 
 function listTools(tools: ToolDefinition[]): string {
-  const rows = tools.map((tool) => `  ${tool.name}${tool.write ? " (write)" : ""}  ${tool.description}`);
+  const rows = tools.map((tool) => `  ${tool.name}${tool.write ? " (write)" : ""}${tool.spendsMoney ? " (spends)" : ""}  ${tool.description}`);
   return [
-    "Usage: seo-mcp query <tool> [--<param> value ...] [--out path.json] [--credentials /path/key.json] [--allow-write]",
+    "Usage: seo-mcp query <tool> [--<param> value ...] [--out path.json] [--credentials /path/key.json] [--allow-write] [--allow-spend]",
     "",
     "Tools:",
     ...rows,
     "",
-    "Tools marked (write) change data and need --allow-write.",
+    "Tools marked (write) change data and need --allow-write. One marked (spends) can also cost money and needs --allow-spend too.",
     "Run `seo-mcp query <tool> --help` for a tool's parameters.",
     "",
   ].join("\n");
@@ -169,6 +176,7 @@ function describeTool(definition: ToolDefinition): string {
   return [
     `${definition.name}: ${definition.description}`,
     ...(definition.write ? ["", "This tool changes data and needs --allow-write."] : []),
+    ...(definition.spendsMoney ? ["This tool can spend money and needs --allow-spend as well."] : []),
     "",
     "Parameters:",
     ...(params.length ? params : ["  (none)"]),

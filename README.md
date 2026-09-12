@@ -999,6 +999,107 @@ Set `SEO_MCP_PLAY_CREDENTIALS` to the service account key, falling back to `GOOG
 
 The window is clamped to the freshness the API reports for itself, since it refuses an end date past that and asking through today always fails. The result says how current the data actually is, so zero rows through a known date is distinguishable from zero rows because the day has not landed. This API carries no acquisition or conversion data; `play_store_stats` has that.
 
+## Google Ads
+
+Reads the account through the API rather than the console. A console table pages, so a count taken from the first screen can be wrong without looking wrong: one keyword count was read as two when the answer was five, because the table shows ten rows and there were fourteen. These tools return every row.
+
+Set `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN` and `GOOGLE_ADS_CUSTOMER_ID` (dashes optional). Two conveniences: `GOOGLE_ADS_CLIENT_SECRET_PATH` reads the client id and secret out of the OAuth client JSON that Google Cloud gives you, and `GOOGLE_ADS_ENV_FILE` points at an existing `.env`-shaped file holding any of these, so a refresh token that already lives somewhere is read in place rather than copied. The process environment wins over the file. `GOOGLE_ADS_API_VERSION` overrides the API version.
+
+### `ads_campaigns`
+
+Campaign name, status, daily budget, impressions, clicks, cost and conversions over a window.
+
+```json
+{ "days": 30 }
+```
+
+<!-- params:ads_campaigns -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `days` | number | no | `30` | How many days back to report, ending today |
+
+<!-- /params:ads_campaigns -->
+
+### `ads_keywords`
+
+Every keyword with its effective CPC bid, approval status, serving status and metrics.
+
+```json
+{ "days": 30 }
+```
+
+<!-- params:ads_keywords -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `days` | number | no | `30` | How many days back to report, ending today |
+
+<!-- /params:ads_keywords -->
+
+### `ads_ads`
+
+Every ad with its ad strength, policy approval status, serving status and metrics.
+
+```json
+{ "days": 30 }
+```
+
+<!-- params:ads_ads -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `days` | number | no | `30` | How many days back to report, ending today |
+
+<!-- /params:ads_ads -->
+
+### `ads_query`
+
+An arbitrary GAQL `SELECT` for a question the shaped reads do not cover. GAQL has no statement other than `SELECT`, so this cannot change anything, and a query that does not start with `SELECT` is refused.
+
+```json
+{ "query": "SELECT campaign.name, metrics.cost_micros FROM campaign WHERE segments.date DURING LAST_7_DAYS" }
+```
+
+<!-- params:ads_query -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `query` | string | yes |  | A GAQL SELECT statement. GAQL has no other statement, so this cannot change anything |
+
+<!-- /params:ads_query -->
+
+### `ads_update`
+
+Changes one keyword bid, campaign daily budget, campaign status or ad status. This is the only tool here that spends money, so it is built to be hard to fire by accident.
+
+```json
+{ "kind": "budget", "target": "search-uk-us-2026-09", "value": "5.00", "dryRun": false, "confirm": true }
+```
+
+<!-- params:ads_update -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kind` | one of bid, budget, campaignStatus, adStatus | yes |  | What to change: a keyword's max CPC bid, a campaign's daily budget, a campaign's status, or an ad's status |
+| `target` | string | yes |  | The keyword text, the campaign name, or the numeric ad id. It must match exactly one thing or the call is refused |
+| `value` | string | yes |  | The new amount in dollars for a bid or budget, or pause or enable for a status |
+| `dryRun` | boolean | no | `true` | Report what would change and which guards it trips, without changing anything. On by default: this tool spends money, so performing a change has to be asked for |
+| `confirm` | boolean | no | `false` | Perform a change that trips a guard. Ignored on a dry run. The dry run lists the guard reasons, so this confirms something already read rather than something unseen |
+
+<!-- /params:ads_update -->
+
+Four rails, each from a real failure rather than a hypothetical:
+
+- **A dry run by default.** `dryRun` defaults to true, so omitting it reports the change and stops. A required parameter enforces this better than a command-line flag, because a flag can be forgotten and a default cannot.
+- **Exactly one match or refuse.** A target that matches nothing is a typo; a target that matches two is a request to change something you did not name. Both stop before any write.
+- **Guards with reasons, in words.** More than three times the current amount, more than $25 on a single bid or daily budget, or pausing something that is currently serving. A budget change also states the monthly equivalent, because $30 a day reads small and is about $912 a month. The dry run lists the reasons, and `confirm` then confirms something you have read rather than something unseen.
+- **The value is read back after the write.** An HTTP 200 means the request was accepted, not that it stored what you meant. The result carries `readBack` and `matches`, and a mismatch is returned as an error.
+
+A change that would be a no-op says so instead of sending a pointless mutation.
+
+From the command line this tool needs `--allow-spend` as well as `--allow-write`. One flag authorising both "resubmit a sitemap" and "triple a daily budget" is not a gate.
+
 ## Running a tool from the command line
 
 Every tool above is also runnable without an MCP client, which is what to use when a result has to land in a file that a later run can diff:
