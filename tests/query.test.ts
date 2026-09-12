@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { runQuery, coerceCliParams } from "../src/query.js";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/version.js";
 import type { QueryCommand } from "../src/cli.js";
 import type { ToolContext, ToolDefinition } from "../src/registry.js";
 
@@ -125,6 +126,32 @@ describe("runQuery", () => {
       dimensions: ["date", "query"],
       dryRun: true,
     });
+  });
+
+  it("names the running version on stderr, without putting it in the result", async () => {
+    // A result does not say which binary produced it. npx will reuse a cached
+    // older build with no error, and a failed install leaves the previous one in
+    // place and working, so what is RUNNING, what the version range resolves to,
+    // and what npm calls latest are three values that usually agree and do not
+    // have to. Reading a result from the wrong version looks exactly like
+    // reading one from the right version.
+    const io = capture();
+
+    const code = await runQuery(command({ tool: "echo", params: { siteUrl: "https://example.com/" } }), io.deps);
+
+    expect(code).toBe(0);
+    expect(io.err.join("")).toMatch(new RegExp(`^${PACKAGE_NAME} ${PACKAGE_VERSION.replace(/\./g, "\\.")} running echo\\n`));
+    // stderr only: stdout stays parseable and an --out file stays pure JSON.
+    expect(() => JSON.parse(io.out.join(""))).not.toThrow();
+  });
+
+  it("names the version on the --out path too, where stdout carries nothing", async () => {
+    const io = capture();
+
+    await runQuery(command({ tool: "echo", params: { siteUrl: "https://example.com/" }, out: "/tmp/snapshot.json" }), io.deps);
+
+    expect(io.err.join("")).toContain(`${PACKAGE_NAME} ${PACKAGE_VERSION} running echo`);
+    expect(JSON.parse(io.files[0]?.data ?? "{}")).toHaveProperty("params");
   });
 
   it("writes to the --out file instead of stdout", async () => {

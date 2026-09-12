@@ -4,6 +4,7 @@ import type { QueryCommand } from "./cli.js";
 import { resolveCredentialsPath } from "./credentials.js";
 import { createToolContext, toolDefinitions, type ToolContext, type ToolDefinition } from "./registry.js";
 import { formatToolError } from "./errors.js";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "./version.js";
 
 export interface RunQueryDeps {
   tools?: ToolDefinition[];
@@ -50,6 +51,15 @@ export async function runQuery(command: QueryCommand, deps: RunQueryDeps = {}): 
     writeError(`${definition.name} can spend money and needs --allow-spend as well as --allow-write. It is still a dry run unless you also pass --dry-run false.\n`);
     return 1;
   }
+
+  // On stderr, so it never reaches the JSON on stdout or the --out file, and
+  // before the run, so it is there when the tool throws as well as when it
+  // returns. What is RUNNING is not what the version range resolves to and not
+  // what npm calls latest: npx will happily reuse a cached older build with no
+  // error at all, and a failed install leaves the previous one in place and
+  // working. A result does not say which binary produced it, and reading one
+  // from the wrong version looks exactly like reading one from the right version.
+  writeError(`${PACKAGE_NAME} ${PACKAGE_VERSION} running ${definition.name}\n`);
 
   try {
     const params = z.object(definition.inputShape).parse(coerceCliParams(definition.inputShape, command.params));

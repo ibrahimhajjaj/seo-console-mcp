@@ -1288,6 +1288,8 @@ seo-mcp query --help                  # list the tools
 seo-mcp query wporg_plugin --help     # list one tool's parameters
 ```
 
+Every run names its own version on stderr (`seo-console-mcp 0.15.1 running wporg_plugin`), so stdout stays parseable and an `--out` file stays pure JSON. **A result does not otherwise say which binary produced it**, and that is not academic: `npx` will reuse a cached older build with no error at all, and a failed install leaves the previous version in place and working. What is running, what the version range resolves to, and what npm calls latest are three values that usually agree and independently do not have to.
+
 Flags are the tool's parameter names in kebab-case (`--site-url` for `siteUrl`); the camelCase spelling works too. List values are comma-separated. The result is written to `--out`, or to stdout when it is omitted, and a failure exits non-zero with the message on stderr. It runs the same implementation the MCP surface exposes, so the two cannot drift.
 
 Tools that change data (`submit_sitemap`, `delete_sitemap`, `request_recrawl`, `indexnow_submit`) are marked `(write)` in the listing and refuse to run from the command line unless `--allow-write` is passed.
