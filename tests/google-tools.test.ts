@@ -617,6 +617,31 @@ describe("Google-backed tool operations", () => {
     expect(result.structuredContent).toMatchObject({ count: 1, sitemaps: [{ warnings: 1, errors: 0, contents: [{ submitted: 42 }] }] });
   });
 
+  it("reports a pending sitemap's counts as unknown, not as clean", async () => {
+    // A sitemap Google has not finished processing carries no counts, and
+    // warnings 0 beside errors 0 reads as "parsed, and nothing wrong with it".
+    // That is the opposite of what a pending sitemap is known to be.
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.sitemaps.list).mockResolvedValue({
+      data: { sitemap: [{ path: "https://example.com/sitemap.xml", isPending: true }] },
+    });
+
+    const result = await listSitemaps(clients, { siteUrl: "https://example.com/" });
+
+    expect(result.structuredContent).toMatchObject({ sitemaps: [{ isPending: true, warnings: null, errors: null }] });
+  });
+
+  it("reports an absent pending flag as unknown rather than as processed", () => {
+    // isPending ?? false said "processed" about a sitemap Google said nothing
+    // about, which is a claim the API never made.
+    const clients = fakeClients();
+    vi.mocked(clients.searchConsole.sitemaps.list).mockResolvedValue({ data: { sitemap: [{ path: "https://example.com/sitemap.xml" }] } });
+
+    return listSitemaps(clients, { siteUrl: "https://example.com/" }).then((result) => {
+      expect(result.structuredContent).toMatchObject({ sitemaps: [{ isPending: null }] });
+    });
+  });
+
   it("submits then re-lists the sitemap", async () => {
     const clients = fakeClients();
     vi.mocked(clients.searchConsole.sitemaps.submit).mockResolvedValue({ data: undefined });

@@ -558,10 +558,14 @@ function shapeSitemap(sitemap: searchconsole_v1.Schema$WmxSitemap): Record<strin
     path: sitemap.path ?? null,
     lastSubmitted: sitemap.lastSubmitted ?? null,
     lastDownloaded: sitemap.lastDownloaded ?? null,
-    isPending: sitemap.isPending ?? false,
+    isPending: sitemap.isPending ?? null,
     isSitemapsIndex: sitemap.isSitemapsIndex ?? false,
-    warnings: toNumber(sitemap.warnings),
-    errors: toNumber(sitemap.errors),
+    // A sitemap Google has not finished processing carries no counts, and zero
+    // warnings beside zero errors reads as "parsed, and clean". Reporting the
+    // counts as unknown while it is pending keeps "not checked yet" apart from
+    // "checked and found nothing wrong".
+    warnings: sitemap.isPending ? null : toNumber(sitemap.warnings),
+    errors: sitemap.isPending ? null : toNumber(sitemap.errors),
     contents: (sitemap.contents ?? []).map((content) => ({
       type: content.type ?? null,
       submitted: toNumber(content.submitted),
