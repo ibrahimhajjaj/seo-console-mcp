@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.18.0
+
+### Added
+
+- `ads_keyword_create` adds one keyword to an ad group. Until now the write
+  surface could change things that existed but create nothing, which left an
+  asymmetry hard to defend on purpose: it could create a negative keyword, which
+  blocks traffic, but not a positive one, which buys it. That reads as an
+  accident of what got built first rather than a decision.
+  A create is guarded differently from a change, and the difference is the whole
+  design. Every other write here reads a current value, compares it to the one
+  asked for, and refuses when they already match; a create has no current value,
+  so the comparison is replaced rather than skipped. What replaces it is a
+  duplicate check. A keyword already in the target ad group is refused, removed
+  ones included, because a removed criterion still holds the text and Google
+  rejects the duplicate with an error naming a resource the interface does not
+  show. A copy elsewhere in the account trips a guard instead of refusing, since
+  running the same text in two ad groups can be deliberate and two copies
+  otherwise compete for one budget with nothing saying so.
+  `EXACT` by default; `PHRASE` and `BROAD` buy more than the text written and
+  each trips a guard. The keyword is read back afterwards and its match type and
+  status compared to what was sent, because a 200 on a create says accepted, not
+  present-and-correct. A created keyword also starts serving immediately and has
+  no previous state to return to, which the output says out loud.
+
 ## 0.17.0
 
 An audit pass, not a feature release. Every fix below is the same shape: something absent was being presented as something known.
