@@ -26,6 +26,8 @@ import {
   adsUpdateShape,
   adsUpdateBatchOutput,
   adsUpdateBatchShape,
+  adsKeywordCreateOutput,
+  adsKeywordCreateShape,
   adsAdCopyOutput,
   adsAdCopyShape,
   adsAssetsOutput,
@@ -123,6 +125,7 @@ import {
   adsUpdateBatchTool,
   adsAdCopyTool,
   adsAssetsTool,
+  adsKeywordCreateTool,
 } from "./google-ads-tools.js";
 import { serverVersion } from "./server-version.js";
 import { listSnapshotsTool } from "./list-snapshots.js";
@@ -520,6 +523,16 @@ export const toolDefinitions: ToolDefinition[] = [
     write: true,
     spendsMoney: true,
     run: (_ctx, params) => adsUpdate(params),
+  }),
+  defineTool({
+    name: "ads_keyword_create",
+    description:
+      "Add one keyword to an ad group. This is the only tool here that creates rather than changes, and it is guarded differently for that reason: there is no current value to compare against, so it is a duplicate check instead. It refuses a keyword that already exists in the target ad group, including a removed one, since a removed criterion still holds the text and Google rejects the create with an error naming a resource the interface does not show. A copy elsewhere in the account trips a guard rather than refusing, because two copies compete for the same budget. EXACT by default; PHRASE and BROAD buy more than the text written and each trips a guard. Dry run unless dryRun is false, and the keyword is read back afterwards",
+    inputShape: adsKeywordCreateShape,
+    outputSchema: adsKeywordCreateOutput,
+    write: true,
+    spendsMoney: true,
+    run: (_ctx, params) => adsKeywordCreateTool(params),
   }),
   defineTool({
     name: "ads_update_batch",

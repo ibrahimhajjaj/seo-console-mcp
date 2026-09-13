@@ -108,6 +108,7 @@ describe("MCP server tool registration", () => {
       "ads_changes",
       "ads_negatives_update",
       "ads_update",
+      "ads_keyword_create",
       "ads_update_batch",
       "list_snapshots",
       "snapshot",

@@ -916,6 +916,35 @@ export const adsChangesOutput = z.object({
   notes: z.array(z.string()),
 });
 
+export const adsKeywordCreateShape = {
+  keyword: z.string().trim().min(1).max(80).describe("The keyword text to add. It is created as written; this tool does not guess at variants"),
+  adGroup: z.string().trim().min(1).max(400).describe("The ad group to add it to. It must match exactly one or nothing is added"),
+  bid: z.number().positive().max(1000).describe("The max CPC bid in dollars. There is no current bid to compare against on a create, so the only size check is the ceiling"),
+  matchType: z
+    .enum(["EXACT", "PHRASE", "BROAD"])
+    .default("EXACT")
+    .describe("How the keyword matches. EXACT by default because it is the one that buys what it says; PHRASE and BROAD buy more than the text written here and each trips a guard"),
+  dryRun: z.boolean().default(true).describe("Report what would be added and which guards it trips, without adding anything"),
+  confirm: z.boolean().default(false).describe("Add it even though a guard tripped. The dry run lists every reason, so this confirms something already read"),
+};
+export const adsKeywordCreateInput = z.object(adsKeywordCreateShape);
+export const adsKeywordCreateOutput = z.object({
+  keyword: z.string(),
+  adGroup: z.string(),
+  campaign: z.string(),
+  matchType: z.string(),
+  bid: z.number(),
+  customerId: z.string(),
+  guards: z.array(z.string()).describe("A create is guarded by a duplicate check rather than a before-and-after comparison, because there is no before"),
+  applied: z.boolean(),
+  readBack: z
+    .object({ text: z.string(), matchType: z.string(), status: z.string(), bid: z.number().nullable() })
+    .nullable()
+    .describe("The keyword as the account holds it after the write. Null when it could not be read back, which is not the same as not created"),
+  matches: z.boolean().nullable(),
+  notes: z.array(z.string()),
+});
+
 export const adsUpdateBatchShape = {
   kind: z
     .enum(["bid", "budget"])

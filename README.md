@@ -1256,6 +1256,36 @@ A change that would be a no-op says so instead of sending a pointless mutation.
 
 From the command line this tool needs `--allow-spend` as well as `--allow-write`. One flag authorising both "resubmit a sitemap" and "triple a daily budget" is not a gate.
 
+### `ads_keyword_create`
+
+Adds one keyword to an ad group. **The only tool here that creates rather than changes**, and it is guarded differently for that reason.
+
+```json
+{ "keyword": "wordpress backup plugin", "adGroup": "brand-exact", "bid": 1.2, "dryRun": false }
+```
+
+<!-- params:ads_keyword_create -->
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `keyword` | string | yes |  | The keyword text to add. It is created as written; this tool does not guess at variants |
+| `adGroup` | string | yes |  | The ad group to add it to. It must match exactly one or nothing is added |
+| `bid` | number | yes |  | The max CPC bid in dollars. There is no current bid to compare against on a create, so the only size check is the ceiling |
+| `matchType` | one of EXACT, PHRASE, BROAD | no | `"EXACT"` | How the keyword matches. EXACT by default because it is the one that buys what it says; PHRASE and BROAD buy more than the text written here and each trips a guard |
+| `dryRun` | boolean | no | `true` | Report what would be added and which guards it trips, without adding anything |
+| `confirm` | boolean | no | `false` | Add it even though a guard tripped. The dry run lists every reason, so this confirms something already read |
+
+<!-- /params:ads_keyword_create -->
+
+Every other write in this package reads a current value, compares it to the one asked for, and refuses when they already match. **A create has no current value.** There is nothing to compare and nothing to refuse against, so the comparison has to be replaced rather than skipped, and what replaces it is a duplicate check:
+
+- **A keyword already in the target ad group is refused**, including a removed one. A removed criterion still holds the text, and Google rejects the duplicate with an error naming a resource the interface does not show, which is a confusing thing to meet without warning.
+- **A copy elsewhere in the account trips a guard rather than refusing.** Running the same text in two ad groups can be deliberate, so refusing would make a legitimate structure impossible; saying nothing would let two copies compete for one budget silently.
+- **`EXACT` by default.** `PHRASE` and `BROAD` each buy more than the text written here, so each trips a guard. Broad is the match type that spends on searches nobody meant to buy.
+- **The keyword is read back** after the write, and its match type and status are compared to what was sent. A 200 on a create means accepted, not present-and-correct.
+
+One asymmetry worth stating plainly: a created keyword **starts serving immediately**, and unlike a bid change there is no previous state to return to. Undoing it means pausing or removing what was made.
+
 ### `ads_update_batch`
 
 Changes several keyword bids, or several campaign daily budgets, in one call. One kind per call: a total across bids and budgets would add a per-click ceiling to a per-day amount, and no honest sentence describes that sum.
