@@ -499,7 +499,7 @@ export const toolDefinitions: ToolDefinition[] = [
   defineTool({
     name: "ads_changes",
     description:
-      "Read the Google Ads change history: what changed, when, which fields, by whom, and whether it came from a tool or from someone in the browser. Google keeps 30 days. This is the audit trail for anything ads_update writes; read-only",
+      "Read the Google Ads change history: what changed, when, which fields, by whom, and whether it came from a tool or from someone in the browser. Google keeps 30 days and at most 10,000 rows, so an empty result over a longer window is a limit rather than a finding. Filter on resourceType rather than on changed field names: a budget change reports amountMicros and says neither budget nor status. This is the audit trail for anything ads_update writes; read-only",
     inputShape: adsChangesShape,
     outputSchema: adsChangesOutput,
     run: (_ctx, params) => adsChanges(params),

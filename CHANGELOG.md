@@ -2,6 +2,22 @@
 
 ## 0.18.0
 
+### Changed
+
+- `ads_changes` says what its output cannot be filtered on. A campaign budget
+  change reports `changedFields` of `amountMicros`, which contains neither
+  "budget" nor "status", so a filter written on the field name matches nothing
+  and the change goes unseen. Worse, such a filter keeps looking alive, because
+  unrelated rows in the same window carry whatever word was searched for: a
+  downstream alert was shipped, tested, watched to go quiet and nearly called
+  done. This tool never filtered on field names and still does not; it now says
+  to key on `resourceType`, which is `CAMPAIGN_BUDGET` and unambiguous, and to
+  use `changedFields` only to tell apart changes of the same type, where an
+  `AD_GROUP_CRITERION` update is a bid change at `cpcBidMicros` and a pause at
+  `status`. The 10,000-row cap and the 90-day `change_status` window are named
+  too, so an empty result over a long window reads as a limit rather than a
+  finding.
+
 ### Added
 
 - `ads_keyword_create` adds one keyword to an ad group. Until now the write

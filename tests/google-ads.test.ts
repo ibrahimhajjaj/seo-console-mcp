@@ -229,6 +229,43 @@ describe("ads reads", () => {
     expect(content.notes.join(" ")).toContain("automated bidding strategy");
   });
 
+  it("warns against filtering change history on field names, and never filters on them itself", async () => {
+    // A budget change reports changedFields amountMicros and contains neither
+    // "budget" nor "status". A downstream filter on the field name matched
+    // nothing and went unnoticed, because unrelated rows carrying the searched
+    // word kept it looking alive. This tool returns every row and says so.
+    const { fetchImpl, calls } = router(() => ({
+      body: stream([
+        {
+          changeEvent: { changeDateTime: "2026-09-13 20:23:23", changeResourceType: "CAMPAIGN_BUDGET", resourceChangeOperation: "UPDATE", changedFields: "amountMicros", clientType: "GOOGLE_ADS_API" },
+          campaign: { name: "c" },
+        },
+        {
+          changeEvent: {
+            changeDateTime: "2026-09-13 20:20:00",
+            changeResourceType: "AD_GROUP_CRITERION",
+            resourceChangeOperation: "UPDATE",
+            changedFields: "status",
+            clientType: "GOOGLE_ADS_WEB_CLIENT",
+          },
+          campaign: { name: "c" },
+        },
+      ]),
+    }));
+
+    const result = await adsChanges(adsChangesInput.parse({}), { credentials, fetchImpl });
+    const content = result.structuredContent as { changes: Array<{ resourceType: string; changedFields: string }>; notes: string[] };
+
+    // The budget row is returned with its real field name, not dropped.
+    expect(content.changes[0]).toMatchObject({ resourceType: "CAMPAIGN_BUDGET", changedFields: "amountMicros" });
+    const notes = content.notes.join(" ");
+    expect(notes).toContain("Filter on resourceType, not on changedFields");
+    expect(notes).toContain("cpcBidMicros");
+    // The query itself must never narrow by field name.
+    expect(JSON.stringify(calls)).not.toContain("changed_fields =");
+    expect(JSON.stringify(calls)).not.toContain("changed_fields LIKE");
+  });
+
   it("converts micros to dollars", async () => {
     const { fetchImpl } = router(() => ({
       body: stream([

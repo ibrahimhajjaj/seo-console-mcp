@@ -315,7 +315,13 @@ export async function adsChanges(params: ChangesParams, deps: AdsDeps = {}): Pro
   }));
   const notes = [
     "clientType says where a change came from: GOOGLE_ADS_API for a tool, GOOGLE_ADS_WEB_CLIENT for someone in the browser.",
-    "Google keeps change history for 30 days, so anything older cannot be recovered here.",
+    "Google keeps change history for 30 days, so anything older cannot be recovered here. The related change_status resource keeps 90 days but reports only that a thing changed, not which fields.",
+    // The trap is one layer up, in whatever reads this. A budget change reports
+    // amountMicros and contains neither "budget" nor "status", so a filter
+    // written on the field name matches nothing and the change is invisible,
+    // while unrelated rows carrying the searched-for word keep the filter
+    // looking alive. Resource type first, field name only to disambiguate.
+    "Filter on resourceType, not on changedFields. A campaign budget change reports changedFields amountMicros, which contains neither budget nor status, so a filter looking for either matches nothing and the change goes unseen. resourceType is CAMPAIGN_BUDGET for it and is unambiguous. Use changedFields only to tell apart changes of the same type: an AD_GROUP_CRITERION UPDATE is a bid change when changedFields is cpcBidMicros and a pause when it is status.",
   ];
   if (changes.length === params.limit) {
     notes.push(`Exactly ${params.limit} rows came back, which is the limit asked for, so there may be more. Raise limit or shorten the window.`);
