@@ -706,6 +706,8 @@ This tool takes no parameters.
 
 The install path is the tell. `npx` reuses a cached build without re-resolving the range and without erroring, so a server can trail the published release while every other signal reads current; a path under `_npx` is what shows it.
 
+**Call it after updating, before reporting anything.** `npm view <pkg> version` reads a local registry cache and can return the previous version for minutes after a successful publish, while `dist-tags` and the versions array already carry the new one. Two sessions here independently concluded a publish had failed when it had not, on separate releases. A registry read cannot tell a slow publish from a failed one; asking the running process what it is can.
+
 ### `wporg_plugin`
 
 Looks up a WordPress.org plugin by slug and returns active installs, downloads, ratings, support threads, and version dates. It uses the public wp.org API and needs no credentials or API key. A plugin published within the last few days is reported with `possiblyLagging: true` when a field looks empty, because the wp.org API under-reports fresh plugins; the field may be live on the page already.

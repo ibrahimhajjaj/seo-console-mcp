@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The `server_version` documentation says to call it after updating and before
+  reporting a result. `npm view <pkg> version` reads a local cache and can
+  return the previous version for minutes after a successful publish while
+  `dist-tags` already carries the new one, so a registry read cannot tell a slow
+  publish from a failed one. Two sessions concluded a publish had failed when it
+  had not, on separate releases.
+
 ## 0.18.0
 
 ### Changed
