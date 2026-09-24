@@ -2,7 +2,9 @@
 
 `seo-mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for Google Search Console, PageSpeed Insights, and on-page SEO audits. It gives MCP clients thirty-six tools covering verified Search Console properties and the other places products get discovered, the App Store, Google Play, WordPress.org, Google Ads, and real-user Core Web Vitals, while keeping the HTML audit, PageSpeed, IndexNow, keyword ideas, and WordPress.org tools usable without Google service account credentials. Every tool also runs from the command line, so a result can be written to a file instead of into a model's context, and `snapshot` records Search Console, the App Store, Google Play and WordPress.org at one moment so a later run can diff against it.
 
-https://github.com/user-attachments/assets/71275de3-fe32-4829-a75d-d1c6037ce67d
+
+https://github.com/user-attachments/assets/66bbd628-d267-421f-9400-633b696bbd53
+
 
 ## Requirements
 
