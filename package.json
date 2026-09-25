@@ -30,7 +30,8 @@
     "format:check": "prettier --check src tests scripts",
     "docs:params": "tsx scripts/param-docs.ts",
     "prepublishOnly": "npm run build && npm test",
-    "build:mcpb": "npm run build && node scripts/build-mcpb.mjs"
+    "build:mcpb": "npm run build && node scripts/build-mcpb.mjs",
+    "release": "npm publish && mcp-publisher login github && mcp-publisher publish"
   },
   "keywords": [
     "mcp",
