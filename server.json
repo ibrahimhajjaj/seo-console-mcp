@@ -8,12 +8,12 @@
     "url": "https://github.com/ibrahimhajjaj/seo-console-mcp",
     "source": "github"
   },
-  "version": "0.18.1",
+  "version": "0.18.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "seo-console-mcp",
-      "version": "0.18.1",
+      "version": "0.18.2",
       "transport": {
         "type": "stdio"
       }

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.18.2
+
+### Added
+
+- An MCPB bundle, built with `npm run build:mcpb` into `mcpb/seo-console-mcp.mcpb`,
+  for directories and hosts that install a local server from one file. Its
+  settings page carries every credential as an optional field.
+
+### Fixed
+
+- A blank setting, or a `${user_config.x}` template a host left unfilled, now
+  counts as not set for this server's own variables. Settings forms pass every
+  field, and because the readers fall back with `??`, a blank
+  `SEO_MCP_CREDENTIALS` hid `GOOGLE_APPLICATION_CREDENTIALS` and a blank
+  `SEO_MCP_CRUX_KEY` hid the PageSpeed key it falls back to.
+
 ## 0.18.1
 
 ### Added
