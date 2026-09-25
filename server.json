@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ibrahimhajjaj/seo-console-mcp",
+  "title": "SEO Console",
+  "description": "Search Console, Google Ads, App Store, Google Play, WordPress.org and Core Web Vitals over MCP",
+  "websiteUrl": "https://seo-console.verdelic.com/",
+  "repository": {
+    "url": "https://github.com/ibrahimhajjaj/seo-console-mcp",
+    "source": "github"
+  },
+  "version": "0.18.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "seo-console-mcp",
+      "version": "0.18.1",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

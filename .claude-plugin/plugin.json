@@ -1,12 +1,12 @@
 {
   "name": "seo-console",
   "displayName": "SEO Console",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "Turn Claude Code into a senior product-marketing manager across every place a product gets discovered: Google Search Console, Google Ads, the App Store, Google Play, WordPress.org and real-user Core Web Vitals. Search analytics, striking-distance keywords, CTR gaps, cannibalization, store listings and conversion, App Store keywords and sales, Android vitals, on-page and whole-site audits, indexing coverage, PageSpeed, and timestamped snapshots you can diff. Google Ads reads cover campaigns, keywords, ad copy, assets, search terms, negatives and change history; its writes are dry-run by default, refuse a target that does not match exactly one thing, and read every value back after writing.",
   "author": {
     "name": "Ibrahim Hajjaj"
   },
-  "homepage": "https://github.com/ibrahimhajjaj/seo-console-mcp#readme",
+  "homepage": "https://seo-console.verdelic.com/",
   "repository": "https://github.com/ibrahimhajjaj/seo-console-mcp",
   "license": "MIT",
   "keywords": [

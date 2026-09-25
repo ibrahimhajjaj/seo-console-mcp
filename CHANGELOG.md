@@ -1,8 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.18.1
+
+### Added
+
+- `server.json` and an `mcpName` in `package.json`, so the server can be listed
+  in the official MCP Registry as `io.github.ibrahimhajjaj/seo-console-mcp`. The
+  registry proves ownership by reading `mcpName` from the published package,
+  which is why this ships as a release rather than a repo-only change.
 
 ### Changed
+
+- The package and plugin homepage is https://seo-console.verdelic.com/.
 
 - The `server_version` documentation says to call it after updating and before
   reporting a result. `npm view <pkg> version` reads a local cache and can
