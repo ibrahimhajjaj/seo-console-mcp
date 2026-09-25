@@ -1,0 +1,158 @@
+{
+  "manifest_version": "0.3",
+  "name": "seo-console-mcp",
+  "display_name": "SEO Console",
+  "version": "0.0.0",
+  "description": "Search Console, Google Ads, App Store, Google Play, WordPress.org and Core Web Vitals over MCP",
+  "long_description": "Search analytics, striking-distance keywords, CTR gaps, cannibalization, indexing coverage, PageSpeed and on-page audits, App Store and Google Play listings and stats, WordPress.org plugin stats, real-user Core Web Vitals, Google Ads reads with guarded writes, and timestamped snapshots you can diff. Every setting is optional: the HTML audit, PageSpeed, IndexNow, keyword ideas and WordPress.org tools work with none of them, and each other tool says which setting it needs when it is missing.",
+  "author": {
+    "name": "Ibrahim Hajjaj",
+    "url": "https://github.com/ibrahimhajjaj"
+  },
+  "homepage": "https://seo-console.verdelic.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ibrahimhajjaj/seo-console-mcp"
+  },
+  "documentation": "https://github.com/ibrahimhajjaj/seo-console-mcp#readme",
+  "support": "https://github.com/ibrahimhajjaj/seo-console-mcp/issues",
+  "license": "MIT",
+  "keywords": ["seo", "aso", "google-search-console", "google-ads", "app-store-connect", "google-play", "wordpress", "core-web-vitals", "pagespeed"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/dist/index.js"],
+      "env": {
+        "SEO_MCP_CREDENTIALS": "${user_config.credentials}",
+        "SEO_MCP_PAGESPEED_KEY": "${user_config.pagespeed_key}",
+        "SEO_MCP_CRUX_KEY": "${user_config.crux_key}",
+        "SEO_MCP_INDEXNOW_KEY": "${user_config.indexnow_key}",
+        "SEO_MCP_PLAY_BUCKET": "${user_config.play_bucket}",
+        "SEO_MCP_PLAY_CREDENTIALS": "${user_config.play_credentials}",
+        "SEO_MCP_ASC_KEY_PATH": "${user_config.asc_key_path}",
+        "SEO_MCP_ASC_KEY_ID": "${user_config.asc_key_id}",
+        "SEO_MCP_ASC_ISSUER_ID": "${user_config.asc_issuer_id}",
+        "SEO_MCP_ASC_VENDOR_NUMBER": "${user_config.asc_vendor_number}",
+        "GOOGLE_ADS_DEVELOPER_TOKEN": "${user_config.ads_developer_token}",
+        "GOOGLE_ADS_CLIENT_ID": "${user_config.ads_client_id}",
+        "GOOGLE_ADS_CLIENT_SECRET": "${user_config.ads_client_secret}",
+        "GOOGLE_ADS_REFRESH_TOKEN": "${user_config.ads_refresh_token}",
+        "GOOGLE_ADS_CUSTOMER_ID": "${user_config.ads_customer_id}",
+        "SEO_MCP_SNAPSHOT_DIR": "${user_config.snapshot_dir}"
+      }
+    }
+  },
+  "user_config": {
+    "credentials": {
+      "type": "file",
+      "title": "Google service account key",
+      "description": "JSON key of a service account added as a user on your Search Console properties. Needed by the Search Console tools and snapshot.",
+      "required": false
+    },
+    "pagespeed_key": {
+      "type": "string",
+      "title": "PageSpeed Insights API key",
+      "description": "Raises the small anonymous PageSpeed quota. Also used for the Chrome UX Report when no separate key is set.",
+      "sensitive": true,
+      "required": false
+    },
+    "crux_key": {
+      "type": "string",
+      "title": "Chrome UX Report API key",
+      "description": "For crux_field_data and crux_history, if your PageSpeed key is not allowed to call the Chrome UX Report API.",
+      "sensitive": true,
+      "required": false
+    },
+    "indexnow_key": {
+      "type": "string",
+      "title": "IndexNow key",
+      "description": "Default key for indexnow_submit. The same key must be hosted on the site at https://<host>/<key>.txt.",
+      "sensitive": true,
+      "required": false
+    },
+    "play_bucket": {
+      "type": "string",
+      "title": "Google Play reports bucket",
+      "description": "The pubsite_prod_... bucket named in Play Console under Download reports. Needed by play_store_stats.",
+      "required": false
+    },
+    "play_credentials": {
+      "type": "file",
+      "title": "Google Play service account key",
+      "description": "Only if Play reports should be read with a different service account from the one above.",
+      "required": false
+    },
+    "asc_key_path": {
+      "type": "file",
+      "title": "App Store Connect private key (.p8)",
+      "description": "Needed by the App Store tools.",
+      "required": false
+    },
+    "asc_key_id": {
+      "type": "string",
+      "title": "App Store Connect key ID",
+      "required": false,
+      "description": "The ID shown beside the key in App Store Connect."
+    },
+    "asc_issuer_id": {
+      "type": "string",
+      "title": "App Store Connect issuer ID",
+      "description": "For a team key. Individual keys have no issuer ID.",
+      "required": false
+    },
+    "asc_vendor_number": {
+      "type": "string",
+      "title": "App Store vendor number",
+      "description": "Needed by app_store_sales. Shown in App Store Connect under Payments and Financial Reports.",
+      "required": false
+    },
+    "ads_developer_token": {
+      "type": "string",
+      "title": "Google Ads developer token",
+      "description": "Needed by the Google Ads tools, with the OAuth client, refresh token and customer ID below.",
+      "sensitive": true,
+      "required": false
+    },
+    "ads_client_id": {
+      "type": "string",
+      "title": "Google Ads OAuth client ID",
+      "required": false,
+      "description": "OAuth client used to mint Google Ads access tokens."
+    },
+    "ads_client_secret": {
+      "type": "string",
+      "title": "Google Ads OAuth client secret",
+      "sensitive": true,
+      "required": false,
+      "description": "Secret of the OAuth client above."
+    },
+    "ads_refresh_token": {
+      "type": "string",
+      "title": "Google Ads refresh token",
+      "sensitive": true,
+      "required": false,
+      "description": "Refresh token issued to that OAuth client for the Ads account."
+    },
+    "ads_customer_id": {
+      "type": "string",
+      "title": "Google Ads customer ID",
+      "description": "The account number, with or without dashes.",
+      "required": false
+    },
+    "snapshot_dir": {
+      "type": "directory",
+      "title": "Snapshot directory",
+      "description": "Where snapshot documents are written and read. Defaults to ~/.config/seo-mcp/snapshots.",
+      "required": false
+    }
+  },
+  "tools_generated": false,
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20.18.1"
+    }
+  }
+}

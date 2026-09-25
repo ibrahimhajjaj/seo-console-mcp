@@ -9,3 +9,5 @@ credentials*.json
 *.p12
 *.log
 .DS_Store
+mcpb/build/
+*.mcpb
