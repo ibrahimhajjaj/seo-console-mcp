@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseCliArgs, UsageError } from "./cli.js";
 import { resolveCredentialsPath } from "./credentials.js";
+import { dropUnsetVariables } from "./env.js";
 import { runSetupWizard } from "./setup.js";
 import { runVerify } from "./verify.js";
 import { runQuery } from "./query.js";
@@ -14,6 +15,7 @@ const usage = [
 ].join("\n");
 
 async function main(): Promise<void> {
+  dropUnsetVariables();
   let command;
   try {
     command = parseCliArgs(process.argv.slice(2));
